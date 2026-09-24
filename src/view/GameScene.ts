@@ -1638,12 +1638,26 @@ export class GameScene extends Phaser.Scene {
     this.clampCamera();
   }
 
+  /**
+   * Не пускать камеру за край карты: экран целиком над картой (запас полклетки на стены),
+   * а если карта по оси меньше экрана — она по центру. Центр считаем из scroll, а не из
+   * getWorldPoint/midPoint: те обновляются только при отрисовке и сразу после centerOn устаревшие —
+   * из-за этого поле «уплывало» и сверху-слева оставалась пустота.
+   */
   private clampCamera(): void {
     const cam = this.cameras.main;
-    const mid = cam.getWorldPoint(this.scale.width / 2, this.scale.height / 2);
-    const cx = Phaser.Math.Clamp(mid.x, 0, W * TS);
-    const cy = Phaser.Math.Clamp(mid.y, 0, H * TS);
-    if (cx !== mid.x || cy !== mid.y) cam.centerOn(cx, cy);
+    const halfW = cam.width / 2 / cam.zoom;
+    const halfH = cam.height / 2 / cam.zoom;
+    const pad = TS / 2;
+    // Сверху запас больше — под плашками конфет/времени (~70 px экрана), иначе верхние комнаты под ними.
+    const padTop = pad + 70 / cam.zoom;
+    const axis = (mid: number, half: number, size: number, lo = pad) =>
+      size + lo + pad <= 2 * half ? size / 2 : Phaser.Math.Clamp(mid, half - lo, size - half + pad);
+    const mx = cam.scrollX + cam.width / 2;
+    const my = cam.scrollY + cam.height / 2;
+    const cx = axis(mx, halfW, W * TS);
+    const cy = axis(my, halfH, H * TS, padTop);
+    if (Math.abs(cx - mx) > 0.01 || Math.abs(cy - my) > 0.01) cam.centerOn(cx, cy);
   }
 
   private setupInput(): void {
