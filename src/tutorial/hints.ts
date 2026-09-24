@@ -41,7 +41,10 @@ interface HintState {
 
 const mine = (m: Match) => m.playerRoom;
 
-/** Порядок = важность: сначала то, от чего можно проиграть прямо сейчас. */
+/**
+ * Порядок = важность: сначала то, от чего можно потерять дверь прямо сейчас.
+ * Пойманному (дух) подсказки не показываем: строить он не может, всё объясняет карточка поимки.
+ */
 const RULES: Rule[] = [
   {
     id: 'repair',
@@ -86,7 +89,8 @@ const RULES: Rule[] = [
     pose: 'point',
     when: (m) => {
       const r = mine(m);
-      if (!r || m.phase === 'pick' || m.buildCells(r, 'cannon').length) return null;
+      // hasBuildCell не трогает rng симуляции (buildCells тасует клетки) — подсказка спрашивает каждый кадр.
+      if (!r || m.phase === 'pick' || m.hasBuildCell(r, 'cannon')) return null;
       const weakest = [...r.buildings].sort((a, b) => a.level - b.level)[0];
       return weakest && m.canAfford(r, m.buildCost('cannon')) ? { kind: 'cell', at: weakest } : null;
     },
@@ -146,6 +150,8 @@ export class HintDirector {
     const sieged = g.state === 'attacking' && g.targetRoom === m.player.roomId;
     this.state.silentSiege = sieged ? this.state.silentSiege + dt : 0;
 
+    // Поймали — недосказанная подсказка про свою комнату больше не нужна.
+    if (m.player.caught) this.current = null;
     if (this.current) {
       this.current.left -= dt;
       if (this.current.left <= 0) this.current = null;

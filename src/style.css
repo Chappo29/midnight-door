@@ -88,6 +88,7 @@ body {
 /* Игровые элементы видны только в матче. */
 #ui:not(.in-game) .hud-top,
 #ui:not(.in-game) #repair,
+#ui:not(.in-game) .spirit-btn,
 #ui:not(.in-game) #home,
 #ui:not(.in-game) .hud-side {
   display: none;
@@ -341,6 +342,8 @@ img.ico-img,
    --------------------------------------------------------- */
 
 .btn-round {
+  /* Свой слой: иконки внутри (z-index 1–2) не просвечивают сквозь экран паузы и не нажимаются через него. */
+  isolation: isolate;
   position: absolute;
   bottom: calc(16px + env(safe-area-inset-bottom));
   border-radius: 50%;
@@ -796,6 +799,31 @@ img.ico-img,
 
 .opt.poor {
   filter: saturate(0.7);
+}
+
+/* Пункт кликабелен (нажатие подсвечивает дверь), но визуально «заперт» — не путать с .is-disabled. */
+.opt-wrap.is-locked .opt {
+  filter: grayscale(0.55);
+}
+
+.lock-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #fff;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px var(--ink);
+  padding: 4px 10px 4px 6px;
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.lock-pill svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
 }
 
 .opt-reason {
@@ -2463,5 +2491,124 @@ img.ico-img,
 @media (max-width: 600px) and (orientation: portrait) {
   .menu-content {
     padding-top: 66px;
+  }
+}
+
+/* ---------------------------------------------------------
+   Дух (игрока поймали): кнопки «Бу!» и «Искорка» на месте ключа,
+   карточка поимки с двумя равными кнопками
+   --------------------------------------------------------- */
+
+.spirit-btn {
+  width: clamp(68px, 10vw, 84px);
+  height: clamp(68px, 10vw, 84px);
+}
+
+.boo-btn {
+  right: calc(18px + env(safe-area-inset-right));
+  background: linear-gradient(180deg, #d9efff 0%, #8fc9f5 55%, #4f8fc2 100%);
+}
+
+.spark-btn {
+  right: calc(18px + env(safe-area-inset-right) + clamp(68px, 10vw, 84px) + 24px);
+  background: linear-gradient(180deg, var(--amber-light) 0%, var(--amber) 55%, var(--amber-dark) 100%);
+}
+
+.spirit-btn .spirit-ico {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  transition: opacity 0.15s;
+}
+
+.spirit-btn .spirit-ico svg {
+  width: clamp(28px, 4.2vw, 38px);
+  height: clamp(28px, 4.2vw, 38px);
+}
+
+/* Откат — кольцо, как у ключа. */
+.spirit-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  background: conic-gradient(rgba(15, 10, 26, 0.68) calc(var(--cd, 0) * 360deg), transparent 0);
+  transition: opacity 0.15s;
+}
+
+.spirit-btn.cd,
+.spirit-btn.off {
+  background: linear-gradient(180deg, #a7a0bf 0%, #7a7391 55%, #5c5570 100%);
+}
+
+.spirit-btn.cd .spirit-ico,
+.spirit-btn.off .spirit-ico {
+  opacity: 0.5;
+}
+
+.spirit-btn.cd::after {
+  opacity: 1;
+}
+
+.spirit-cd-num {
+  display: none;
+  position: absolute;
+  bottom: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: clamp(12px, 2vw, 15px);
+  background: var(--ink);
+  color: #fff;
+  border-radius: 8px;
+  padding: 1px 7px;
+  z-index: 2;
+}
+
+.spirit-btn.cd .spirit-cd-num {
+  display: block;
+}
+
+@media (max-height: 460px) {
+  .spirit-btn {
+    width: 60px;
+    height: 60px;
+  }
+  .spark-btn {
+    right: calc(18px + env(safe-area-inset-right) + 60px + 22px);
+  }
+}
+
+.btn-big.grape {
+  background: linear-gradient(180deg, var(--grape-light) 0%, var(--grape) 55%, var(--grape-dark) 100%);
+  --btn-dark: var(--grape-dark);
+}
+
+/* Две кнопки одного размера: ни одна не «главнее» (правила Яндекса про рекламу за награду). */
+.caught-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.caught-btns.single {
+  grid-template-columns: minmax(0, 320px);
+  justify-content: center;
+}
+
+.caught-btns .btn-big {
+  min-width: 0;
+  min-height: 66px;
+  line-height: 1.15;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .caught-btns {
+    grid-template-columns: 1fr;
   }
 }

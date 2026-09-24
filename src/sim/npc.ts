@@ -1,18 +1,22 @@
+import { B, cannonRange } from './balance';
+import { ghostTargetable } from './ghost';
 import type { Match } from './match';
-import type { Character, Cmd, Cost, NpcProfile, Room } from './types';
+import type { BuildKind, Character, Cmd, Cost, NpcProfile, Room } from './types';
 
 /**
  * Характеры соседей — чтобы они не были одинаковыми ботами:
- * соня еле шевелится и ставит пару пушек, трусишка вкладывается в дверь, стрелок строит больше всех.
+ * соня еле шевелится и ставит пару пушек (и верстак — пусть дверь чинится сама),
+ * трусишка вкладывается в дверь и после пары пушек ставит холодильник, стрелок строит больше всех.
+ * Капкан ставят все, умные охотнее (см. B.npc.trapBase/trapPerSkill).
  */
 export const PROFILES: readonly NpcProfile[] = [
-  { name: 'Соня', door: 1.0, eco: 1.3, gun: 0.7, pace: 1.7, maxCannons: 2 },
-  { name: 'Трусишка', door: 2.0, eco: 0.9, gun: 0.5, pace: 1.2, maxCannons: 2 },
+  { name: 'Соня', door: 1.0, eco: 1.3, gun: 0.7, pace: 1.7, maxCannons: 2, bench: 1.3 },
+  { name: 'Трусишка', door: 2.0, eco: 0.9, gun: 0.5, pace: 1.2, maxCannons: 2, fridge: 1.2 },
   { name: 'Копилка', door: 0.8, eco: 1.7, gun: 0.7, pace: 1.2, maxCannons: 3 },
   { name: 'Стрелок', door: 0.8, eco: 0.8, gun: 1.6, pace: 0.9, maxCannons: 4 },
 ];
 
-export const BALANCED: NpcProfile = { name: 'Игрок', door: 1.2, eco: 1.0, gun: 1.0, pace: 1, maxCannons: 4 };
+export const BALANCED: NpcProfile = { name: 'Игрок', door: 1.2, eco: 1.0, gun: 1.0, pace: 1, maxCannons: 4, trap: 1.0, bench: 0.8, fridge: 0.8 };
 
 /** Темп «как у живого ребёнка», секунды. */
 const THINK_MIN = 3;
@@ -32,6 +36,8 @@ interface Option {
  * skill 0..1: насколько быстро реагирует, чинит вовремя и копит на нужное.
  */
 export function npcThink(m: Match, c: Character, dt: number, skill: number): void {
+  // Дух бывает только у игрока — сюда попадает лишь ИИ-игрок (тесты, прогон баланса).
+  if (c.spirit) return spiritThink(m, c, dt);
   if (c.caught || c.roomId === null) return;
   c.think -= dt;
   if (c.think > 0) return;
@@ -55,16 +61,19 @@ export function npcThink(m: Match, c: Character, dt: number, skill: number): voi
 
   const p = c.profile;
   const opts: Option[] = [];
+  const sofaBlocked = m.sofaBlockedBy(room);
   const doorCost = m.doorUpgradeCost(room);
   if (doorCost && !door.broken) {
     const behind = door.level <= room.sofa.level ? 1.8 : 1.0;
-    opts.push({ score: p.door * (1 + (1 - hpFrac)) * behind, cost: doorCost, cmd: { type: 'upgradeDoor' } });
+    // Диван упёрся в дверь — соседу важнее пробить дверь, чем ждать у запертого дивана.
+    const blockedMul = sofaBlocked ? B.npc.sofaBlockedDoorMul : 1;
+    opts.push({ score: p.door * (1 + (1 - hpFrac)) * behind * blockedMul, cost: doorCost, cmd: { type: 'upgradeDoor' } });
   }
-  const sofaCost = m.sofaUpgradeCost(room);
+  const sofaCost = sofaBlocked ? null : m.sofaUpgradeCost(room);
   if (sofaCost) opts.push({ score: p.eco * (room.sofa.level < 3 ? 1.5 : 1), cost: sofaCost, cmd: { type: 'upgradeSofa' } });
 
   const cannons = room.buildings.filter((b) => b.kind === 'cannon');
-  const cannonCell = cannons.length < p.maxCannons ? pickCannonCell(m, room, skill) : null;
+  const cannonCell = cannons.length < p.maxCannons ? pickNearDoorCell(m, room, 'cannon', skill) : null;
   if (cannonCell) {
     opts.push({
       score: p.gun * (cannons.length < 2 ? 1.4 : 0.9),
@@ -75,6 +84,25 @@ export function npcThink(m: Match, c: Character, dt: number, skill: number): voi
   const weakest = [...cannons].sort((a, b) => a.level - b.level)[0];
   const weakestCost = weakest ? m.upgradeCost(weakest) : null;
   if (weakest && weakestCost) opts.push({ score: p.gun * 0.8, cost: weakestCost, cmd: { type: 'upgrade', x: weakest.x, y: weakest.y } });
+
+  // Поздние постройки (открываются дверью). Выбор клетки тасует rng — зовём его только после проверок замка, лимита и характера.
+  const open = (k: BuildKind) => !m.buildLocked(room, k) && !m.atCap(room, k);
+  const trapWant = (p.trap ?? 1) * (B.npc.trapBase + B.npc.trapPerSkill * skill);
+  if (trapWant > 0 && open('trap')) {
+    const cell = pickNearDoorCell(m, room, 'trap', skill, B.trap.radius - B.npc.trapReachMargin);
+    if (cell) opts.push({ score: trapWant, cost: m.buildCost('trap'), cmd: { type: 'build', kind: 'trap', ...cell } });
+  }
+  const trap = room.buildings.find((b) => b.kind === 'trap');
+  const trapUp = trap ? m.upgradeCost(trap) : null;
+  if (trap && trapUp) opts.push({ score: trapWant * B.npc.trapUpMul, cost: trapUp, cmd: { type: 'upgrade', x: trap.x, y: trap.y } });
+  if (p.bench && open('workbench')) {
+    const cell = m.findBuildCell(room, 'workbench');
+    if (cell) opts.push({ score: p.bench, cost: m.buildCost('workbench'), cmd: { type: 'build', kind: 'workbench', ...cell } });
+  }
+  if (p.fridge && cannons.length >= B.npc.fridgeAfterCannons && open('fridge')) {
+    const cell = m.findBuildCell(room, 'fridge');
+    if (cell) opts.push({ score: p.fridge, cost: m.buildCost('fridge'), cmd: { type: 'build', kind: 'fridge', ...cell } });
+  }
 
   if (m.opts.flameUnlocked) {
     // Тыквы нужны ровно настолько, чтобы хватало пламени на следующую покупку.
@@ -114,14 +142,39 @@ export function npcThink(m: Match, c: Character, dt: number, skill: number): voi
 }
 
 /**
- * Куда ставить пушку. Пушки бьют по радиусу, а призрак приходит к двери —
- * умный ставит поближе к двери, глупый куда попало.
+ * ИИ-дух: летит к призраку, «Бу!» — когда тот входит в комнату или ломает почти сломанную дверь,
+ * «Искорка» — пушке соседа рядом, которая достаёт до призрака.
  */
-function pickCannonCell(m: Match, room: Room, skill: number) {
-  const cells = m.buildCells(room, 'cannon');
-  if (!cells.length || m.rng.next() > skill) return cells[0] ?? null;
+function spiritThink(m: Match, c: Character, dt: number): void {
+  c.think -= dt;
+  if (c.think > 0) return;
+  const N = B.npc;
+  c.think = m.rng.range(N.spiritThinkMin, N.spiritThinkMax) * c.profile.pace;
+  const g = m.ghost;
+  if (m.phase !== 'night' || !ghostTargetable(g)) return;
+  m.command(c.id, { type: 'move', x: Math.floor(g.x), y: Math.floor(g.y) });
+  if (c.booCd <= 0 && m.booInRange(c)) {
+    const r = m.rooms[g.targetRoom];
+    const doorLow = g.state === 'attacking' && !!r && r.door.hp < r.door.maxHp * N.spiritBooDoor;
+    if (g.state === 'entering' || doorLow) m.command(c.id, { type: 'boo' });
+  }
+  if (c.sparkCd <= 0) {
+    const t = m.sparkCannons(c).find(({ b }) => Math.hypot(g.x - b.x - 0.5, g.y - b.y - 0.5) <= cannonRange(b.level));
+    if (t) m.command(c.id, { type: 'spark', x: t.b.x, y: t.b.y, roomId: t.r.id });
+  }
+}
+
+/**
+ * Куда ставить пушку или капкан. Они бьют по радиусу, а призрак приходит к двери —
+ * умный ставит поближе к двери, глупый куда попало. reach — не дальше этого от места
+ * у двери, где стоит призрак (капкану дальше смысла нет); у пушки без ограничения.
+ */
+function pickNearDoorCell(m: Match, room: Room, kind: BuildKind, skill: number, reach = Infinity) {
   const f = room.door.front;
-  cells.sort((a, b) => Math.hypot(a.x + 0.5 - f.x, a.y + 0.5 - f.y) - Math.hypot(b.x + 0.5 - f.x, b.y + 0.5 - f.y));
+  const dist = (v: { x: number; y: number }) => Math.hypot(v.x + 0.5 - f.x, v.y + 0.5 - f.y);
+  const cells = m.buildCells(room, kind).filter((v) => dist(v) <= reach);
+  if (!cells.length || m.rng.next() > skill) return cells[0] ?? null;
+  cells.sort((a, b) => dist(a) - dist(b));
   return cells[m.rng.int(Math.min(3, cells.length))];
 }
 

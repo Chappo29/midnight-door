@@ -110,6 +110,17 @@ Transparent background, no text, no ground shadows, characters do not overlap.
 
 Пушка состоит из двух частей: основание стоит на месте, ствол поворачивается в сторону призрака. Поэтому обе части рисуются **строго сверху**, и ствол обязательно смотрит **вправо**.
 
+### Капкан, верстак, холодильник (открываются уровнем двери)
+
+Ключи: `trap`, `trap_l2`, `trap_l3`, `workbench`, `workbench_l2`, `workbench_l3`, `fridge`, `fridge_l2`, `fridge_l3` (ур. 1 — без суффикса). Нет картинки уровня — берётся ближайшая младшая, нет вовсе — рисуется процедурная заглушка (`drawLatePlaceholder` в `src/view/GameScene.ts`). В клетке: капкан — низкая тарелка, верстак — столик, оба примерно в клетку шириной; холодильник стоит, как мебель, основанием у низа клетки. Эти же картинки — иконки в меню постройки.
+
+Листы: `docs/art/source/buildings/trap_sheet.png`, `workbench_sheet.png`, `fridge_sheet.png` (по 3 уровня в ряд).
+```
+node scripts/slice-sheet.mjs docs/art/source/buildings/trap_sheet.png - trap,trap_l2,trap_l3 --each
+node scripts/slice-sheet.mjs docs/art/source/buildings/workbench_sheet.png - workbench,workbench_l2,workbench_l3 --each
+node scripts/slice-sheet.mjs docs/art/source/buildings/fridge_sheet.png - fridge,fridge_l2,fridge_l3 --each
+```
+
 ## Предметы комнаты
 
 | Файл | Промпт |

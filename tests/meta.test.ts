@@ -26,6 +26,19 @@ describe('монеты и магазин', () => {
     expect(win.parts.reduce((s, p) => s + p.coins, 0)).toBe(win.coins);
   });
 
+  it('test_reward_team_win_half_base_plus_neighbours', () => {
+    const solo = matchReward(true, 'hard', 600, 3);
+    const team = matchReward(true, 'hard', 600, 3, true);
+    const soloBase = solo.parts.find((p) => p.label === 'победа')!.coins;
+    expect(team.parts).toEqual([
+      { label: 'командная победа', coins: Math.round(soloBase * 0.5) },
+      { label: 'соседи', coins: 15 },
+    ]);
+    expect(team.coins).toBe(Math.round(soloBase * 0.5) + 15);
+    expect(team.coins).toBeLessThan(solo.coins);
+    expect(team.coins).toBeGreaterThan(matchReward(false, 'hard', 600, 3).coins);
+  });
+
   it('test_meta_harder_difficulty_pays_more', () => {
     expect(matchReward(true, 'nightmare', 600, 3).coins).toBeGreaterThan(matchReward(true, 'hard', 600, 3).coins);
     expect(matchReward(true, 'hard', 600, 3).coins).toBeGreaterThan(matchReward(true, 'easy', 600, 3).coins);
@@ -72,6 +85,25 @@ describe('монеты и магазин', () => {
     expect(b.candy).toBe(100);
     expect(b.doorLevel).toBe(1);
     expect(m.boosters.candy).toBe(BOOSTER_MAX - 1);
+  });
+
+  it('test_meta_corrupt_save_is_repaired', () => {
+    const m = normalizeMeta({
+      coins: NaN,
+      heroes: 'x',
+      hero: 9,
+      skins: { door: ['classic'], cannon: ['classic'] },
+      skin: { door: 'ice', cannon: 'nope' },
+      boosters: { candy: -5, door: 99, wrench: NaN },
+      daily: { last: 7, step: -1 },
+    } as never);
+    expect(m.coins).toBe(0);
+    expect(m.heroes).toEqual([0]);
+    expect(m.hero).toBe(0);
+    expect(m.skin).toEqual({ door: 'classic', cannon: 'classic' });
+    expect(m.boosters).toEqual({ candy: 0, door: BOOSTER_MAX, wrench: 0 });
+    expect(m.daily).toEqual({ last: '', step: 0 });
+    expect(buyHero(m, HEROES[1].look)).toBe('Не хватает монет');
   });
 
   it('test_meta_old_save_gets_defaults', () => {

@@ -205,17 +205,19 @@ async function start(difficulty: Difficulty): Promise<void> {
     onEnd: () => {
       const flameJustUnlocked = progress.matches === 0;
       progress.matches++;
+      // Командная победа (игрок был духом) — тоже победа: для ребёнка это общий успех.
       if (match.result === 'win') progress.wins[difficulty]++;
       const neighbors = match.survivors - (match.player.caught ? 0 : 1);
-      const reward = matchReward(match.result === 'win', difficulty, match.nightTime, neighbors);
+      const reward = matchReward(match.result === 'win', difficulty, match.nightTime, neighbors, match.teamWin);
       progress.meta.coins += reward.coins;
       saveProgress(progress);
-      track('match_end', { difficulty, result: match.result, coins: reward.coins, night: Math.round(match.nightTime) });
+      track('match_end', { difficulty, result: match.result, team: match.teamWin, coins: reward.coins, night: Math.round(match.nightTime) });
       sfx.playMusic(null, 400);
       sfx.play(match.result === 'win' ? 'win' : 'lose', { pitch: 0 });
       hud.showResult(match, flameJustUnlocked, () => start(difficulty), showMenu, reward);
     },
     onMenu: showMenu,
+    onRevive: () => track('spirit_revive', { difficulty, night: Math.round(match.nightTime) }),
   };
   game.scene.stop('game');
   game.scene.start('game', data);
@@ -223,20 +225,24 @@ async function start(difficulty: Difficulty): Promise<void> {
 
 // Страница прослушивания звуков: localhost:5173/?sounds (только в разработке).
 // Строка = событие, кнопки = варианты. Выбор: npm run sfx -- pick click=2 shot=1 …
-// Просмотр экранов итогов без матча: localhost:5173/?result=win или ?result=lose (только в разработке).
+// Просмотр экранов итогов без матча: localhost:5173/?result=win, ?result=team или ?result=lose (только в разработке).
 const previewResult = import.meta.env.DEV ? new URLSearchParams(location.search).get('result') : null;
-if (previewResult === 'win' || previewResult === 'lose') {
+if (previewResult === 'win' || previewResult === 'lose' || previewResult === 'team') {
   const m = new Match({ seed: 1, difficulty: 'easy', flameUnlocked: true });
-  m.result = previewResult;
+  m.result = previewResult === 'lose' ? 'lose' : 'win';
+  m.teamWin = previewResult === 'team';
   m.nightTime = 9 * 60 + 12;
   m.ghost.level = 7;
+  m.ghost.maxHp = 1000;
+  m.ghost.hp = 120;
   for (let i = 0; i < 6; i++) m.rooms[i].ownerId = i;
-  if (previewResult === 'lose') {
+  if (previewResult !== 'win') {
     m.player.caught = true;
+    m.player.spirit = previewResult === 'team';
     m.rooms[0].eliminated = true;
   }
   const again = () => (location.search = '');
-  hud.showResult(m, false, again, again, matchReward(previewResult === 'win', 'easy', m.nightTime, 4));
+  hud.showResult(m, false, again, again, matchReward(m.result === 'win', 'easy', m.nightTime, 4, m.teamWin));
 } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('sounds')) {
   spritesReady.then(() => {
     const box = document.getElementById('screen')!;

@@ -3,19 +3,26 @@ import {
   DIFF,
   TICK,
   adjustCost,
+  benchHeal,
   buildBaseCost,
   cannonDmg,
   cannonRange,
   cannonUpCost,
   doorMaxHp,
   doorUpCost,
+  extraUpCost,
+  isLateKind,
   pumpkinRate,
   pumpkinUpCost,
   sofaIncome,
+  sofaNeedDoor,
   sofaUpCost,
+  trapHold,
+  trapRecharge,
+  unlockDoor,
   type DiffParams,
 } from './balance';
-import { createGhost, ghostTargetable, spawnGhost, updateGhost } from './ghost';
+import { createGhost, ghostLeaveRoom, ghostTargetable, spawnGhost, updateGhost } from './ghost';
 import { Tile, generateMap, type TileT } from './map';
 import { BALANCED, PROFILES, npcThink } from './npc';
 import { bfs } from './path';
@@ -64,7 +71,12 @@ export class Match {
   time = 0;
   nightTime = 0;
   result: 'win' | 'lose' | null = null;
-  resultReason: 'dawn' | 'ghost' | 'caught' | '' = '';
+  /** ghost — призрак побеждён; allCaught — поймали всех (единственное поражение). */
+  resultReason: 'ghost' | 'allCaught' | '' = '';
+  /** Призрака добили, пока игрок был духом, — «Командная победа!». */
+  teamWin = false;
+  /** Воскрешение (реклама за награду) уже было — второй раз нельзя. */
+  reviveUsed = false;
   events: SimEvent[] = [];
   firstElimAt = -1;
   /** Ручки сценария обучения; null — обычный матч. */
@@ -116,6 +128,10 @@ export class Match {
         task: null,
         facing: 1,
         caught: false,
+        spirit: false,
+        booCd: 0,
+        sparkCd: 0,
+        flyTo: null,
         profile: i === 0 ? BALANCED : profiles[i - 1],
         think: 0,
       });
@@ -156,8 +172,9 @@ export class Match {
     return adjustCost(buildBaseCost(kind), this.opts.flameUnlocked);
   }
 
-  upgradeCost(b: Building): Cost | null {
-    const c = b.kind === 'cannon' ? cannonUpCost(b.level) : pumpkinUpCost(b.level);
+  upgradeCost(b: Pick<Building, 'kind' | 'level'>): Cost | null {
+    const k = b.kind;
+    const c = k === 'cannon' ? cannonUpCost(b.level) : k === 'pumpkin' ? pumpkinUpCost(b.level) : extraUpCost(k, b.level);
     return c && adjustCost(c, this.opts.flameUnlocked);
   }
 
@@ -169,6 +186,23 @@ export class Match {
   sofaUpgradeCost(r: Room): Cost | null {
     const c = sofaUpCost(r.sofa.level);
     return c && adjustCost(c, this.opts.flameUnlocked);
+  }
+
+  /** Диван апается только вслед за дверью: если дверь ещё слабая — вернёт нужный её уровень, иначе null. */
+  sofaBlockedBy(r: Room): number | null {
+    const need = sofaNeedDoor(r.sofa.level + 1);
+    return need > 0 && r.door.level < need ? need : null;
+  }
+
+  /**
+   * Постройка заперта дверью: вернёт нужный уровень двери, иначе null.
+   * В обучении поздние постройки заперты всегда — там учим только пушке и тыкве.
+   */
+  buildLocked(r: Room, kind: BuildKind): number | null {
+    const need = unlockDoor(kind);
+    if (!need) return null;
+    if (this.script) return need;
+    return r.door.level < need ? need : null;
   }
 
   sellValue(b: Building): number {
@@ -198,12 +232,39 @@ export class Match {
     if (!inRoom(r, x, y)) return 'Это не твоя комната';
     if (occupantAt(r, x, y) !== null) return 'Место занято';
     if (x === r.door.inside.x && y === r.door.inside.y) return 'Здесь проход к двери';
+    const need = this.buildLocked(r, kind);
+    if (need) return `Сначала дверь до ур. ${need}`;
     const soil = isSoil(r, x, y);
     if (kind === 'pumpkin' && !this.opts.flameUnlocked) return 'Тыквы откроются во втором матче';
     if (kind === 'pumpkin' && !soil) return 'Тыкву сажают на грядку';
-    if (kind === 'cannon' && soil) return 'Грядка — для тыкв';
+    if (kind !== 'pumpkin' && soil) return 'Грядка — для тыкв';
+    if (this.atCap(r, kind)) return 'Больше нельзя';
     if (!allConnected(r, { x, y })) return 'Загородит проход';
     return null;
+  }
+
+  /** Поздних построек в комнате не больше B[kind].maxPerRoom (пушки и тыквы ограничены только местом). */
+  atCap(r: Room, kind: BuildKind): boolean {
+    return isLateKind(kind) && r.buildings.filter((b) => b.kind === kind).length >= B[kind].maxPerRoom;
+  }
+
+  /**
+   * Есть ли сейчас хоть одно место под постройку. Без rng (buildCells тасует клетки генератором
+   * симуляции) — для интерфейса и подсказок, которые спрашивают каждый кадр.
+   */
+  hasBuildCell(r: Room, kind: BuildKind): boolean {
+    const cells = kind === 'pumpkin' ? r.soil : this.roomCells(r);
+    return cells.some((v) => this.canPlace(r, v.x, v.y, kind) === null);
+  }
+
+  /**
+   * Клетки, где сейчас можно поставить постройку, — без случайного порядка и без rng.
+   * Для вида и обучения: они зовутся каждый кадр, и rng симуляции там трогать нельзя
+   * (иначе матч с тем же seed пошёл бы по-другому в зависимости от частоты кадров).
+   */
+  placeableCells(r: Room, kind: BuildKind): Vec[] {
+    const cells = kind === 'pumpkin' ? r.soil : this.roomCells(r);
+    return cells.filter((v) => this.canPlace(r, v.x, v.y, kind) === null);
   }
 
   findBuildCell(r: Room, kind: BuildKind): Vec | null {
@@ -237,7 +298,9 @@ export class Match {
   command(charId: number, cmd: Cmd): string | null {
     const c = this.chars[charId];
     if (this.phase === 'end' || this.result) return 'Игра окончена';
+    if (c.spirit) return this.spiritCommand(c, cmd);
     if (c.caught) return 'Тебя поймали';
+    if (cmd.type === 'boo' || cmd.type === 'spark') return 'Только для духа';
 
     if (cmd.type === 'pickRoom') {
       if (this.phase !== 'pick' || c.roomId !== null) return 'Комната уже выбрана';
@@ -260,7 +323,8 @@ export class Match {
       case 'build': {
         const err = this.canPlace(room, cmd.x, cmd.y, cmd.kind);
         if (err) return err;
-        if (!this.canAfford(room, this.buildCost(cmd.kind))) return 'Не хватает конфет';
+        const cost = this.buildCost(cmd.kind);
+        if (!this.canAfford(room, cost)) return this.missing(room, cost);
         stands = this.standCells(room, cmd);
         break;
       }
@@ -292,6 +356,8 @@ export class Match {
         stands = [room.door.inside];
         break;
       case 'upgradeSofa': {
+        const need = this.sofaBlockedBy(room);
+        if (need) return `Сначала дверь до ур. ${need}`;
         const cost = this.sofaUpgradeCost(room);
         if (!cost) return 'Максимальный уровень';
         if (!this.canAfford(room, cost)) return this.missing(room, cost);
@@ -306,6 +372,116 @@ export class Match {
     c.path = path;
     this.cancelTask(c);
     c.task = { cmd, stage: 'walk', kind: null, target: null, workLeft: 0, workTotal: 0, paid: null };
+    return null;
+  }
+
+  /**
+   * Команды духа: полёт в клетку (сквозь стены), «Бу!» и «Искорка». Строить и чинить дух не может.
+   */
+  private spiritCommand(c: Character, cmd: Cmd): string | null {
+    const S = B.spirit;
+    switch (cmd.type) {
+      case 'move': {
+        const w = this.tiles[0].length;
+        const h = this.tiles.length;
+        const x = Math.min(w - 1, Math.max(0, Math.floor(cmd.x)));
+        const y = Math.min(h - 1, Math.max(0, Math.floor(cmd.y)));
+        c.flyTo = { x: x + 0.5, y: y + 0.5 };
+        return null;
+      }
+      case 'boo': {
+        if (c.booCd > 0) return `Бу! будет готово через ${Math.ceil(c.booCd)} с`;
+        if (!this.booInRange(c)) return 'Подлети ближе к призраку';
+        // «Бу!» не зависит от капканов: не проверяет и не даёт иммунитет.
+        const g = this.ghost;
+        g.held = Math.max(g.held, S.booHold);
+        c.booCd = S.booCd;
+        this.events.push({ type: 'boo', charId: c.id });
+        return null;
+      }
+      case 'spark': {
+        if (c.sparkCd > 0) return `Искорка будет готова через ${Math.ceil(c.sparkCd)} с`;
+        const target = this.sparkTarget(c, cmd);
+        if (!target) return 'Рядом нет пушки соседа';
+        target.b.boost = S.sparkTime;
+        c.sparkCd = S.sparkCd;
+        this.events.push({ type: 'spark', roomId: target.r.id, x: target.b.x, y: target.b.y });
+        return null;
+      }
+      default:
+        return 'Ты дух — строить нельзя';
+    }
+  }
+
+  /** Призрак ночью на виду и в радиусе «Бу!» от духа c (для кнопки HUD — тоже). */
+  booInRange(c: Character): boolean {
+    const g = this.ghost;
+    return this.phase === 'night' && ghostTargetable(g) && Math.hypot(g.x - c.x, g.y - c.y) <= B.spirit.booRange;
+  }
+
+  /** Пушки соседей (живые комнаты, не игрока) в радиусе «Искорки» от духа c. */
+  sparkCannons(c: Character): { r: Room; b: Building }[] {
+    const out: { r: Room; b: Building }[] = [];
+    for (const r of this.rooms) {
+      if (r.ownerId === null || r.ownerId === this.playerId || r.eliminated) continue;
+      for (const b of r.buildings) {
+        if (b.kind === 'cannon' && Math.hypot(b.x + 0.5 - c.x, b.y + 0.5 - c.y) <= B.spirit.sparkRange) out.push({ r, b });
+      }
+    }
+    return out;
+  }
+
+  /** Цель «Искорки»: пушка в указанной клетке (если она в радиусе) или ближайшая пушка соседа. */
+  private sparkTarget(c: Character, cmd: { x?: number; y?: number; roomId?: number }): { r: Room; b: Building } | null {
+    const list = this.sparkCannons(c);
+    if (cmd.x !== undefined && cmd.y !== undefined) {
+      return list.find((t) => t.b.x === cmd.x && t.b.y === cmd.y && (cmd.roomId === undefined || t.r.id === cmd.roomId)) ?? null;
+    }
+    const d = (t: { b: Building }) => Math.hypot(t.b.x + 0.5 - c.x, t.b.y + 0.5 - c.y);
+    return list.reduce<{ r: Room; b: Building } | null>((best, t) => (!best || d(t) < d(best) ? t : best), null);
+  }
+
+  /**
+   * Можно ли сейчас вернуть игрока в комнату (реклама за награду): раз за матч, игрок — дух, ночь идёт,
+   * и призрак не входит прямо сейчас в его комнату. null — можно, иначе причина.
+   * Где призрак стоит, не важно: в тик поимки он ещё в комнате, но уже идёт к другой двери.
+   */
+  canRevive(): string | null {
+    const p = this.player;
+    if (this.reviveUsed) return 'Возвращаться можно один раз';
+    if (!p.spirit || p.roomId === null) return 'Ты и так в комнате';
+    if (this.result || this.phase !== 'night') return 'Игра окончена';
+    const g = this.ghost;
+    if (g.state === 'entering' && g.targetRoom === p.roomId) return 'Призрак в комнате';
+    return null;
+  }
+
+  /**
+   * Вернуть игрока в свою комнату: дверь того же уровня с B.revive.doorHp HP, ключ готов, конфеты и постройки
+   * на месте, B.revive.protect с призрак сюда не идёт. Уровень призрака не откатывается.
+   */
+  revive(): string | null {
+    const err = this.canRevive();
+    if (err) return err;
+    const p = this.player;
+    const r = this.rooms[p.roomId!];
+    const d = r.door;
+    r.eliminated = false;
+    d.broken = false;
+    d.hp = d.maxHp * B.revive.doorHp;
+    d.repairCd = 0;
+    p.caught = false;
+    p.spirit = false;
+    p.flyTo = null;
+    p.task = null;
+    p.path = [];
+    p.x = p.prevX = d.inside.x + 0.5;
+    p.y = p.prevY = d.inside.y + 0.5;
+    this.ghost.avoidRoom = r.id;
+    this.ghost.avoidTimer = B.revive.protect;
+    ghostLeaveRoom(this, r);
+    this.reviveUsed = true;
+    this.events.push({ type: 'revived', charId: p.id, roomId: r.id });
     return null;
   }
 
@@ -377,7 +553,7 @@ export class Match {
 
     if (this.phase === 'pick') this.stepPick(dt);
     else if (this.phase === 'prep' && this.phaseLeft <= 0) this.startNight();
-    // Рассвета нет (как в Haunted Dorm): ночь идёт, пока призрак не побеждён или не поймал игрока.
+    // Рассвета нет (как в Haunted Dorm): ночь идёт, пока призрак не побеждён или не поймал всех (пойманный игрок — дух).
     else if (this.phase === 'night' && !this.result) this.nightTime += dt;
 
     const running = this.phase === 'prep' || this.phase === 'night';
@@ -388,7 +564,10 @@ export class Match {
     }
     if (this.phase === 'night') {
       updateGhost(this, dt);
-      if (!this.result) this.stepCannons(dt);
+      if (!this.result) {
+        this.stepTraps(dt);
+        this.stepCannons(dt);
+      }
     }
 
     if (this.endTimer >= 0) {
@@ -457,12 +636,52 @@ export class Match {
       if (this.phase === 'night' && !d.broken && r.items.some((i) => i.kind === 'toolbox')) {
         d.hp = Math.min(d.maxHp, d.hp + d.maxHp * B.items.toolbox * dt);
       }
+      if (this.phase === 'night' && !d.broken) this.stepWorkbench(r, dt);
+    }
+  }
+
+  /** Верстак ночью латает дверь раз в B.workbench.interval с. Целую дверь не трогает — готов сразу, как её ударят. */
+  private stepWorkbench(r: Room, dt: number): void {
+    const d = r.door;
+    for (const b of r.buildings) {
+      if (b.kind !== 'workbench') continue;
+      b.cooldown = Math.max(0, b.cooldown - dt);
+      if (b.cooldown > 0 || d.hp >= d.maxHp) continue;
+      b.cooldown = B.workbench.interval;
+      const amount = Math.min(d.maxHp - d.hp, d.maxHp * benchHeal(b.level));
+      d.hp += amount;
+      this.events.push({ type: 'benchFix', roomId: r.id, amount: Math.round(amount) });
+    }
+  }
+
+  /**
+   * Капканы: призрак на виду (идёт, ломится, убегает) в радиусе заряженного капкана и без иммунитета — застывает.
+   * Входящего в комнату и лечащегося не держат. За тик срабатывает не больше одного капкана.
+   */
+  private stepTraps(dt: number): void {
+    const g = this.ghost;
+    const can = g.state === 'moving' || g.state === 'attacking' || g.state === 'retreating';
+    let fired = false;
+    for (const r of this.rooms) {
+      if (r.ownerId === null || r.eliminated) continue;
+      for (const b of r.buildings) {
+        if (b.kind !== 'trap') continue;
+        b.cooldown = Math.max(0, b.cooldown - dt);
+        if (fired || !can || b.cooldown > 0 || g.held > 0 || g.holdImmune > 0) continue;
+        if (Math.hypot(g.x - b.x - 0.5, g.y - b.y - 0.5) > B.trap.radius) continue;
+        g.held = trapHold(b.level);
+        g.holdImmune = g.held + B.trap.immune;
+        b.cooldown = trapRecharge(b.level);
+        fired = true;
+        this.events.push({ type: 'trapped', roomId: r.id, x: b.x, y: b.y });
+      }
     }
   }
 
   private stepChar(c: Character, dt: number): void {
     c.prevX = c.x;
     c.prevY = c.y;
+    if (c.spirit) return this.stepSpirit(c, dt);
     if (c.caught) return;
     if (c.path.length) {
       this.walk(c, dt);
@@ -476,6 +695,27 @@ export class Match {
     else if (t.stage === 'work') {
       t.workLeft -= dt;
       if (t.workLeft <= 0) this.finishWork(c, room, t);
+    }
+  }
+
+  /** Дух: откаты умений и полёт по прямой к flyTo — без пути, сквозь стены. */
+  private stepSpirit(c: Character, dt: number): void {
+    c.booCd = Math.max(0, c.booCd - dt);
+    c.sparkCd = Math.max(0, c.sparkCd - dt);
+    const t = c.flyTo;
+    if (!t) return;
+    const dx = t.x - c.x;
+    const dy = t.y - c.y;
+    const d = Math.hypot(dx, dy);
+    const step = B.spirit.speed * dt;
+    if (Math.abs(dx) > 0.01) c.facing = dx > 0 ? 1 : -1;
+    if (d <= step) {
+      c.x = t.x;
+      c.y = t.y;
+      c.flyTo = null;
+    } else {
+      c.x += (dx / d) * step;
+      c.y += (dy / d) * step;
     }
   }
 
@@ -527,7 +767,7 @@ export class Match {
         const err = this.canPlace(r, cmd.x, cmd.y, cmd.kind);
         const cost = this.buildCost(cmd.kind);
         if (err) return this.fail(c, err);
-        if (!this.canAfford(r, cost)) return this.fail(c, 'Не хватает конфет');
+        if (!this.canAfford(r, cost)) return this.fail(c, this.missing(r, cost));
         this.pay(r, cost);
         t.paid = cost;
         const kind = cmd.kind === 'pumpkin' ? 'plant' : 'build';
@@ -562,6 +802,9 @@ export class Match {
         if (r.door.repairCd > 0) return this.fail(c, 'Ключ ещё не готов');
         return this.beginWork(c, t, 'repair', doorTarget, B.repair.work);
       case 'upgradeSofa': {
+        // Дверь не может понизиться в уровне сама по себе, так что это защита от гонки, а не основная проверка (та — в command).
+        const need = this.sofaBlockedBy(r);
+        if (need) return this.fail(c, `Сначала дверь до ур. ${need}`);
         const cost = this.sofaUpgradeCost(r);
         if (!cost) return this.fail(c, 'Нельзя улучшить');
         if (!this.canAfford(r, cost)) return this.fail(c, this.missing(r, cost));
@@ -633,12 +876,15 @@ export class Match {
       for (const b of r.buildings) {
         if (b.kind !== 'cannon') continue;
         b.cooldown = Math.max(0, b.cooldown - dt);
+        // «Искорка» духа: пока горит — урон ×sparkMul. Гаснет всегда, даже если пушка сейчас не стреляет.
+        const mul = b.boost ? B.spirit.sparkMul : 1;
+        if (b.boost) b.boost = Math.max(0, b.boost - dt);
         if (!active || b.cooldown > 0) continue;
         const bx = b.x + 0.5;
         const by = b.y + 0.5;
         if (!inside && Math.hypot(g.x - bx, g.y - by) > cannonRange(b.level)) continue;
         b.cooldown = B.cannon.interval;
-        g.hp -= cannonDmg(b.level);
+        g.hp -= cannonDmg(b.level) * mul;
         // Обучение: до финала призрак не умирает — успеть показать починку и улучшение.
         if (this.script) g.hp = Math.max(g.hp, g.maxHp * this.script.hpFloor);
         this.events.push({ type: 'shot', roomId: r.id, fromX: bx, fromY: by, toX: g.x, toY: g.y });
@@ -646,6 +892,7 @@ export class Match {
           g.hp = 0;
           g.state = 'dead';
           this.events.push({ type: 'ghostDead' });
+          this.teamWin = this.player.spirit;
           this.finish('win', 'ghost');
           return;
         }
@@ -653,10 +900,24 @@ export class Match {
     }
   }
 
-  /** Вызывается призраком, когда он поймал хозяина комнаты. */
+  /**
+   * Вызывается призраком, когда он поймал хозяина комнаты. Поимка игрока не конец: он становится духом
+   * и помогает соседям. Поражение — только когда поймали всех.
+   */
   onEliminated(c: Character): void {
     if (this.firstElimAt < 0) this.firstElimAt = this.nightTime;
-    if (c.isPlayer) this.finish('lose', 'caught');
+    if (this.survivors === 0) {
+      // Последнего поймали — матч проигран, духом уже не стать (карточка духа не нужна).
+      this.finish('lose', 'allCaught');
+      return;
+    }
+    if (c.isPlayer) {
+      c.spirit = true;
+      c.flyTo = null;
+      c.booCd = 0;
+      c.sparkCd = 0;
+      this.events.push({ type: 'spirit', charId: c.id });
+    }
   }
 
   private finish(result: 'win' | 'lose', reason: Match['resultReason']): void {

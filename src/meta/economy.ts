@@ -39,18 +39,41 @@ export function emptyMeta(): Meta {
   };
 }
 
-/** Дочинить сохранение старой версии: недостающие поля — по умолчанию. */
+/** Целое ≥ 0 из сохранения; мусор (NaN, строка, минус) — значение по умолчанию. */
+function safeInt(n: unknown, fallback: number, max = Number.MAX_SAFE_INTEGER): number {
+  const v = typeof n === 'number' ? Math.floor(n) : NaN;
+  return Number.isFinite(v) ? Math.min(max, Math.max(0, v)) : fallback;
+}
+
+/**
+ * Дочинить сохранение старой версии или испорченное: недостающие и битые поля — по умолчанию.
+ * Иначе NaN в монетах «открывал» бы все покупки (NaN < цена всегда false).
+ */
 export function normalizeMeta(raw: Partial<Meta> | undefined): Meta {
   const e = emptyMeta();
   const m = { ...e, ...raw };
+  const list = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+  const heroes = Array.from(new Set([0, ...list<number>(m.heroes).filter((h) => HEROES.some((q) => q.look === h))]));
+  const skins = {
+    door: Array.from(new Set(['classic', ...list<string>(m.skins?.door)])),
+    cannon: Array.from(new Set(['classic', ...list<string>(m.skins?.cannon)])),
+  };
   return {
-    coins: Math.max(0, Math.floor(m.coins ?? 0)),
-    heroes: Array.from(new Set([0, ...(m.heroes ?? [])])),
-    hero: (m.heroes ?? [0]).includes(m.hero) ? m.hero : 0,
-    skins: { door: Array.from(new Set(['classic', ...(m.skins?.door ?? [])])), cannon: Array.from(new Set(['classic', ...(m.skins?.cannon ?? [])])) },
-    skin: { door: m.skin?.door ?? 'classic', cannon: m.skin?.cannon ?? 'classic' },
-    boosters: { ...e.boosters, ...m.boosters },
-    daily: { last: m.daily?.last ?? '', step: m.daily?.step ?? 0 },
+    coins: safeInt(m.coins, 0),
+    heroes,
+    hero: heroes.includes(m.hero) ? m.hero : 0,
+    skins,
+    // Выбранный скин — только из купленных.
+    skin: {
+      door: skins.door.includes(m.skin?.door as string) ? (m.skin!.door as string) : 'classic',
+      cannon: skins.cannon.includes(m.skin?.cannon as string) ? (m.skin!.cannon as string) : 'classic',
+    },
+    boosters: {
+      candy: safeInt(m.boosters?.candy, 0, BOOSTER_MAX),
+      door: safeInt(m.boosters?.door, 0, BOOSTER_MAX),
+      wrench: safeInt(m.boosters?.wrench, 0, BOOSTER_MAX),
+    },
+    daily: { last: typeof m.daily?.last === 'string' ? m.daily.last : '', step: safeInt(m.daily?.step, 0, DAILY.length - 1) },
     tutorialGift: !!m.tutorialGift,
   };
 }
@@ -164,15 +187,19 @@ export interface Reward {
 }
 
 const WIN_BASE: Record<Difficulty, number> = { easy: 30, hard: 60, nightmare: 100 };
+/** Командная победа (добили, пока игрок был духом): доля от обычной награды за победу. */
+const TEAM_WIN_MUL = 0.5;
 
 /**
  * Монеты за матч. Проигрыш тоже что-то даёт (за каждую минуту ночи) — чтобы ребёнок
- * не уходил с пустыми руками; победа заметно выгоднее.
+ * не уходил с пустыми руками; победа заметно выгоднее. teamWin — победили, когда игрок был духом:
+ * база победы вдвое меньше, за соседей как обычно.
  */
-export function matchReward(win: boolean, difficulty: Difficulty, nightSeconds: number, neighborsAlive: number): Reward {
+export function matchReward(win: boolean, difficulty: Difficulty, nightSeconds: number, neighborsAlive: number, teamWin = false): Reward {
   const parts: Reward['parts'] = [];
   if (win) {
-    parts.push({ label: 'победа', coins: WIN_BASE[difficulty] });
+    if (teamWin) parts.push({ label: 'командная победа', coins: Math.round(WIN_BASE[difficulty] * TEAM_WIN_MUL) });
+    else parts.push({ label: 'победа', coins: WIN_BASE[difficulty] });
     if (neighborsAlive > 0) parts.push({ label: 'соседи', coins: neighborsAlive * 5 });
   } else {
     parts.push({ label: 'за старание', coins: 10 });

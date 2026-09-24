@@ -201,7 +201,7 @@ export function pickCannonCell(m: Match, r: Room): Vec | null {
   const f = r.door.front;
   const reach = B.cannon.range - 0.6;
   const cells = m
-    .buildCells(r, 'cannon')
+    .placeableCells(r, 'cannon')
     .map((c) => ({ c, d: Math.hypot(c.x + 0.5 - f.x, c.y + 0.5 - f.y) }))
     .sort((a, b) => a.d - b.d);
   // Ребёнок мог выбрать не ту комнату — тогда просто ближайшая к двери клетка.

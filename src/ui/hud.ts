@@ -17,6 +17,9 @@ export interface MenuOption {
   note?: string;
   poor?: boolean;
   disabled?: boolean;
+  /** Пункт упёрся в уровень двери (диван, поздние постройки): кликабелен, но выглядит запертым —
+   *  вместо цены пилюля с замком и номером нужного уровня; onPick решает сам, что делать (например, подсветить дверь). */
+  lockDoor?: number;
   onPick: () => void;
 }
 
@@ -24,6 +27,9 @@ export interface HudHandlers {
   repair: () => void;
   home: () => void;
   pause: () => void;
+  /** Умения духа (игрока поймали): «Бу!» и «Искорка». */
+  boo: () => void;
+  spark: () => void;
 }
 
 /** Метапрогресс на главном меню: монеты и переходы в магазин/подарок. */
@@ -91,6 +97,10 @@ const ICON = {
   close: `<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>`,
   up: `<svg viewBox="0 0 24 24"><path d="M12 19V6M6 11l6-6 6 6" stroke="var(--ink)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   lock: `<svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2" fill="#fff" stroke="var(--ink)" stroke-width="1.3"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="var(--ink)" stroke-width="1.6"/></svg>`,
+  /** Поздние постройки — заглушки, пока нет спрайтов trap/workbench/fridge: капкан (тарелка с липким желе и леденцом), верстак с молотком, холодильник с магнитом-конфетой. */
+  trap: `<svg viewBox="0 0 24 24"><ellipse cx="11" cy="16.5" rx="9" ry="5" fill="url(#hg-silver)" stroke="var(--ink)" stroke-width="1.4"/><ellipse cx="11" cy="15.8" rx="5.6" ry="2.8" fill="#ff7eb6" stroke="var(--ink)" stroke-width="1.1"/><path d="M15 14.5 18 6.5" stroke="var(--ink)" stroke-width="2.8" stroke-linecap="round"/><path d="M15 14.5 18 6.5" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/><circle cx="18.4" cy="5.4" r="3.7" fill="url(#hg-straw)" stroke="var(--ink)" stroke-width="1.3"/><path d="M16.9 5a1.6 1.6 0 1 1 1.6 1.8" fill="none" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/></svg>`,
+  bench: `<svg viewBox="0 0 24 24"><path d="M5.5 13v7M18.5 13v7" stroke="var(--ink)" stroke-width="3.2" stroke-linecap="round"/><path d="M5.5 13v7M18.5 13v7" stroke="#b07d42" stroke-width="1.4" stroke-linecap="round"/><rect x="2.5" y="10" width="19" height="4.2" rx="1.4" fill="#c98a4b" stroke="var(--ink)" stroke-width="1.3"/><path d="M6.5 8.5 13.5 4.6" stroke="var(--ink)" stroke-width="2.8" stroke-linecap="round"/><path d="M6.5 8.5 13.5 4.6" stroke="#f3d7a4" stroke-width="1.2" stroke-linecap="round"/><rect x="12.3" y="1.6" width="6.4" height="4.6" rx="1.1" transform="rotate(-29 15.5 3.9)" fill="url(#hg-silver)" stroke="var(--ink)" stroke-width="1.2"/></svg>`,
+  fridge: `<svg viewBox="0 0 24 24"><rect x="5.5" y="2" width="13" height="20" rx="3.4" fill="#eaf6ff" stroke="var(--ink)" stroke-width="1.4"/><path d="M5.5 9.2h13" stroke="var(--ink)" stroke-width="1.2"/><path d="M15.6 4.6v2.4M15.6 11.6v4" stroke="var(--ink)" stroke-width="1.7" stroke-linecap="round"/><path d="M9 14.2 7.4 12.8v2.8zM12.4 14.2l1.6-1.4v2.8z" fill="url(#hg-straw)" stroke="var(--ink)" stroke-width=".8" stroke-linejoin="round"/><circle cx="10.7" cy="14.2" r="2" fill="url(#hg-straw)" stroke="var(--ink)" stroke-width="1"/></svg>`,
   replay: `<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.6 5.9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M4 12V7M4 12h5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   menuList: `<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke="var(--ink)" stroke-width="2.6" stroke-linecap="round"/></svg>`,
   bolt: `<svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 10-13h-6l1-7z" fill="url(#hg-amber)" stroke="var(--ink)" stroke-width="1.3" stroke-linejoin="round"/></svg>`,
@@ -107,6 +117,12 @@ const ICON = {
   coin: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.6" fill="url(#hg-coin)" stroke="var(--ink)" stroke-width="1.5"/><circle cx="12" cy="12" r="7.2" fill="none" stroke="#fff3c4" stroke-width="1" stroke-opacity=".85"/><path d="M12 7.4l1.1 2.4 2.6.3-1.9 1.8.5 2.6-2.3-1.3-2.3 1.3.5-2.6-1.9-1.8 2.6-.3z" fill="#fff3c4" stroke="var(--ink)" stroke-width=".9" stroke-linejoin="round"/></svg>`,
   shop: `<svg viewBox="0 0 24 24"><path d="M5 9l1.4-4.6A2 2 0 0 1 8.3 3h7.4a2 2 0 0 1 1.9 1.4L19 9" fill="none" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><path d="M4.4 9h15.2l-1 10.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8L4.4 9z" fill="url(#hg-straw)" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><path d="M8.5 9a3.5 3.5 0 0 0 7 0" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>`,
   gift: `<svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="1.6" fill="url(#hg-mint)" stroke="var(--ink)" stroke-width="1.4"/><rect x="3" y="7" width="18" height="4" rx="1.2" fill="#fff" stroke="var(--ink)" stroke-width="1.3"/><rect x="11" y="7" width="2" height="13" fill="var(--ink)" opacity=".85"/><path d="M12 7c-1.5-3.4-6-3.6-6-.6 0 1.6 2.6.6 6 .6zm0 0c1.5-3.4 6-3.6 6-.6 0 1.6-2.6.6-6 .6z" fill="url(#hg-straw)" stroke="var(--ink)" stroke-width="1.1" stroke-linejoin="round"/></svg>`,
+  /** Телевизор — «посмотреть ролик» (реклама за награду). */
+  tv: `<svg viewBox="0 0 24 24"><path d="M9 3l3 3 3-3" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.5" y="6" width="19" height="14" rx="3" fill="url(#hg-grape)" stroke="var(--ink)" stroke-width="1.4"/><rect x="5" y="8.5" width="14" height="9" rx="1.6" fill="#fff" stroke="var(--ink)" stroke-width="1.2"/><path d="M10.5 10.6v4.8l4-2.4z" fill="url(#hg-straw)" stroke="var(--ink)" stroke-width="1" stroke-linejoin="round"/></svg>`,
+  /** Дух кричит «Бу!»: привиденьице с открытым ртом и волнами крика. */
+  boo: `<svg viewBox="0 0 24 24"><path d="M4 21V11a7 7 0 0 1 14 0v10l-2.3-1.8L13.3 21 11 19.2 8.7 21 6.3 19.2z" fill="#fff" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><circle cx="8.6" cy="10.5" r="1.3" fill="var(--ink)"/><circle cx="13.4" cy="10.5" r="1.3" fill="var(--ink)"/><ellipse cx="11" cy="14.6" rx="1.7" ry="2.1" fill="var(--ink)"/><path d="M20 7.5l2-1.5M20.5 11h2.2M20 14.5l2 1.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  /** «Искорка»: четырёхлучевая звёздочка с маленькой рядом. */
+  spark: `<svg viewBox="0 0 24 24"><path d="M11 2.5l2 6.5 6.5 2-6.5 2-2 6.5-2-6.5-6.5-2 6.5-2z" fill="url(#hg-amber)" stroke="var(--ink)" stroke-width="1.3" stroke-linejoin="round"/><path d="M19 15.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z" fill="#fff" stroke="var(--ink)" stroke-width="1" stroke-linejoin="round"/></svg>`,
 };
 
 /** Цена/сумма с монеткой — общий вид для магазина, подарка дня и итогов. */
@@ -119,6 +135,10 @@ function coinAmount(n: number, cls = 'price-ico'): string {
 const OPTION_ICON: Record<string, () => string> = {
   'build:cannon': () => img('cannon_base'),
   'build:pumpkin': () => img('pumpkin'),
+  // Спрайтов поздних построек может ещё не быть — тогда SVG-заглушка.
+  'build:trap': () => img('trap') || ICON.trap,
+  'build:workbench': () => img('workbench') || ICON.bench,
+  'build:fridge': () => img('fridge') || ICON.fridge,
   upgradeDoor: () => img('door_l1'),
   repair: () => ICON.wrench,
   upgradeSofa: () => img('sofa'),
@@ -137,6 +157,11 @@ function costPill(c: Cost): string {
   return candy + flame;
 }
 
+/** Пункт заперт дверью: пилюля с замком, иконкой двери и нужным уровнем — вместо цены. */
+function lockPill(doorLevel: number): string {
+  return `<span class="lock-pill">${ICON.lock}${img('door_l1', 'cost-ico')}${doorLevel}</span>`;
+}
+
 /** Небольшая метка вместо цены — «+30%», «через 5 с», а для «Продать» — число конфет со значком. */
 function noteVisual(note: string): string {
   const gain = /🍬\s*(\d+)/u.exec(note);
@@ -148,7 +173,7 @@ function noteVisual(note: string): string {
 /** Интерфейс поверх canvas на обычном DOM: чёткий текст и крупные кнопки на любом экране. */
 export class Hud {
   private readonly el: Record<string, HTMLElement> = {};
-  private handlers: HudHandlers = { repair: () => {}, home: () => {}, pause: () => {} };
+  private handlers: HudHandlers = { repair: () => {}, home: () => {}, pause: () => {}, boo: () => {}, spark: () => {} };
   private readonly last = new Map<string, string>();
   private bannerTimer = 0;
   private toastTimer = 0;
@@ -185,14 +210,27 @@ export class Hud {
         <span class="repair-ico">${ICON.wrench}</span>
         <span class="repair-cd-num"></span>
       </button>
+      <button class="btn-round spirit-btn boo-btn hidden" id="boo" aria-label="Бу! Напугать призрака" type="button">
+        <span class="spirit-ico">${ICON.boo}</span>
+        <span class="spirit-cd-num"></span>
+      </button>
+      <button class="btn-round spirit-btn spark-btn hidden" id="spark" aria-label="Искорка: пушка соседа бьёт сильнее" type="button">
+        <span class="spirit-ico">${ICON.spark}</span>
+        <span class="spirit-cd-num"></span>
+      </button>
       <div id="menu"></div>
       <div id="screen"></div>
       <div id="toastScreen" class="toast-top"></div>`;
-    for (const id of ['candy', 'flame', 'clock', 'pause', 'sound', 'banner', 'toast', 'home', 'repair', 'menu', 'screen', 'portraits', 'toastScreen']) {
+    for (const id of ['candy', 'flame', 'clock', 'pause', 'sound', 'banner', 'toast', 'home', 'repair', 'boo', 'spark', 'menu', 'screen', 'portraits', 'toastScreen']) {
       this.el[id] = root.querySelector<HTMLElement>(`#${id}`)!;
     }
     this.el.repair.addEventListener('click', () => this.handlers.repair());
     this.el.home.addEventListener('click', () => this.handlers.home());
+    // Серая «Бу!» (призрак далеко) не реагирует — без ругательного тоста.
+    this.el.boo.addEventListener('click', () => {
+      if (!this.el.boo.classList.contains('off')) this.handlers.boo();
+    });
+    this.el.spark.addEventListener('click', () => this.handlers.spark());
     this.el.pause.addEventListener('click', () => this.handlers.pause());
     this.el.sound.addEventListener('click', () => this.setMuteIcon(this.onToggleMute()));
     // Щелчок на любой кнопке интерфейса.
@@ -321,6 +359,31 @@ export class Hud {
       this.last.set('repair-ring', cdKey);
       this.el.repair.style.setProperty('--cd', cdKey);
     }
+
+    // Дух: две кнопки умений вместо ключа — откат цифрой и кольцом, как у ключа.
+    const p = m.player;
+    const spirit = p.spirit && m.phase === 'night' && !m.result;
+    this.toggle('boo', 'hidden', !spirit);
+    this.toggle('spark', 'hidden', !spirit);
+    if (spirit) {
+      this.abilityCd('boo', p.booCd, B.spirit.booCd);
+      this.abilityCd('spark', p.sparkCd, B.spirit.sparkCd);
+      // Серые, пока не до кого дотянуться: призрак далеко / рядом нет пушки соседа.
+      this.toggle('boo', 'off', !m.booInRange(p));
+      this.toggle('spark', 'off', m.sparkCannons(p).length === 0);
+    }
+  }
+
+  /** Откат умения духа на кнопке: класс cd, число секунд и кольцо --cd. */
+  private abilityCd(id: 'boo' | 'spark', left: number, total: number): void {
+    const cd = Math.ceil(left);
+    this.toggle(id, 'cd', cd > 0);
+    this.set(id, cd > 0 ? String(cd) : '', '.spirit-cd-num');
+    const frac = left > 0 ? Math.min(1, left / total).toFixed(2) : '0.00';
+    if (this.last.get(`${id}-ring`) !== frac) {
+      this.last.set(`${id}-ring`, frac);
+      this.el[id].style.setProperty('--cd', frac);
+    }
   }
 
   banner(text: string, ms = 2600): void {
@@ -424,8 +487,10 @@ export class Hud {
       if (o.id && b.dataset.opt !== o.id) b.dataset.opt = o.id;
       const cls = `opt${o.poor ? ' poor' : ''}`;
       if (b.className !== cls) b.className = cls;
+      // Заперт дверью — кнопка остаётся активной (нажатие подсвечивает дверь), только disabled НЕ ставим.
       if (b.disabled !== !!o.disabled) b.disabled = !!o.disabled;
       wrap.classList.toggle('is-disabled', !!o.disabled);
+      wrap.classList.toggle('is-locked', !!o.lockDoor);
 
       const setHtml = (sel: string, html: string, root: ParentNode = b) => {
         const el = root.querySelector(sel);
@@ -441,7 +506,7 @@ export class Hud {
       setText('.opt-desc', o.desc ?? '');
 
       const showReason = !!o.disabled && !!o.note;
-      const costHtml = o.cost ? costPill(o.cost) : !showReason && o.note ? noteVisual(o.note) : '';
+      const costHtml = o.lockDoor ? lockPill(o.lockDoor) : o.cost ? costPill(o.cost) : !showReason && o.note ? noteVisual(o.note) : '';
       setHtml('.cost', costHtml);
 
       const reasonText = showReason ? stripEmoji(o.note!) : '';
@@ -725,7 +790,9 @@ export class Hud {
     this.setInGame(false);
     this.clearMessages();
     const win = m.result === 'win';
-    const title = win ? 'Призрак побеждён!' : 'Призрак тебя пощекотал!';
+    const title = win ? (m.teamWin ? 'Командная победа!' : 'Призрак побеждён!') : 'Призрак всех пощекотал!';
+    // Проигрыш — честно показать, сколько у призрака осталось: «почти победили».
+    const ghostPct = m.ghost.maxHp > 0 ? Math.max(1, Math.round((m.ghost.hp / m.ghost.maxHp) * 100)) : 100;
     // Все жильцы вместе с игроком: «5/5» при своей поимке выглядело как ошибка (считались только соседи).
     const survived = m.survivors;
     const total = m.chars.length;
@@ -739,6 +806,7 @@ export class Hud {
           <div class="stat"><span class="stat-ico">${ICON.clock}</span><span class="stat-n">${m.clock}</span><span class="stat-k">время</span></div>
           <div class="stat"><span class="stat-ico">${m.player.caught ? ICON.cross : ICON.check}</span><span class="stat-n">${survived}/${total}</span><span class="stat-k">выжило</span></div>
           <div class="stat"><span class="stat-ico">${img('ghost_down_idle')}</span><span class="stat-n">ур. ${m.ghost.level}</span><span class="stat-k">призрак</span></div>
+          ${win ? '' : `<div class="stat"><span class="stat-ico">${img('ghost_down_idle')}</span><span class="stat-n">${ghostPct}%</span><span class="stat-k">HP призрака</span></div>`}
         </div>
         ${
           reward

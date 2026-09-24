@@ -76,6 +76,16 @@ export class Sfx {
     }
   }
 
+  /**
+   * Заглушить всё на время рекламы (правило Яндекса 4.7) — без записи в настройки игрока,
+   * в отличие от setMuted. После ролика звук возвращается к выбору игрока.
+   */
+  suspend(on: boolean): void {
+    this.game.sound.mute = on || this._muted;
+    if (on) this.game.sound.pauseAll();
+    else this.game.sound.resumeAll();
+  }
+
   private music: Phaser.Sound.BaseSound | null = null;
   private musicKey: string | null = null;
   /** Идущие затухания: у звука одно, новое отменяет старое (иначе нарастание спорит с затуханием). */

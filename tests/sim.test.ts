@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { B } from '../src/sim/balance';
+import { B, doorMaxHp, sofaNeedDoor } from '../src/sim/balance';
 import { Match } from '../src/sim/match';
 import { Tile, generateMap, guardSlots } from '../src/sim/map';
 import { bfs } from '../src/sim/path';
 import { Rng } from '../src/sim/rng';
 import { allConnected } from '../src/sim/roomgrid';
-import type { Difficulty } from '../src/sim/types';
+import type { Difficulty, SimEvent } from '../src/sim/types';
+import { finishTask, inRoomMatch, mkBuilding, nightNow, pinGhostAtDoor, runUntil, stepSec } from './helpers';
 
 function runToEnd(m: Match, maxSeconds = 2400): void {
   for (let i = 0; i < maxSeconds * 20 && m.phase !== 'end'; i++) m.step();
@@ -139,12 +140,141 @@ describe('match', () => {
     }
   });
 
-  it('если игрока поймали — поражение', () => {
+  it('test_match_player_caught_becomes_spirit_match_continues', () => {
     const m = new Match({ seed: 11, difficulty: 'nightmare', flameUnlocked: false });
     // Игрок ничего не делает — рано или поздно дверь ломают.
-    runToEnd(m);
-    expect(m.result).toBe('lose');
-    expect(m.resultReason).toBe('caught');
+    runUntil(m, (mm) => mm.player.caught, 2400);
     expect(m.player.caught).toBe(true);
+    expect(m.survivors).toBeGreaterThan(0);
+    expect(m.player.spirit).toBe(true);
+    expect(m.result).toBeNull();
+    expect(m.phase).toBe('night');
+    // Матч идёт дальше: ночь продолжается и после поимки.
+    const t = m.nightTime;
+    stepSec(m, 5);
+    expect(m.nightTime).toBeGreaterThan(t);
+  });
+
+  it('test_match_all_caught_is_lose', () => {
+    // Arrange: все соседи уже пойманы, у игрока дверь на последнем издыхании.
+    const m = inRoomMatch();
+    nightNow(m);
+    for (const r of m.rooms) {
+      if (r.ownerId === null || r.ownerId === m.playerId) continue;
+      r.eliminated = true;
+      m.chars[r.ownerId].caught = true;
+    }
+    const room = m.playerRoom!;
+    room.door.hp = 1;
+    pinGhostAtDoor(m, room);
+    // Act
+    const events: SimEvent[] = [];
+    for (let i = 0; i < 20 * 20 && !m.result; i++) {
+      m.step();
+      events.push(...m.events);
+    }
+    // Assert: последнего поймали — поражение, духом не стал (карточки духа нет).
+    expect(m.result).toBe('lose');
+    expect(m.resultReason).toBe('allCaught');
+    expect(m.player.caught).toBe(true);
+    expect(m.player.spirit).toBe(false);
+    expect(events.some((e) => e.type === 'spirit')).toBe(false);
+  });
+
+  it('test_match_spirit_team_win', () => {
+    // Arrange: игрока поймали — он дух.
+    const m = inRoomMatch();
+    nightNow(m);
+    const room = m.playerRoom!;
+    room.door.hp = 1;
+    pinGhostAtDoor(m, room);
+    runUntil(m, (mm) => mm.player.spirit, 20);
+    expect(m.player.spirit).toBe(true);
+    // Призрак почти добит и стоит на пушке соседа.
+    const nb = m.rooms.find((r) => r.ownerId !== null && r.ownerId !== m.playerId && !r.eliminated)!;
+    const cell = nb.door.inside;
+    nb.buildings.push(mkBuilding('cannon', cell.x, cell.y));
+    pinGhostAtDoor(m, nb);
+    m.ghost.x = cell.x + 0.5;
+    m.ghost.y = cell.y + 0.5;
+    m.ghost.hp = 1;
+    // Act
+    runUntil(m, (mm) => mm.result !== null, 5);
+    // Assert
+    expect(m.result).toBe('win');
+    expect(m.resultReason).toBe('ghost');
+    expect(m.teamWin).toBe(true);
+  });
+
+  it('test_match_same_seed_same_outcome', () => {
+    const run = () => {
+      const m = new Match({ seed: 5, difficulty: 'nightmare', flameUnlocked: true, autoPlayer: true });
+      runToEnd(m);
+      return { result: m.result, nightTime: m.nightTime, level: m.ghost.level, team: m.teamWin };
+    };
+    expect(run()).toEqual(run());
+  });
+});
+
+describe('sofa gate', () => {
+  it('test_sofa_upgrade_without_door_level_returns_reason', () => {
+    // Arrange
+    const m = inRoomMatch();
+    const room = m.playerRoom!;
+    room.sofa.level = 2;
+    room.door.level = 1;
+    room.candy = 9999;
+    // Act
+    const err = m.command(0, { type: 'upgradeSofa' });
+    // Assert
+    expect(err).toMatch(/Сначала дверь до ур\. 2/);
+    for (let i = 0; i < 20 * 5; i++) m.step();
+    expect(room.sofa.level).toBe(2);
+  });
+
+  it('test_sofa_upgrade_with_door_level_succeeds', () => {
+    // Arrange
+    const m = inRoomMatch();
+    const room = m.playerRoom!;
+    room.sofa.level = 2;
+    room.door.level = 2;
+    room.door.maxHp = room.door.hp = doorMaxHp(2);
+    room.candy = 9999;
+    // Act
+    const err = m.command(0, { type: 'upgradeSofa' });
+    finishTask(m);
+    // Assert
+    expect(err).toBeNull();
+    expect(room.sofa.level).toBe(3);
+  });
+
+  it('test_sofa_blockedBy_table_matches_needDoor', () => {
+    // Arrange
+    const m = inRoomMatch();
+    const room = m.playerRoom!;
+    room.door.level = 1;
+    // Act & Assert
+    for (let lvl = 1; lvl <= 7; lvl++) {
+      room.sofa.level = lvl;
+      const need = sofaNeedDoor(lvl + 1);
+      expect(m.sofaBlockedBy(room)).toBe(need > 1 ? need : null);
+    }
+    room.sofa.level = B.sofa.max;
+    expect(m.sofaBlockedBy(room)).toBeNull();
+  });
+
+  it('test_npc_sofa_blocked_never_orders_sofa', () => {
+    // Arrange
+    const m = new Match({ seed: 13, difficulty: 'easy', flameUnlocked: true, autoPlayer: true });
+    while (m.phase === 'pick') m.step();
+    nightNow(m);
+    // Act
+    stepSec(m, 600);
+    // Assert: дверь не может понизиться в уровне сама по себе — раз диван добрался до текущего уровня,
+    // дверь уже тогда была нужного уровня и с тех пор могла только подрасти.
+    for (const r of m.rooms) {
+      if (r.ownerId === null) continue;
+      expect(r.door.level).toBeGreaterThanOrEqual(sofaNeedDoor(r.sofa.level));
+    }
   });
 });

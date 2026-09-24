@@ -1,7 +1,8 @@
-import { B } from './balance';
+import { B, fridgeSlow } from './balance';
 import { Tile } from './map';
 import type { Match } from './match';
 import { bfs } from './path';
+import { inRoom } from './roomgrid';
 import type { Ghost, Room, Vec } from './types';
 
 export function createGhost(nest: Vec): Ghost {
@@ -23,12 +24,29 @@ export function createGhost(nest: Vec): Ghost {
     siegeTime: 0,
     healTimer: 0,
     levelTimer: 0,
+    xp: 0,
+    held: 0,
+    holdImmune: 0,
+    avoidRoom: -1,
+    avoidTimer: 0,
   };
 }
 
 export const ghostMaxHp = (m: Match, level: number) => B.ghost.hp * B.ghost.hpMul ** (level - 1) * m.diff.ghostMul;
 export const ghostDamage = (m: Match, level: number) => B.ghost.dmg * B.ghost.dmgMul ** (level - 1) * m.diff.ghostMul;
 export const ghostHitInterval = (level: number) => B.ghost.hitInterval / (1 + B.ghost.hitSpeedup * (level - 1));
+/** Насколько реже призрак бьёт дверь этой комнаты: холодильник внутри (0 — нет холодильника). */
+export const fridgeSlowOf = (r: Room) => {
+  const f = r.buildings.find((b) => b.kind === 'fridge');
+  // Не больше 0.9: иначе при подборе чисел пауза между ударами ушла бы в бесконечность.
+  return f ? Math.min(0.9, fridgeSlow(f.level)) : 0;
+};
+/** Пауза между ударами по двери этой комнаты — одна на симуляцию и отрисовку (кадр удара считается от неё же). */
+export const ghostHitIntervalAt = (m: Match, r: Room) => ghostHitInterval(m.ghost.level) / (1 - fridgeSlowOf(r));
+/** Сколько ударов по дверям нужно с уровня level на следующий: каждый уровень на xpGrowth дороже. */
+export const ghostXpNeed = (m: Match, level: number) =>
+  // Не меньше 0.01: при hitsPerLevel ≤ 0 (подбор чисел в tune.ts) цикл набора уровней не кончился бы.
+  Math.max(0.01, m.diff.hitsPerLevel * (1 + B.ghost.xpGrowth * (level - 1)));
 
 /** По призраку можно стрелять, пока он на виду (не в гнезде и жив). */
 export const ghostTargetable = (g: Ghost) =>
@@ -42,7 +60,22 @@ export function spawnGhost(m: Match): void {
   g.x = g.prevX = m.nest.x;
   g.y = g.prevY = m.nest.y;
   g.levelTimer = 0;
+  g.xp = 0;
+  g.held = 0;
+  g.holdImmune = 0;
   chooseTarget(m);
+}
+
+/**
+ * Призрак внутри комнаты r (игрок воскрес за рекламу, а призрак стоял рядом) — выставить его за дверь
+ * и отправить к другой комнате. Иначе он прошёл бы сквозь починенную дверь, а пушки комнаты били бы по нему в упор.
+ */
+export function ghostLeaveRoom(m: Match, r: Room): void {
+  const g = m.ghost;
+  if (!inRoom(r, Math.floor(g.x), Math.floor(g.y))) return;
+  g.x = g.prevX = r.door.front.x;
+  g.y = g.prevY = r.door.front.y;
+  chooseTarget(m, r.id);
 }
 
 export function hideGhost(m: Match): void {
@@ -56,10 +89,21 @@ export function updateGhost(m: Match, dt: number): void {
   g.prevY = g.y;
   if (g.state === 'hidden' || g.state === 'dead') return;
 
-  if (!m.script) g.levelTimer += dt;
-  if (g.levelTimer >= m.diff.levelEvery) {
-    g.levelTimer -= m.diff.levelEvery;
-    levelUp(m);
+  // Уровень растёт от ударов (hitDoor → gainXp); таймер — страховка, если призрак долго не может ударить.
+  // В обучении уровень не растёт вовсе.
+  if (!m.script) {
+    g.levelTimer += dt;
+    if (g.levelTimer >= m.diff.levelFallback) levelUp(m);
+  }
+
+  // Капкан держит: стоит на месте, не бьёт, терпение и осада на паузе (сдаться «из-за капкана» нельзя).
+  // Состояние прежнее — пушки по нему бьют; отступление ждёт, пока отпустит: беглеца ловят и добивают всем этажом.
+  g.holdImmune = Math.max(0, g.holdImmune - dt);
+  // Защита воскресшей комнаты тикает и пока призрака держат.
+  g.avoidTimer = Math.max(0, g.avoidTimer - dt);
+  if (g.held > 0) {
+    g.held = Math.max(0, g.held - dt);
+    return;
   }
 
   if (!m.script && (g.state === 'moving' || g.state === 'attacking' || g.state === 'entering') && g.hp <= g.maxHp * B.ghost.retreatAt) {
@@ -97,7 +141,7 @@ export function updateGhost(m: Match, dt: number): void {
       }
       if (!m.script?.ghostHitHold) g.hitTimer -= dt;
       if (g.hitTimer <= 0) {
-        g.hitTimer += ghostHitInterval(g.level);
+        g.hitTimer += ghostHitIntervalAt(m, r);
         hitDoor(m, r);
         if (r.door.broken) break;
       }
@@ -147,12 +191,28 @@ export function updateGhost(m: Match, dt: number): void {
   }
 }
 
+/** Удары копятся в «злость»; набралось на уровень — уровень, остаток переносится на следующий. */
+function gainXp(m: Match, x: number): void {
+  const g = m.ghost;
+  g.xp += x;
+  for (let need = ghostXpNeed(m, g.level); g.xp >= need; need = ghostXpNeed(m, g.level)) {
+    g.xp -= need;
+    levelUp(m);
+  }
+}
+
 function levelUp(m: Match): void {
   const g = m.ghost;
   const frac = g.maxHp > 0 ? g.hp / g.maxHp : 1;
+  const oldMax = g.maxHp;
   g.level++;
   g.maxHp = ghostMaxHp(m, g.level);
-  g.hp = frac * g.maxHp;
+  // Уровень посреди осады: пересчитать «HP в начале осады» под новый максимум, иначе урон пушек
+  // до нового уровня забывается и призрак почти не сдаётся у крепкой двери.
+  if (g.state === 'attacking' && oldMax > 0) g.siegeHp *= g.maxHp / oldMax;
+  // Доля HP сохраняется, и сверху новый уровень немного лечит.
+  g.hp = Math.min(g.maxHp, frac * g.maxHp + g.maxHp * B.ghost.levelHeal);
+  g.levelTimer = 0;
   m.events.push({ type: 'ghostLevel', level: g.level });
 }
 
@@ -164,7 +224,10 @@ function chooseTarget(m: Match, exclude = -1): void {
   const g = m.ghost;
   // Комнаты со сломанной дверью тоже цели: призрак мог отступить лечиться, не дойдя до хозяина.
   const alive = m.rooms.filter((r) => r.ownerId !== null && !r.eliminated);
-  let list = alive.filter((r) => r.id !== exclude);
+  // Воскресшую комнату не трогает B.revive.protect с — если только она не последняя живая.
+  const avoid = g.avoidTimer > 0 ? g.avoidRoom : -1;
+  let list = alive.filter((r) => r.id !== exclude && r.id !== avoid);
+  if (!list.length) list = alive.filter((r) => r.id !== avoid);
   if (!list.length) list = alive;
   if (!list.length) {
     g.targetRoom = -1;
@@ -188,6 +251,8 @@ function hitDoor(m: Match, r: Room): void {
   door.hp -= dealt;
   if (r.items.some((i) => i.kind === 'lavender')) r.candy += dealt * B.items.lavender;
   m.events.push({ type: 'doorHit', roomId: r.id, dmg: Math.round(dealt) });
+  // Злость — от нанесённого урона в долях полного удара (добивающий слабый удар — часть удара).
+  if (!m.script && dmg > 0) gainXp(m, dealt / dmg);
   if (door.hp <= 0) {
     door.hp = 0;
     door.broken = true;

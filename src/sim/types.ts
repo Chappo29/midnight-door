@@ -1,5 +1,6 @@
 export type Vec = { x: number; y: number };
-export type BuildKind = 'cannon' | 'pumpkin';
+/** trap/workbench/fridge открываются уровнем двери прямо в матче (B.unlock). */
+export type BuildKind = 'cannon' | 'pumpkin' | 'trap' | 'workbench' | 'fridge';
 export type ItemKind = 'lavender' | 'safe' | 'toolbox';
 export type Difficulty = 'easy' | 'hard' | 'nightmare';
 export type Phase = 'pick' | 'prep' | 'night' | 'end';
@@ -15,6 +16,8 @@ export interface Building {
   y: number;
   level: number;
   cooldown: number;
+  /** Секунд «Искорки» духа (пушка бьёт сильнее). Нет поля — 0. */
+  boost?: number;
 }
 
 export interface Item {
@@ -83,7 +86,11 @@ export type Cmd =
   | { type: 'sell'; x: number; y: number }
   | { type: 'upgradeDoor' }
   | { type: 'repair' }
-  | { type: 'upgradeSofa' };
+  | { type: 'upgradeSofa' }
+  /** Только для духа: напугать призрака рядом. */
+  | { type: 'boo' }
+  /** Только для духа: «Искорка» — пушка соседа в клетке x,y комнаты roomId или ближайшая в радиусе. */
+  | { type: 'spark'; x?: number; y?: number; roomId?: number };
 
 export type WorkKind = 'build' | 'plant' | 'upgrade' | 'sell' | 'door' | 'sofa' | 'repair';
 
@@ -108,6 +115,10 @@ export interface NpcProfile {
   pace: number;
   /** Больше этого числа пушек не ставит. */
   maxCannons: number;
+  /** Любовь к поздним постройкам (открываются дверью). Нет числа — капкан по умолчанию 1, верстак и холодильник не строит. */
+  trap?: number;
+  bench?: number;
+  fridge?: number;
 }
 
 export interface Character {
@@ -126,6 +137,13 @@ export interface Character {
   task: Task | null;
   facing: 1 | -1;
   caught: boolean;
+  /** Пойманный игрок стал духом: летает сквозь стены и помогает соседям (caught при этом остаётся true). */
+  spirit: boolean;
+  /** Откаты умений духа «Бу!» и «Искорка», с. */
+  booCd: number;
+  sparkCd: number;
+  /** Куда летит дух (центр клетки), null — висит на месте. */
+  flyTo: Vec | null;
   profile: NpcProfile;
   think: number;
 }
@@ -175,7 +193,17 @@ export interface Ghost {
   siegeDoorHp: number;
   siegeTime: number;
   healTimer: number;
+  /** Секунд без нового уровня — страховка DIFF.levelFallback (сбрасывается любым новым уровнем). */
   levelTimer: number;
+  /** «Злость»: удары по дверям к следующему уровню (частичный удар — доля). */
+  xp: number;
+  /** Секунд, что его ещё держит капкан: стоит на месте и не бьёт (по нему стреляют). */
+  held: number;
+  /** Секунд, пока капканы его не хватают (после удержания). */
+  holdImmune: number;
+  /** Комната, которую призрак не выбирает целью ещё avoidTimer с (защита после воскрешения). */
+  avoidRoom: number;
+  avoidTimer: number;
 }
 
 export type SimEvent =
@@ -195,4 +223,16 @@ export type SimEvent =
   /** Призрак бросил эту дверь и пошёл к другой. */
   | { type: 'ghostLeft'; roomId: number }
   | { type: 'ghostDead' }
+  /** Капкан в клетке x,y схватил призрака. */
+  | { type: 'trapped'; roomId: number; x: number; y: number }
+  /** Верстак подлатал дверь на amount HP. */
+  | { type: 'benchFix'; roomId: number; amount: number }
+  /** Пойманный игрок стал духом. */
+  | { type: 'spirit'; charId: number }
+  /** Дух крикнул «Бу!» — призрак замер. */
+  | { type: 'boo'; charId: number }
+  /** Дух дал «Искорку» пушке в клетке x,y. */
+  | { type: 'spark'; roomId: number; x: number; y: number }
+  /** Игрок вернулся в свою комнату (реклама за награду). */
+  | { type: 'revived'; charId: number; roomId: number }
   | { type: 'fail'; charId: number; msg: string };

@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
-import { B, TICK } from '../sim/balance';
+import { B, LATE_KINDS, TICK, benchHeal, fridgeSlow, isLateKind, trapHold, type LateKind } from '../sim/balance';
 import { H, Tile, W } from '../sim/map';
 import type { Match } from '../sim/match';
 import { inRoom, isSoil, key, occupantAt, roomAtCell, roomByDoor, roomCells, roomCenter, walkable } from '../sim/roomgrid';
-import type { Building, Character, Cmd, Room, SimEvent } from '../sim/types';
+import type { BuildKind, Building, Character, Cmd, Room, SimEvent } from '../sim/types';
 import type { Hud, MenuOption } from '../ui/hud';
 import { anchorY, doorKeys, firstSprite, fitImage, hasSprite, preloadSprites } from './sprites';
-import { ghostHitInterval } from '../sim/ghost';
+import { ghostHitIntervalAt, ghostXpNeed } from '../sim/ghost';
 import type { PlayOpts, Sfx } from '../audio/sfx';
 import { TutorialDirector, type TutorialTrack } from '../tutorial/director';
 import { TutorialOverlay } from '../tutorial/overlay';
@@ -26,6 +26,8 @@ export interface GameData {
   tutorial?: { onSkip: () => void; track?: TutorialTrack };
   /** Подсказки по ходу игры: какие уже показаны и куда отметить новую. */
   hints?: { seen: Set<string>; onSeen: (id: string) => void };
+  /** Игрок вернулся в комнату за рекламу (для аналитики). Пока не вызывается: кнопку убрали из UI до Yandex SDK. */
+  onRevive?: () => void;
 }
 
 interface CharView {
@@ -118,6 +120,14 @@ const ITEM_INFO = {
   safe: 'Сейф: +1.5 🍬 в секунду',
   toolbox: 'Ящик: сам понемногу чинит дверь',
 } as const;
+/** Подписи построек в меню и в баннере «Новое!» (desc — серая строчка под названием). */
+const BUILD_INFO: Record<BuildKind, { label: string; desc?: string }> = {
+  cannon: { label: 'Пушка' },
+  pumpkin: { label: 'Тыква' },
+  trap: { label: 'Капкан', desc: 'держит призрака' },
+  workbench: { label: 'Верстак', desc: 'чинит дверь ночью' },
+  fridge: { label: 'Холодильник', desc: 'призрак бьёт реже' },
+};
 const DOOR_COLORS = [0x8b5a2b, 0x9c6b35, 0xb07d42, 0x8a8f99, 0x9fa8b3, 0xd4a82c, 0xe8c24a, 0x9ef0ff];
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -131,6 +141,7 @@ export class GameScene extends Phaser.Scene {
   private acc = 0;
   private userPaused = false;
   private hiddenPaused = false;
+  /** Игрока поймали: карточка «Играть духом / вернуться» на экране, игра стоит. */
   private ended = false;
   private low!: Phaser.GameObjects.Graphics;
   private high!: Phaser.GameObjects.Graphics;
@@ -149,6 +160,8 @@ export class GameScene extends Phaser.Scene {
   private sofaLabels: Phaser.GameObjects.Text[] = [];
   private roomLabels: Phaser.GameObjects.Text[] = [];
   private doorShake = new Map<number, number>();
+  /** Пункт меню упёрся в дверь (диван и т.п.) — тап по нему подсвечивает дверь до этого момента (this.time.now). */
+  private doorPulse = new Map<number, number>();
   private selected: { x: number; y: number } | null = null;
   private drag = { down: false, sx: 0, sy: 0, scrollX: 0, scrollY: 0, dragging: false };
   private pinch = { active: false, dist: 0, zoom: 1 };
@@ -168,6 +181,10 @@ export class GameScene extends Phaser.Scene {
   private walkFollow = false;
   private hints: HintDirector | null = null;
   private hintOverlay: TutorialOverlay | null = null;
+  /** Поздние постройки, про которые уже сказали «Новое!» (или открытые ещё до получения комнаты). */
+  private seenUnlock = new Set<LateKind>();
+  /** Первая проверка уже была: всё, что открыто к этому моменту (усилитель двери), — без баннера. */
+  private unlockPrimed = false;
 
   constructor() {
     super('game');
@@ -189,11 +206,14 @@ export class GameScene extends Phaser.Scene {
     this.sofaLabels = [];
     this.roomLabels = [];
     this.doorShake = new Map();
+    this.doorPulse = new Map();
     this.selected = null;
     this.ghostFlash = 0;
     this.doorImgs = [];
     this.pickOverview = false;
     this.walkFollow = false;
+    this.seenUnlock = new Set();
+    this.unlockPrimed = false;
   }
 
   preload(): void {
@@ -222,6 +242,8 @@ export class GameScene extends Phaser.Scene {
         this.fitCamera();
       },
       pause: () => this.togglePause(),
+      boo: () => this.cmd({ type: 'boo' }),
+      spark: () => this.cmd({ type: 'spark' }),
     });
     if (this.m.opts.tutorial) this.startTutorial();
     else {
@@ -252,6 +274,36 @@ export class GameScene extends Phaser.Scene {
       document.removeEventListener('visibilitychange', onVis);
       this.hud.setInGame(false);
     });
+  }
+
+  // ---------------- поймали: дух ----------------
+
+  /**
+   * Игрока поймали, соседи ещё держатся: сразу дух, игра не останавливается.
+   * Карточку «дух или реклама» убрали по решению пользователя (2026-09-24) — выбор с рекламой казался жёстким
+   * для детей. Воскрешение в симуляции (Match.canRevive/revive) и заглушка рекламы остаются на будущее.
+   */
+  private onPlayerCaught(): void {
+    if (this.m.result || this.ended) return;
+    this.selected = null;
+    this.hud.hideMenu();
+    this.fitCamera();
+    this.hud.banner('Ты дух! Помогай соседям', 3500);
+  }
+
+  /** Дух: тап по пушке соседа — «Искорка» (если готова и дотягивается), иначе лететь в эту клетку. */
+  private spiritTap(tx: number, ty: number): void {
+    const m = this.m;
+    const p = m.player;
+    for (const r of m.rooms) {
+      if (r.ownerId === null || r.ownerId === m.playerId || r.eliminated) continue;
+      const b = r.buildings.find((q) => q.kind === 'cannon' && q.x === tx && q.y === ty);
+      if (!b) continue;
+      const near = Math.hypot(tx + 0.5 - p.x, ty + 0.5 - p.y) <= B.spirit.sparkRange;
+      if (p.sparkCd <= 0 && near) return this.cmd({ type: 'spark', x: tx, y: ty, roomId: r.id });
+      break;
+    }
+    this.cmd({ type: 'move', x: tx, y: ty });
   }
 
   // ---------------- обучение ----------------
@@ -396,6 +448,7 @@ export class GameScene extends Phaser.Scene {
     this.syncBuildings();
     this.renderDynamic(time);
     this.hud.update(this.m);
+    this.checkUnlocks();
     // Последние 5 секунд до полуночи — тикают часы.
     if (this.m.phase === 'prep' && this.m.phaseLeft <= 5) {
       const sec = Math.ceil(this.m.phaseLeft);
@@ -624,6 +677,17 @@ export class GameScene extends Phaser.Scene {
       v.root.setPosition(x, y).setDepth(10 + y / 10000);
       v.hammer.setVisible(false);
       v.shovel.setVisible(false);
+      if (c.spirit) {
+        // Дух: полупрозрачный, голубоватый, покачивается в воздухе — без испуга.
+        v.root.setAlpha(0.55);
+        v.img?.setTint(0xa8d8ff);
+        v.emote.setText('');
+        if (c.flyTo) this.face(v, c.flyTo.x - c.x, c.flyTo.y - c.y);
+        this.setPose(v, 'idle');
+        v.body.setRotation(Math.sin(time / 500) * 0.06).setScale(this.flipX(v), 1);
+        v.body.y = 16 + Math.sin(time / 300) * 4 - 6;
+        continue;
+      }
       if (c.caught) {
         // Пойман: испуганный кадр лицом к камере, дрожит и бледнеет.
         v.root.setAlpha(0.35);
@@ -633,6 +697,12 @@ export class GameScene extends Phaser.Scene {
         v.body.setRotation(Math.sin(time / 40) * 0.15).setScale(this.flipX(v), 1);
         v.body.y = 16;
         continue;
+      }
+      // Вернулся из духов (воскрешение) — снова обычный вид.
+      if (v.root.alpha !== 1) {
+        v.root.setAlpha(1);
+        v.img?.clearTint();
+        v.emote.setText('');
       }
 
       const t = c.task;
@@ -805,7 +875,8 @@ export class GameScene extends Phaser.Scene {
     if (g.state === 'dead') return;
     v.setVisible(true);
     v.setPosition(lerp(g.prevX, g.x, a) * TS, lerp(g.prevY, g.y, a) * TS);
-    this.ghostBody.y = Math.sin(time / 260) * 4;
+    // Капкан держит — не покачивается (прилип).
+    this.ghostBody.y = g.held > 0 ? 0 : Math.sin(time / 260) * 4;
     this.ghostLabel.setText(`ур. ${g.level}`);
     this.ghostFlash = Math.max(0, this.ghostFlash - deltaMs);
     if (this.ghostImg) {
@@ -852,7 +923,8 @@ export class GameScene extends Phaser.Scene {
       // Верхние двери он бьёт снизу — спиной к нам; нижние — лицом.
       const r = this.m.rooms[g.targetRoom];
       const view = r.top ? 'up' : 'down';
-      const interval = ghostHitInterval(g.level);
+      // Тот же интервал, что в симуляции (холодильник растягивает паузу) — иначе кадр удара залипает.
+      const interval = ghostHitIntervalAt(this.m, r);
       const sinceHit = interval - g.hitTimer;
       const p = 1 - g.hitTimer / interval;
       frame = sinceHit < 0.18 ? `${view}_attack2` : p > 0.55 ? `${view}_attack1` : `${view}_idle`;
@@ -917,6 +989,68 @@ export class GameScene extends Phaser.Scene {
     return `cannon_${part}`;
   }
 
+  /** Картинка поздней постройки для уровня: <kind>_l<N>, нет — ближайшая младшая, ур. 1 = <kind>; нет вовсе — null (рисуем заглушку). */
+  private levelKey(kind: LateKind, level: number): string | null {
+    for (let l = level; l >= 2; l--) if (hasSprite(this, `${kind}_l${l}`)) return `${kind}_l${l}`;
+    return hasSprite(this, kind) ? kind : null;
+  }
+
+  /**
+   * Заглушки поздних построек (пока нет спрайтов): мультяшно, толстый тёмный контур, читается в клетке.
+   * Капкан — тарелка с розовым липким желе и леденцом, верстак — лавка с молотком, холодильник — с магнитом-конфетой.
+   * С уровнем добавляется золотая звёздочка-заклёпка (ур. 2 — одна, ур. 3 — две).
+   */
+  private drawLatePlaceholder(g: Phaser.GameObjects.Graphics, kind: LateKind, level: number): void {
+    const ink = 0x1a1030;
+    if (kind === 'trap') {
+      g.fillStyle(0x000000, 0.2).fillEllipse(0, 13, 38, 10);
+      g.fillStyle(0x9aa1b1).fillEllipse(0, 6, 36, 22);
+      g.lineStyle(3, ink).strokeEllipse(0, 6, 36, 22);
+      g.fillStyle(0xd5d9e2).fillEllipse(0, 4, 28, 14);
+      g.fillStyle(0xff7eb6).fillEllipse(-1, 5, 22, 11);
+      g.lineStyle(2, ink).strokeEllipse(-1, 5, 22, 11);
+      g.fillStyle(0xffc6de).fillEllipse(-5, 3, 8, 3);
+      g.fillStyle(0xff7eb6).fillCircle(-11, 11, 2.5).fillCircle(9, 12, 2);
+      // Леденец на палочке — приманка.
+      g.lineStyle(5, ink).lineBetween(7, 4, 11, -12);
+      g.lineStyle(2.5, 0xffffff).lineBetween(7, 4, 11, -12);
+      g.fillStyle(0xff4d6d).fillCircle(12, -15, 7);
+      g.lineStyle(2.5, ink).strokeCircle(12, -15, 7);
+      g.lineStyle(2, 0xffffff).beginPath().arc(12, -15, 3.5, -0.4, Math.PI * 1.2).strokePath();
+    } else if (kind === 'workbench') {
+      g.fillStyle(0x000000, 0.2).fillEllipse(0, 16, 40, 9);
+      g.fillStyle(ink).fillRoundedRect(-17, -1, 8, 18, 2).fillRoundedRect(9, -1, 8, 18, 2);
+      g.fillStyle(0x9c6b35).fillRect(-15, 0, 4, 15).fillRect(11, 0, 4, 15);
+      g.fillStyle(0xc98a4b).fillRoundedRect(-20, -8, 40, 11, 3);
+      g.lineStyle(3, ink).strokeRoundedRect(-20, -8, 40, 11, 3);
+      g.lineStyle(1.5, 0x9c6b35).lineBetween(-7, -6, -7, 1).lineBetween(6, -6, 6, 1);
+      // Молоток лежит на лавке.
+      g.lineStyle(5, ink).lineBetween(-12, -11, 4, -15);
+      g.lineStyle(2.5, 0xf3d7a4).lineBetween(-12, -11, 4, -15);
+      g.fillStyle(0xaeb4c2).fillRoundedRect(2, -21, 9, 11, 2);
+      g.lineStyle(2.5, ink).strokeRoundedRect(2, -21, 9, 11, 2);
+    } else {
+      g.fillStyle(0x000000, 0.2).fillEllipse(0, 17, 32, 8);
+      g.fillStyle(0xeaf6ff).fillRoundedRect(-13, -21, 26, 38, 7);
+      g.lineStyle(3, ink).strokeRoundedRect(-13, -21, 26, 38, 7);
+      g.lineStyle(2, ink).lineBetween(-13, -6, 13, -6);
+      g.fillStyle(0xc9e6fb).fillRoundedRect(-10, -18, 4, 9, 2);
+      g.fillStyle(ink).fillRoundedRect(6, -16, 3.5, 7, 1.5).fillRoundedRect(6, -2, 3.5, 10, 1.5);
+      // Магнит-конфетка в фантике.
+      g.fillStyle(0xff4d6d).fillTriangle(-9, 5, -13, 1, -13, 9).fillTriangle(3, 5, 7, 1, 7, 9);
+      g.fillStyle(0xff4d6d).fillCircle(-3, 5, 5);
+      g.lineStyle(2, ink).strokeCircle(-3, 5, 5);
+      g.fillStyle(0xffffff).fillCircle(-4.5, 3.5, 1.5);
+    }
+    // Уровень — золотые заклёпки в углу (цифра уровня и так рядом).
+    g.fillStyle(0xffd166);
+    g.lineStyle(1.5, ink);
+    for (let i = 0; i < level - 1; i++) {
+      g.fillCircle(-15 + i * 7, -17, 3);
+      g.strokeCircle(-15 + i * 7, -17, 3);
+    }
+  }
+
   /** Скин комнаты: свой только у игрока, у соседей — обычный. */
   private roomSkin(r: Room, slot: 'door' | 'cannon'): string {
     return r.ownerId === 0 ? (this.m.opts.skin?.[slot] ?? 'classic') : 'classic';
@@ -951,7 +1085,23 @@ export class GameScene extends Phaser.Scene {
       barrel.fillStyle(0x2d2f36).fillRoundedRect(0, -5, 24, 10, 3);
       barrel.fillStyle(0xff6b6b).fillRect(18, -5, 6, 10);
       parts.push(g, barrel);
+    } else if (isLateKind(b.kind)) {
+      const k = this.levelKey(b.kind, b.level);
+      if (!k) {
+        this.drawLatePlaceholder(g, b.kind, b.level);
+        parts.push(g);
+      } else if (b.kind === 'fridge') {
+        // Холодильник стоит, как мебель: основание у низа клетки, макушка чуть выше неё.
+        g.fillStyle(0x000000, 0.2).fillEllipse(0, TS / 2 - 5, 32, 8);
+        parts.push(g, fitImage(this, 0, TS / 2 - 3, k, TS - 10, TS + 2, 1));
+      } else {
+        // Капкан — низкая тарелка, верстак — столик: оба примерно в клетку шириной.
+        const low = b.kind === 'trap';
+        g.fillStyle(0x000000, 0.2).fillEllipse(0, low ? 12 : 15, low ? 38 : 40, low ? 10 : 9);
+        parts.push(g, fitImage(this, 0, low ? 2 : 0, k, TS - (low ? 6 : 4), TS - (low ? 12 : 6), 0.5));
+      }
     } else {
+      // Тыква без спрайта.
       g.fillStyle(0x000000, 0.2).fillEllipse(0, 14, 36, 10);
       g.fillStyle(0xe8740f).fillEllipse(0, 4, 36, 28);
       g.fillStyle(0xff9a2e).fillEllipse(0, 3, 24, 26);
@@ -984,8 +1134,8 @@ export class GameScene extends Phaser.Scene {
           }
         }
         if (v.getData('level') !== b.level) {
-          if (b.kind === 'cannon') {
-            // Новая модель пушки: пересобираем вид, ствол смотрит туда же, где был.
+          if (b.kind !== 'pumpkin') {
+            // Новая модель (пушка, капкан, верстак, холодильник): пересобираем вид, ствол пушки смотрит туда же, где был.
             const rot = (v.getData('barrel') as { rotation: number } | null)?.rotation ?? 0;
             v.destroy();
             v = this.makeBuilding(b, this.roomSkin(r, 'cannon'));
@@ -999,6 +1149,8 @@ export class GameScene extends Phaser.Scene {
             (v.getData('lvl') as Phaser.GameObjects.Text).setText(String(b.level));
           }
         }
+        // Капкан на перезарядке — бледный: видно, что сейчас не схватит.
+        if (b.kind === 'trap') v.setAlpha(b.cooldown > 0 ? 0.45 : 1);
         const barrel = v.getData('barrel') as { rotation: number } | null;
         if (barrel) {
           if (ghostOut && Math.hypot(g.x - b.x - 0.5, g.y - b.y - 0.5) < 9) {
@@ -1074,6 +1226,12 @@ export class GameScene extends Phaser.Scene {
         hi.fillStyle(0x000000, 0.6).fillRect(px + 3, by, TS - 6, 7);
         hi.fillStyle(frac > 0.5 ? 0x5ee06a : frac > 0.25 ? 0xffc94a : 0xff4d4d).fillRect(px + 4, by + 1, (TS - 8) * frac, 5);
       }
+      // Пункт меню упёрся в эту дверь — коротко подсвечиваем её жёлтым пульсом.
+      const pulseUntil = this.doorPulse.get(r.id) ?? 0;
+      if (pulseUntil > now) {
+        const a = 0.5 + 0.5 * Math.sin(now / 120);
+        hi.lineStyle(3, 0xffe066, a).strokeRoundedRect(px + 1, py + 1, TS - 2, TS - 2, 6);
+      }
     }
 
     for (let i = 0; i < m.rooms.length; i++) {
@@ -1110,17 +1268,34 @@ export class GameScene extends Phaser.Scene {
     if (this.selected) {
       const s = this.selected;
       lo.lineStyle(3, 0xffe066, 0.9).strokeRoundedRect(s.x * TS + 2, s.y * TS + 2, TS - 4, TS - 4, 6);
-      // Радиус своей пушки (или будущей, пока выбираешь, что строить): куда она достаёт.
+      // Радиус своей пушки или капкана (или будущей пушки, пока выбираешь, что строить): куда достаёт.
       const room = m.playerRoom;
       const b = room?.buildings.find((q) => q.x === s.x && q.y === s.y);
-      const level = b ? (b.kind === 'cannon' ? b.level : 0) : room && occupantAt(room, s.x, s.y) === null && !isSoil(room, s.x, s.y) ? 1 : 0;
-      if (level) {
-        const r = m.cannonRange({ level }) * TS;
+      const empty = !b && !!room && occupantAt(room, s.x, s.y) === null && !isSoil(room, s.x, s.y);
+      const radius = b?.kind === 'cannon' ? m.cannonRange(b) : b?.kind === 'trap' ? B.trap.radius : empty ? m.cannonRange({ level: 1 }) : 0;
+      if (radius) {
+        const r = radius * TS;
         const cx = (s.x + 0.5) * TS;
         const cy = (s.y + 0.5) * TS;
         hi.fillStyle(0xffe066, 0.1).fillCircle(cx, cy, r);
         hi.lineStyle(3, 0xffe066, 0.75).strokeCircle(cx, cy, r);
       }
+    }
+
+    // «Искорка»: пушка соседа светится, пока горит усиление.
+    for (const r of m.rooms) {
+      if (r.eliminated) continue;
+      for (const b of r.buildings) {
+        if (b.kind !== 'cannon' || !b.boost) continue;
+        const a = 0.55 + 0.35 * Math.sin(time / 110);
+        hi.lineStyle(4, 0xffe066, a).strokeCircle((b.x + 0.5) * TS, (b.y + 0.5) * TS, TS * 0.55);
+      }
+    }
+    // Дух: «Бу!» готово — тонкий круг, докуда достаёт крик.
+    const sp = m.player;
+    if (sp.spirit && m.phase === 'night' && sp.booCd <= 0) {
+      const v = this.charViews[sp.id];
+      if (v) hi.lineStyle(2, 0xa8d8ff, 0.35).strokeCircle(v.root.x, v.root.y, B.spirit.booRange * TS);
     }
 
     const g = m.ghost;
@@ -1130,7 +1305,35 @@ export class GameScene extends Phaser.Scene {
       const frac = g.hp / g.maxHp;
       hi.fillStyle(0x000000, 0.6).fillRoundedRect(gx - 28, gy, 56, 8, 3);
       hi.fillStyle(g.state === 'healing' ? 0x7dd3ff : 0xc58aff).fillRoundedRect(gx - 27, gy + 1, 54 * frac, 6, 3);
+      // Полоска злости под HP: удары копятся до нового уровня. Почти полна — пульсирует красным.
+      // В обучении уровень не растёт — там она была бы застывшим шумом.
+      if (!m.script) {
+        const anger = Math.min(1, g.xp / ghostXpNeed(m, g.level));
+        hi.fillStyle(0x000000, 0.6).fillRoundedRect(gx - 28, gy + 10, 56, 5, 2);
+        if (anger >= 0.8) hi.fillStyle(0xff4d4d, 0.6 + 0.4 * Math.sin(time / 90));
+        else hi.fillStyle(0xffa53d);
+        if (anger > 0) hi.fillRect(gx - 27, gy + 11, 54 * anger, 3);
+      }
+      // Держит капкан — над головой кружатся три жёлтые звёздочки.
+      if (g.held > 0) {
+        for (let i = 0; i < 3; i++) {
+          const ang = time / 260 + (i * Math.PI * 2) / 3;
+          this.star(hi, gx + Math.cos(ang) * 20, gy - 10 + Math.sin(ang) * 6, 6);
+        }
+      }
     }
+  }
+
+  /** Пятиконечная звёздочка с тёмным контуром (радиус r). */
+  private star(gr: Phaser.GameObjects.Graphics, x: number, y: number, r: number): void {
+    const pts: { x: number; y: number }[] = [];
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const rr = i % 2 ? r * 0.45 : r;
+      pts.push({ x: x + Math.cos(a) * rr, y: y + Math.sin(a) * rr });
+    }
+    gr.fillStyle(0xffe066).fillPoints(pts, true);
+    gr.lineStyle(1.5, 0x1a1030).strokePoints(pts, true);
   }
 
   // ---------------- события симуляции → эффекты ----------------
@@ -1208,6 +1411,37 @@ export class GameScene extends Phaser.Scene {
           if (!c.isPlayer) this.hud.toast(`Призрак поймал: ${c.name}`);
           break;
         }
+        case 'spirit':
+          if (e.charId === m.playerId) this.onPlayerCaught();
+          break;
+        case 'boo':
+          this.sfx.play('ghost_boo', { volume: 0.8, pitch: 0.05 });
+          this.floatText(this.ghostView.x, this.ghostView.y - 60, 'Бу!', '#a8d8ff');
+          this.puff(this.ghostView.x, this.ghostView.y - 20, 0xa8d8ff, 10, 36, 5);
+          // Призрак вздрагивает (поворот контейнера; сам ghostBody разворачивается каждый кадр).
+          this.tweens.add({
+            targets: this.ghostView,
+            angle: { from: -10, to: 10 },
+            duration: 70,
+            yoyo: true,
+            repeat: 3,
+            onComplete: () => this.ghostView.setAngle(0),
+          });
+          break;
+        case 'spark':
+          this.puff((e.x + 0.5) * TS, (e.y + 0.5) * TS, 0xffe066, 12, 34, 5);
+          this.floatText((e.x + 0.5) * TS, e.y * TS, 'Искорка!', '#ffe066');
+          this.bounce(this.buildingViews.get(key(e.x, e.y)));
+          this.sfx.play('upgrade', { volume: 0.7 });
+          break;
+        case 'revived': {
+          const c = m.chars[e.charId];
+          this.puff(c.x * TS, c.y * TS, 0xffe066, 16, 44, 6);
+          this.sfx.play('popup', { volume: 0.8 });
+          this.hud.banner('Снова в комнате!', 3000);
+          this.fitCamera();
+          break;
+        }
         case 'shot':
           this.shoot(e.fromX * TS, e.fromY * TS, e.toX * TS, e.toY * TS);
           this.ghostHurtUntil = this.time.now + 260;
@@ -1216,7 +1450,24 @@ export class GameScene extends Phaser.Scene {
         case 'ghostLevel':
           this.ghostLaughUntil = this.time.now + 1100;
           this.sfx.play('ghost_laugh', { volume: 0.7, pitch: 0 });
+          // Злость набралась: «+1», короткая вспышка и рывок (масштаб — у контейнера, ghostBody разворачивается каждый кадр).
+          this.floatText(this.ghostView.x, this.ghostView.y - 72, '+1', '#ff4d4d');
           this.floatText(this.ghostView.x, this.ghostView.y - 50, `Уровень ${e.level}!`, '#c58aff');
+          this.ghostFlash = 250;
+          this.tweens.add({ targets: this.ghostView, scale: { from: 1.25, to: 1 }, duration: 200, ease: 'Quad.easeOut' });
+          break;
+        case 'trapped':
+          this.floatText(this.ghostView.x, this.ghostView.y - 60, 'Попался!', '#ff7eb6');
+          this.puff((e.x + 0.5) * TS, (e.y + 0.5) * TS, 0xff7eb6, 10, 34, 5);
+          this.puff(this.ghostView.x, this.ghostView.y, 0xff7eb6, 8, 26, 4);
+          this.roomSound('door_hit', e.roomId, { volume: 0.35, pitch: 0.12 }, 0.3, e);
+          this.bounce(this.buildingViews.get(key(e.x, e.y)));
+          break;
+        case 'benchFix':
+          if (e.roomId === mineId && e.amount > 0) {
+            const d = m.rooms[e.roomId].door;
+            this.floatText((d.x + 0.5) * TS, (d.y + (m.rooms[e.roomId].top ? 1.2 : -0.2)) * TS, `+${e.amount}`, '#7dff7a');
+          }
           break;
         case 'ghostRetreat':
           this.sfx.play('ghost_retreat', { volume: 0.6 });
@@ -1309,6 +1560,13 @@ export class GameScene extends Phaser.Scene {
       this.clampCamera();
       return;
     }
+    if (this.m.player.spirit && zAll * TS < 34) {
+      // Дух на маленьком экране: крупно вокруг духа (своя комната уже не его забота).
+      cam.setZoom(Math.min(w / (9 * TS), h / (10.5 * TS)));
+      cam.centerOn(this.m.player.x * TS, this.m.player.y * TS);
+      this.clampCamera();
+      return;
+    }
     if (this.m.phase === 'pick' || !room || zAll * TS >= 34) {
       cam.setZoom(zAll);
       cam.centerOn((W * TS) / 2, (H * TS) / 2 - 20 / zAll);
@@ -1350,6 +1608,16 @@ export class GameScene extends Phaser.Scene {
   private followPlayerToRoom(): void {
     const room = this.m.playerRoom;
     const p = this.m.player;
+    // Дух летит, а весь этаж не влез в экран — камера плавно ведёт духа.
+    if (p.spirit) {
+      if (!p.flyTo || this.mapFits() || this.drag.dragging || this.pinch.active) return;
+      const v = this.charViews[p.id];
+      const cam = this.cameras.main;
+      const mid = cam.midPoint;
+      if (v) cam.centerOn(mid.x + (v.root.x - mid.x) * 0.1, mid.y + (v.root.y - mid.y) * 0.1);
+      this.clampCamera();
+      return;
+    }
     const phase = this.m.phase;
     const active = !!room && (phase === 'pick' ? !this.pickOverview : phase === 'prep' && !this.mapFits());
     const walking = active && !inRoom(room!, Math.floor(p.x), Math.floor(p.y));
@@ -1441,6 +1709,7 @@ export class GameScene extends Phaser.Scene {
   /** WASD/стрелки — шаг на соседнюю клетку, пока клавиша зажата. */
   /** Ключ: в обучении — только на шаге «Чини дверь». */
   private tutRepair(): void {
+    if (this.m.player.spirit) return;
     if (this.tut && !this.tut.allowAction('repair')) return;
     this.cmd({ type: 'repair' });
   }
@@ -1454,6 +1723,11 @@ export class GameScene extends Phaser.Scene {
     if (!dx && !dy) return;
     const c = this.m.player;
     const room = this.m.playerRoom;
+    // Дух летит на соседнюю клетку в любую сторону, сквозь стены.
+    if (c.spirit) {
+      if (!c.flyTo) this.m.command(c.id, { type: 'move', x: Math.floor(c.x) + dx, y: Math.floor(c.y) + dy });
+      return;
+    }
     if (!room || c.path.length || c.caught || this.m.phase === 'pick') return;
     const cx = Math.floor(c.x);
     const cy = Math.floor(c.y);
@@ -1494,8 +1768,10 @@ export class GameScene extends Phaser.Scene {
       else this.hud.banner('Это твоя комната! 🏠');
       return;
     }
+    if (m.phase === 'end') return;
+    if (m.player.spirit) return this.spiritTap(tx, ty);
     const room = m.playerRoom;
-    if (!room || m.player.caught || m.phase === 'end') return;
+    if (!room || m.player.caught) return;
 
     if (tx === room.door.x && ty === room.door.y) return this.openDoorMenu(room, p);
     if (!inRoom(room, tx, ty)) return;
@@ -1515,28 +1791,29 @@ export class GameScene extends Phaser.Scene {
     if (tx === room.door.inside.x && ty === room.door.inside.y) return;
     this.selected = { x: tx, y: ty };
     this.openMenu(p, () => {
-      const soil = isSoil(room, tx, ty);
-      const kind = soil ? 'pumpkin' : 'cannon';
-      const cost = m.buildCost(kind);
-      const locked = soil && !m.opts.flameUnlocked;
-      const opt: MenuOption = soil
-        ? {
-            id: 'build:pumpkin',
-            icon: '🎃',
-            label: 'Тыква',
-            cost,
-            note: locked ? 'во 2-м матче' : undefined,
-            disabled: locked,
-            poor: !m.canAfford(room, cost),
-            onPick: () => this.cmd({ type: 'build', kind, x: tx, y: ty }),
-          }
-        : { id: 'build:cannon', icon: '💥', label: 'Пушка', cost, poor: !m.canAfford(room, cost), onPick: () => this.cmd({ type: 'build', kind, x: tx, y: ty }) };
-      const err = m.canPlace(room, tx, ty, kind);
+      if (!isSoil(room, tx, ty)) {
+        // Пол: пушка и поздние постройки (капкан, верстак, холодильник). В обучении поздних нет вовсе — иначе вечный замок.
+        const kinds: BuildKind[] = m.script ? ['cannon'] : ['cannon', ...LATE_KINDS];
+        return { title: 'Пол', options: kinds.map((kind) => this.buildOption(room, kind, tx, ty)) };
+      }
+      const cost = m.buildCost('pumpkin');
+      const locked = !m.opts.flameUnlocked;
+      const opt: MenuOption = {
+        id: 'build:pumpkin',
+        icon: '🎃',
+        label: 'Тыква',
+        cost,
+        note: locked ? 'во 2-м матче' : undefined,
+        disabled: locked,
+        poor: !m.canAfford(room, cost),
+        onPick: () => this.cmd({ type: 'build', kind: 'pumpkin', x: tx, y: ty }),
+      };
+      const err = m.canPlace(room, tx, ty, 'pumpkin');
       if (err && !locked) {
         opt.disabled = true;
         opt.note = err;
       }
-      return { title: soil ? 'Грядка' : 'Пол', options: [opt] };
+      return { title: 'Грядка', options: [opt] };
     });
   }
 
@@ -1610,10 +1887,10 @@ export class GameScene extends Phaser.Scene {
     const m = this.m;
     this.openMenu(p, () => {
       const up = m.sofaUpgradeCost(room);
-      return {
-        title: `Диван · ур. ${room.sofa.level} · 🍬 ${m.incomeOf(room).toFixed(1)}/с`,
-        options: [
-          {
+      const need = m.sofaBlockedBy(room);
+      const opt: MenuOption = need
+        ? { id: 'upgradeSofa', icon: '⬆', label: 'Больше конфет', lockDoor: need, onPick: () => this.pulseDoor(room) }
+        : {
             id: 'upgradeSofa',
             icon: '⬆',
             label: 'Больше конфет',
@@ -1622,10 +1899,54 @@ export class GameScene extends Phaser.Scene {
             disabled: !up,
             poor: !!up && !m.canAfford(room, up),
             onPick: () => this.cmd({ type: 'upgradeSofa' }),
-          },
-        ],
+          };
+      return {
+        title: `Диван · ур. ${room.sofa.level} · 🍬 ${m.incomeOf(room).toFixed(1)}/с`,
+        options: [opt],
       };
     });
+  }
+
+  /**
+   * «Новое!»: поздняя постройка открылась дверью — баннер один раз за матч на каждую.
+   * Открытое уже к получению комнаты (усилитель двери) — молча. В обучении их нет вовсе.
+   */
+  private checkUnlocks(): void {
+    const m = this.m;
+    const r = m.playerRoom;
+    if (m.script || !r || r.eliminated) return;
+    for (const kind of LATE_KINDS) {
+      if (this.seenUnlock.has(kind) || m.buildLocked(r, kind)) continue;
+      this.seenUnlock.add(kind);
+      if (!this.unlockPrimed) continue;
+      this.hud.banner(`Новое! ${BUILD_INFO[kind].label} в меню постройки`, 3500);
+      this.sfx.play('popup', { volume: 0.8 });
+    }
+    this.unlockPrimed = true;
+  }
+
+  /** Пункт «построить kind» на полу: заперт дверью — замок и пульс двери, упёрся в правило — серый с причиной. */
+  private buildOption(room: Room, kind: BuildKind, x: number, y: number): MenuOption {
+    const m = this.m;
+    const { label, desc } = BUILD_INFO[kind];
+    const id = `build:${kind}`;
+    const icon = kind === 'cannon' ? '💥' : '';
+    const need = m.buildLocked(room, kind);
+    if (need) return { id, icon, label, desc, lockDoor: need, onPick: () => this.pulseDoor(room) };
+    const cost = m.buildCost(kind);
+    const opt: MenuOption = { id, icon, label, desc, cost, poor: !m.canAfford(room, cost), onPick: () => this.cmd({ type: 'build', kind, x, y }) };
+    const err = m.canPlace(room, x, y, kind);
+    if (err) {
+      opt.disabled = true;
+      opt.note = err;
+    }
+    return opt;
+  }
+
+  /** Пункт меню упёрся в дверь — вместо тоста-ругани подсвечиваем свою дверь коротким пульсом. */
+  private pulseDoor(room: Room): void {
+    this.doorPulse.set(room.id, this.time.now + 1500);
+    this.sfx.play('click', { volume: 0.7 });
   }
 
   private openBuildingMenu(room: Room, b: Building, p: Phaser.Input.Pointer): void {
@@ -1635,10 +1956,17 @@ export class GameScene extends Phaser.Scene {
       // Постройку могли продать — тогда меню закрываем.
       if (!room.buildings.includes(b)) return null;
       const up = m.upgradeCost(b);
+      const pct = (v: number) => +(v * 100).toFixed(1);
       const title =
         b.kind === 'cannon'
           ? `Пушка · ур. ${b.level} · урон ${Math.round(m.cannonDamage(b))} · радиус ${m.cannonRange(b).toFixed(1)}`
-          : `Тыква · ур. ${b.level}`;
+          : b.kind === 'trap'
+            ? `Капкан · ур. ${b.level} · держит ${trapHold(b.level)} с`
+            : b.kind === 'workbench'
+              ? `Верстак · ур. ${b.level} · +${pct(benchHeal(b.level))}% / ${B.workbench.interval} с`
+              : b.kind === 'fridge'
+                ? `Холодильник · ур. ${b.level} · реже на ${pct(fridgeSlow(b.level))}%`
+                : `Тыква · ур. ${b.level}`;
       return {
         title,
         options: [
