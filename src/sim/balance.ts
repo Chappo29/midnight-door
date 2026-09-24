@@ -159,11 +159,12 @@ export interface DiffParams {
   npcSkill: number;
 }
 
-// hitsPerLevel/levelFallback подобраны scripts/tune.ts (этап B, 2026-09-24) — предварительно, этап E перемеряет.
+// Подобрано scripts/tune.ts (этап E, 2026-09-24, сверено на 80 и 240 матчах): easy не трогали; hard — страховка 115→110;
+// nightmare — hitsPerLevel 22→20 и ghostMul 1.0→0.95 (призрак растёт быстрее, но слабее — убийство ~13.5 мин вместо 15).
 export const DIFF: Record<Difficulty, DiffParams> = {
   easy: { ghostMul: 0.7, hitsPerLevel: 27, levelFallback: 200, npcSkill: 0.3 },
-  hard: { ghostMul: 0.85, hitsPerLevel: 21, levelFallback: 115, npcSkill: 0.6 },
-  nightmare: { ghostMul: 1.0, hitsPerLevel: 22, levelFallback: 125, npcSkill: 0.9 },
+  hard: { ghostMul: 0.85, hitsPerLevel: 21, levelFallback: 110, npcSkill: 0.6 },
+  nightmare: { ghostMul: 0.95, hitsPerLevel: 20, levelFallback: 125, npcSkill: 0.9 },
 };
 
 export const sofaIncome = (level: number) => B.sofa.income * B.sofa.incomeMul ** (level - 1);
