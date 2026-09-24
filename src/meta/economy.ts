@@ -1,0 +1,209 @@
+import type { Difficulty } from '../sim/types';
+
+/**
+ * Прогресс между матчами: монеты, магазин, ежедневный подарок.
+ * Чистые функции над данными сохранения — без интерфейса, чтобы проверять тестами.
+ * Цены и награды — здесь, в одном месте (данные, а не код экранов).
+ */
+
+export type BoosterId = 'candy' | 'door' | 'wrench';
+export type SkinSlot = 'door' | 'cannon';
+
+/** То, что хранится между матчами (часть сохранения). */
+export interface Meta {
+  coins: number;
+  /** Купленные герои (номера charN). Нулевой есть всегда. */
+  heroes: number[];
+  hero: number;
+  /** Купленные скины по слотам; 'classic' есть всегда. */
+  skins: Record<SkinSlot, string[]>;
+  skin: Record<SkinSlot, string>;
+  /** Сколько усилителей куплено: сработают в следующем матче. */
+  boosters: Record<BoosterId, number>;
+  /** Ежедневный подарок: день последнего получения (YYYY-MM-DD) и шаг календаря 0–6. */
+  daily: { last: string; step: number };
+  /** Подарок за пройденное обучение уже выдан. */
+  tutorialGift: boolean;
+}
+
+export function emptyMeta(): Meta {
+  return {
+    coins: 0,
+    heroes: [0],
+    hero: 0,
+    skins: { door: ['classic'], cannon: ['classic'] },
+    skin: { door: 'classic', cannon: 'classic' },
+    boosters: { candy: 0, door: 0, wrench: 0 },
+    daily: { last: '', step: 0 },
+    tutorialGift: false,
+  };
+}
+
+/** Дочинить сохранение старой версии: недостающие поля — по умолчанию. */
+export function normalizeMeta(raw: Partial<Meta> | undefined): Meta {
+  const e = emptyMeta();
+  const m = { ...e, ...raw };
+  return {
+    coins: Math.max(0, Math.floor(m.coins ?? 0)),
+    heroes: Array.from(new Set([0, ...(m.heroes ?? [])])),
+    hero: (m.heroes ?? [0]).includes(m.hero) ? m.hero : 0,
+    skins: { door: Array.from(new Set(['classic', ...(m.skins?.door ?? [])])), cannon: Array.from(new Set(['classic', ...(m.skins?.cannon ?? [])])) },
+    skin: { door: m.skin?.door ?? 'classic', cannon: m.skin?.cannon ?? 'classic' },
+    boosters: { ...e.boosters, ...m.boosters },
+    daily: { last: m.daily?.last ?? '', step: m.daily?.step ?? 0 },
+    tutorialGift: !!m.tutorialGift,
+  };
+}
+
+// ---------------- магазин ----------------
+
+/** Герои: номер = картинка charN. Первый бесплатный, остальные — цель «накопить». */
+export const HEROES: readonly { look: number; price: number }[] = [
+  { look: 0, price: 0 },
+  { look: 1, price: 150 },
+  { look: 2, price: 200 },
+  { look: 3, price: 250 },
+  { look: 4, price: 300 },
+  { look: 5, price: 400 },
+];
+
+/** Скины. ready=false — картинка ещё не нарисована, в магазине «скоро». */
+export const SKINS: Record<SkinSlot, readonly { id: string; name: string; price: number; ready: boolean }[]> = {
+  door: [
+    { id: 'classic', name: 'Деревянная', price: 0, ready: true },
+    { id: 'ginger', name: 'Пряничная', price: 250, ready: true },
+    { id: 'ice', name: 'Ледяная', price: 350, ready: true },
+    { id: 'candy', name: 'Карамельная', price: 500, ready: true },
+  ],
+  cannon: [
+    { id: 'classic', name: 'Карамельная', price: 0, ready: true },
+    // Темы — в пару к скинам двери. Не «мятная/золотая»: так уже выглядят 3-й и 5-й уровни обычной пушки.
+    { id: 'ginger', name: 'Пряничная', price: 200, ready: true },
+    { id: 'ice', name: 'Ледяная', price: 450, ready: true },
+  ],
+};
+
+/** Усилители на один матч: покупаешь заранее — срабатывают в следующем матче. */
+export const BOOSTERS: Record<BoosterId, { title: string; desc: string; price: number }> = {
+  candy: { title: 'Мешок конфет', desc: '+100 конфет в начале', price: 40 },
+  door: { title: 'Крепкая дверь', desc: 'дверь сразу ур. 2', price: 60 },
+  wrench: { title: 'Быстрый ключ', desc: 'ключ заряжается вдвое быстрее', price: 50 },
+};
+/** Больше этого за раз не накопить — чтобы не скупали «про запас» всё подряд. */
+export const BOOSTER_MAX = 3;
+
+/** Что делают усилители в матче (MatchOptions.boosters). */
+export interface MatchBoosters {
+  candy: number;
+  doorLevel: number;
+  repairMul: number;
+}
+
+export type BuyError = 'Не хватает монет' | 'Уже есть' | 'Скоро' | 'Больше не взять';
+
+export function buyHero(m: Meta, look: number): BuyError | null {
+  const h = HEROES.find((q) => q.look === look);
+  if (!h || m.heroes.includes(look)) return 'Уже есть';
+  if (m.coins < h.price) return 'Не хватает монет';
+  m.coins -= h.price;
+  m.heroes.push(look);
+  m.hero = look;
+  return null;
+}
+
+export function selectHero(m: Meta, look: number): boolean {
+  if (!m.heroes.includes(look)) return false;
+  m.hero = look;
+  return true;
+}
+
+/** catalog — для тестов: какие скины уже нарисованы, меняется по мере арта. */
+export function buySkin(m: Meta, slot: SkinSlot, id: string, catalog = SKINS): BuyError | null {
+  const s = catalog[slot].find((q) => q.id === id);
+  if (!s || m.skins[slot].includes(id)) return 'Уже есть';
+  if (!s.ready) return 'Скоро';
+  if (m.coins < s.price) return 'Не хватает монет';
+  m.coins -= s.price;
+  m.skins[slot].push(id);
+  m.skin[slot] = id;
+  return null;
+}
+
+export function buyBooster(m: Meta, id: BoosterId): BuyError | null {
+  if (m.boosters[id] >= BOOSTER_MAX) return 'Больше не взять';
+  if (m.coins < BOOSTERS[id].price) return 'Не хватает монет';
+  m.coins -= BOOSTERS[id].price;
+  m.boosters[id]++;
+  return null;
+}
+
+/** Забрать по одному каждого купленного усилителя на этот матч. */
+export function takeBoosters(m: Meta): MatchBoosters {
+  const b: MatchBoosters = { candy: 0, doorLevel: 1, repairMul: 1 };
+  if (m.boosters.candy > 0) {
+    m.boosters.candy--;
+    b.candy = 100;
+  }
+  if (m.boosters.door > 0) {
+    m.boosters.door--;
+    b.doorLevel = 2;
+  }
+  if (m.boosters.wrench > 0) {
+    m.boosters.wrench--;
+    b.repairMul = 0.5;
+  }
+  return b;
+}
+
+// ---------------- награда за матч ----------------
+
+export interface Reward {
+  coins: number;
+  /** Из чего сложилась — показываем на экране итогов. */
+  parts: { label: string; coins: number }[];
+}
+
+const WIN_BASE: Record<Difficulty, number> = { easy: 30, hard: 60, nightmare: 100 };
+
+/**
+ * Монеты за матч. Проигрыш тоже что-то даёт (за каждую минуту ночи) — чтобы ребёнок
+ * не уходил с пустыми руками; победа заметно выгоднее.
+ */
+export function matchReward(win: boolean, difficulty: Difficulty, nightSeconds: number, neighborsAlive: number): Reward {
+  const parts: Reward['parts'] = [];
+  if (win) {
+    parts.push({ label: 'победа', coins: WIN_BASE[difficulty] });
+    if (neighborsAlive > 0) parts.push({ label: 'соседи', coins: neighborsAlive * 5 });
+  } else {
+    parts.push({ label: 'за старание', coins: 10 });
+    const minutes = Math.min(10, Math.floor(nightSeconds / 60));
+    if (minutes > 0) parts.push({ label: 'продержался', coins: minutes * 3 });
+  }
+  return { coins: parts.reduce((s, p) => s + p.coins, 0), parts };
+}
+
+/** Подарок за пройденное обучение: сразу хватает на первую покупку. */
+export const TUTORIAL_GIFT = 60;
+
+// ---------------- ежедневный подарок ----------------
+
+/** Календарь на 7 дней; 7-й — крупный. Пропуск дня не сбрасывает (детям обидно терять серию). */
+export const DAILY: readonly number[] = [20, 30, 40, 50, 60, 80, 150];
+
+/** Ключ дня по местному времени. */
+export function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function dailyAvailable(m: Meta, today: string): boolean {
+  return m.daily.last !== today;
+}
+
+/** Забрать подарок дня. Возвращает монеты (0 — сегодня уже забран). */
+export function claimDaily(m: Meta, today: string): number {
+  if (!dailyAvailable(m, today)) return 0;
+  const coins = DAILY[m.daily.step % DAILY.length];
+  m.coins += coins;
+  m.daily = { last: today, step: (m.daily.step + 1) % DAILY.length };
+  return coins;
+}

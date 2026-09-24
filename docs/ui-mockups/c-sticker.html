@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Полночь у двери — UI вариант C: Ночная наклейка</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,500;0,700;0,800;0,900;1,800&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   ПОЛНОЧЬ У ДВЕРИ — Вариант C: «Ночная наклейка / Spooky sticker-comic»
+   Наклейки с белым die-cut кантом + тёмная обводка + лёгкий поворот,
+   комикс-панели с полутоновыми точками (halftone), объёмный
+   outline-леттеринг, лунные/призрачные акценты на глубокой
+   тёмно-фиолетовой ночи.
+   ========================================================= */
+
+:root{
+  --ink:        #1c1330;   /* тёмно-фиолетово-чёрная обводка */
+  --ink-soft:   #2a1f48;
+  --paper:      #fff8ec;   /* тёплый белый наклейки */
+  --night-1:    #140f22;
+  --night-2:    #241c3f;
+  --night-3:    #2a2342;
+  --night-4:    #33304f;
+  --floor:      #e2b98a;
+  --floor-dk:   #cf9f6c;
+  --mint:       #7dffb0;
+  --mint-dk:    #29a86b;
+  --magenta:    #ff5fd2;
+  --magenta-dk: #b8258f;
+  --moon:       #ffe066;
+  --moon-dk:    #d6a821;
+  --sky-blue:   #7dd6ff;
+  --ember:      #ff8a3d;
+  --font: 'Rubik', 'Arial Rounded MT Bold', sans-serif;
+}
+
+*{ box-sizing: border-box; }
+
+html,body{
+  margin:0;
+  background: #0c0918;
+  color: var(--paper);
+  font-family: var(--font);
+}
+
+body{
+  padding: 40px 0 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 54px;
+}
+
+.page-head{
+  width: 1366px;
+  max-width: calc(100vw - 24px);
+  padding: 4px 6px 0;
+}
+.page-head h1{
+  font-size: 22px;
+  font-weight: 900;
+  margin: 0 0 4px;
+  letter-spacing: .5px;
+}
+.page-head p{
+  margin: 0;
+  font-size: 14px;
+  color: #b8aed6;
+  font-weight: 500;
+  max-width: 900px;
+  line-height: 1.5;
+}
+.swatches{
+  display:flex; gap:8px; margin-top:14px;
+}
+.swatch{ width:26px; height:26px; border-radius:8px; box-shadow: 0 0 0 2px var(--ink); }
+
+.section-label{
+  width: 1366px;
+  max-width: calc(100vw - 24px);
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  margin: 0 0 -18px;
+  padding: 0 6px;
+}
+.section-label .num{
+  font-weight:900;
+  font-size:15px;
+  color: var(--night-1);
+  background: var(--moon);
+  border: 3px solid var(--ink);
+  border-radius: 9px;
+  width: 30px; height:30px;
+  display:flex; align-items:center; justify-content:center;
+  transform: rotate(-4deg);
+  box-shadow: 0 3px 0 var(--ink);
+}
+.section-label .txt{
+  font-weight: 800;
+  font-size: 16px;
+  color: #cdc3ea;
+  letter-spacing:.2px;
+}
+
+.frame{
+  width: 1366px;
+  height: 768px;
+  max-width: calc(100vw - 24px);
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  box-shadow: 0 0 0 3px var(--ink), 0 22px 50px rgba(0,0,0,.55);
+  background: var(--night-2);
+  flex: none;
+}
+
+/* ---------- generic sticker / comic building blocks ---------- */
+
+.sticker{
+  background: var(--paper);
+  border-radius: 22px;
+  box-shadow:
+    0 0 0 5px var(--paper),
+    0 0 0 9px var(--ink),
+    0 7px 0 var(--ink),
+    0 13px 18px rgba(0,0,0,.4);
+  position: relative;
+}
+.sticker.thin{
+  box-shadow:
+    0 0 0 3px var(--paper),
+    0 0 0 6px var(--ink),
+    0 5px 0 var(--ink),
+    0 9px 12px rgba(0,0,0,.38);
+}
+.sticker.round{ border-radius: 50%; }
+
+.halftone{ position:relative; overflow:hidden; }
+.halftone::before{
+  content:"";
+  position:absolute; inset:0;
+  background-image: radial-gradient(var(--ink) 1.35px, transparent 1.5px);
+  background-size: 11px 11px;
+  opacity:.10;
+  pointer-events:none;
+}
+.halftone.on-dark::before{ opacity:.16; background-image: radial-gradient(#fff 1.35px, transparent 1.5px); }
+
+.stroke-title{
+  font-family: var(--font);
+  font-weight: 900;
+  color: var(--paper);
+  -webkit-text-stroke: 9px var(--ink);
+  paint-order: stroke fill;
+  letter-spacing: .5px;
+  line-height: 1;
+  filter: drop-shadow(0 6px 0 var(--ink));
+}
+
+.pin{
+  position:absolute;
+  background: var(--moon);
+  color: var(--ink);
+  font-weight:900;
+  border-radius: 999px;
+  border: 3px solid var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
+  font-size: 13px;
+  padding: 3px 9px;
+  transform: rotate(-8deg);
+}
+
+.speech{
+  background: var(--paper);
+  border-radius: 26px;
+  box-shadow: 0 0 0 5px var(--paper), 0 0 0 9px var(--ink), 0 9px 0 var(--ink), 0 14px 20px rgba(0,0,0,.4);
+  position:relative;
+  color: var(--ink);
+}
+.speech .tail{
+  position:absolute;
+  width: 34px; height: 34px;
+  background: var(--paper);
+  border-left: 9px solid var(--ink);
+  border-bottom: 9px solid var(--ink);
+  transform: rotate(45deg);
+}
+.speech .tail::before{
+  content:""; position:absolute; inset: -9px -9px auto auto;
+  width:34px; height:9px; background:var(--paper);
+}
+
+/* icon base */
+.icon{ display:block; overflow:visible; }
+.icon .stroke{ stroke: var(--ink); stroke-width: 6.5; stroke-linecap:round; stroke-linejoin:round; fill:none; }
+.icon .fill{ stroke: var(--ink); stroke-width: 6.5; stroke-linejoin:round; }
+.icon .gloss{ fill:#fff; opacity:.55; }
+
+/* buttons */
+.btn{
+  font-family: var(--font);
+  font-weight: 900;
+  border: none;
+  cursor: pointer;
+  color: var(--ink);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.btn:active{ transform: translateY(4px); }
+
+/* rotations for the scattered-sticker feel */
+.r1{ transform: rotate(-3.5deg); }
+.r2{ transform: rotate(2.5deg); }
+.r3{ transform: rotate(-1.5deg); }
+.r4{ transform: rotate(3deg); }
+.r5{ transform: rotate(-2deg); }
+
+/* ===================== FRAME 1 — MAIN MENU ===================== */
+
+.frame-menu{
+  background:
+    radial-gradient(60% 46% at 50% -6%, #4a3f79 0%, transparent 70%),
+    radial-gradient(120% 90% at 50% 120%, var(--night-3) 0%, var(--night-1) 65%);
+}
+.menu-stars{
+  position:absolute; inset:0;
+  background-image:
+    radial-gradient(#fff 1.6px, transparent 1.8px),
+    radial-gradient(#fff 1.2px, transparent 1.4px);
+  background-size: 140px 140px, 90px 90px;
+  background-position: 0 0, 45px 60px;
+  opacity:.35;
+}
+.menu-moon{
+  position:absolute; top:44px; right:96px;
+  width:96px; height:96px; border-radius:50%;
+  background: radial-gradient(circle at 38% 34%, #fff 0%, var(--moon) 55%, var(--moon-dk) 100%);
+  box-shadow: 0 0 0 6px var(--ink), 0 0 46px 6px rgba(255,224,102,.45);
+}
+.menu-floorline{
+  position:absolute; left:0; right:0; bottom:0; height:150px;
+  background:
+    repeating-linear-gradient(90deg, var(--floor) 0 64px, var(--floor-dk) 64px 68px);
+  box-shadow: 0 -6px 0 var(--ink) inset;
+}
+.menu-floorline::before{
+  content:""; position:absolute; inset:0 0 auto 0; height:14px;
+  background: linear-gradient(180deg, rgba(0,0,0,.35), transparent);
+}
+
+.title-wrap{
+  position:absolute; top:70px; left:50%; transform: translateX(-50%) rotate(-2deg);
+  text-align:center;
+  z-index:3;
+}
+.title-badge{
+  position:absolute; inset: -34px -60px;
+  z-index:-1;
+  background:
+    conic-gradient(var(--magenta) 0 10deg, transparent 10deg 20deg) 50% / 100% 100%;
+  border-radius: 50%;
+  opacity:.5;
+  filter: blur(0px);
+}
+.title-wrap h1{
+  margin:0;
+  font-size: 66px;
+  white-space: nowrap;
+}
+.title-wrap h1 span{ display:block; }
+.title-wrap h1 .l1{ font-size: 21px; letter-spacing: 4px; -webkit-text-stroke: 0; color: var(--moon); text-shadow: 0 3px 0 var(--ink); filter:none; }
+.title-wrap h1 .l2{ font-size: 72px; color: var(--paper); }
+.title-sub{
+  margin-top: 6px;
+  display:inline-block;
+  background: var(--magenta);
+  color: var(--paper);
+  font-weight: 800;
+  font-size: 15px;
+  padding: 5px 16px;
+  border-radius: 999px;
+  border: 3px solid var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
+  transform: rotate(2deg);
+}
+
+.menu-ghost{
+  position:absolute; top: 118px; left: 128px; width: 168px; height:168px; z-index:2;
+  transform: rotate(-6deg);
+  padding: 10px;
+}
+.menu-ghost img{ width:100%; height:100%; object-fit:contain; filter: drop-shadow(0 0 18px rgba(255,95,210,.55)); }
+
+.menu-door{
+  position:absolute; top: 96px; right: 232px; width: 150px; height:210px; z-index:2;
+  transform: rotate(5deg);
+  padding: 10px 10px 6px;
+}
+.menu-door img{ width:100%; height:100%; object-fit:contain; }
+
+.diffs{
+  position:absolute; left:50%; top: 322px; transform: translateX(-50%);
+  display:flex; gap: 34px; z-index:3;
+}
+.diff-btn{
+  width: 210px; height: 168px;
+  border-radius: 26px;
+  flex-direction: column;
+  padding-top: 6px;
+  gap:4px;
+}
+.diff-btn .ico-wrap{
+  width:56px; height:56px;
+  display:flex; align-items:center; justify-content:center;
+}
+.diff-btn .name{ font-size: 24px; }
+.diff-btn .desc{ font-size: 12px; font-weight:700; opacity:.75; margin-top:-2px;}
+.diff-easy{ background: var(--mint); }
+.diff-hard{ background: var(--ember); }
+.diff-night{ background: var(--magenta); color: var(--paper); }
+.diff-night .win-pin{ background: var(--night-1); color: var(--moon); }
+.win-pin{
+  position:absolute; top:-16px; right:-14px;
+  transform: rotate(10deg);
+}
+
+.tut-btn{
+  position:absolute; left:50%; top: 552px; transform: translateX(-50%) rotate(-1.5deg);
+  width: 306px; height: 58px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--paper);
+  border: 4px solid var(--paper);
+  box-shadow: 0 0 0 4px var(--ink), 0 5px 0 var(--ink);
+  font-size: 19px;
+  gap: 10px;
+}
+
+.mascot-menu{
+  position:absolute; bottom: 26px; left: 40px; width: 168px; z-index:4;
+  filter: drop-shadow(0 10px 0 rgba(0,0,0,.3));
+  transform: rotate(-3deg);
+}
+.mascot-menu img{ width:100%; display:block; }
+.mascot-bubble{
+  position:absolute; bottom: 176px; left: 176px;
+  padding: 10px 16px; font-size:16px; font-weight:800;
+  transform: rotate(-2deg);
+}
+.mascot-bubble .tail{ left: -6px; bottom: 10px; }
+
+.ver-tag{
+  position:absolute; bottom: 14px; right: 18px;
+  font-size:11px; color: rgba(255,255,255,.35); font-weight:700;
+}
+
+/* ===================== FRAME 2 — IN-MATCH HUD ===================== */
+
+.frame-hud{ background: var(--night-3); }
+
+.scene{
+  position:absolute; inset:0;
+  background:
+    radial-gradient(120% 70% at 50% 46%, transparent 40%, var(--night-1) 100%),
+    repeating-linear-gradient(90deg, var(--floor) 0 58px, var(--floor-dk) 58px 62px);
+}
+.scene .corridor{
+  position:absolute; top:0; bottom:0; width: 230px;
+  background: linear-gradient(90deg, var(--night-1), var(--night-3) 70%, transparent);
+}
+.scene .corridor.left{ left:0; }
+.scene .corridor.right{ right:0; transform: scaleX(-1); }
+.scene .plank-shadow{
+  position:absolute; inset:0;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.05) 0 40px, transparent 40px 80px);
+}
+.scene .prop{ position:absolute; filter: drop-shadow(0 6px 4px rgba(0,0,0,.35)); }
+.scene .prop img{ width:100%; height:100%; object-fit:contain; }
+
+.hud-topbar{
+  position:absolute; top:16px; left:16px; right:16px;
+  display:flex; align-items:flex-start; justify-content:center; gap:14px;
+  z-index:5;
+}
+.chip{
+  background: var(--paper);
+  border-radius: 999px;
+  padding: 8px 18px 8px 10px;
+  display:flex; align-items:center; gap:8px;
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--ink), 0 5px 0 var(--ink);
+  color: var(--ink);
+  font-weight:900;
+  font-size: 21px;
+}
+.chip .icon-box{
+  width:34px; height:34px;
+  border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  flex: none;
+}
+.chip.candy .icon-box{ background: var(--magenta); }
+.chip.flame .icon-box{ background: var(--ember); }
+.chip.timer .icon-box{ background: var(--sky-blue); }
+.chip.level .icon-box{ background: var(--night-3); }
+.chip.candy img{ width:26px; height:26px; object-fit:contain; }
+.chip .lbl{ font-size:12px; font-weight:800; opacity:.55; margin-right:-3px; }
+
+.portrait-row{
+  position:absolute; top: 76px; left:16px; right:16px;
+  display:flex; justify-content:center; gap:12px;
+  z-index:5;
+}
+.portrait{
+  width: 58px; height:58px; border-radius:50%;
+  box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--ink), 0 4px 0 var(--ink);
+  background-repeat:no-repeat;
+  background-size: 190% auto;
+  background-position: 50% 24%;
+  position:relative;
+}
+.portrait .tag{
+  position:absolute; left:50%; bottom:-16px; transform: translateX(-50%);
+  font-size: 10px; font-weight:900; padding:2px 7px; border-radius:999px;
+  border:2px solid var(--ink); white-space:nowrap;
+}
+.portrait.me{ box-shadow: 0 0 0 4px var(--moon), 0 0 0 7px var(--ink), 0 4px 0 var(--ink), 0 0 0 4px var(--moon); }
+.portrait.me .tag{ background: var(--moon); color:var(--ink); }
+.portrait.tgt{ box-shadow: 0 0 0 4px var(--magenta), 0 0 0 7px var(--ink), 0 4px 0 var(--ink); animation: tgt-pulse 1s ease-in-out infinite; }
+.portrait.tgt .tag{ background: var(--magenta); color:var(--paper); }
+.portrait.gone{ filter: grayscale(1) brightness(.6); opacity:.7; }
+@keyframes tgt-pulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.09);} }
+
+.hud-side{
+  position:absolute; top:16px; right:16px; display:flex; flex-direction:column; gap:10px; z-index:6;
+}
+.round-btn{
+  width:52px; height:52px; border-radius:50%;
+  background: var(--paper);
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--ink), 0 4px 0 var(--ink);
+}
+.round-btn.blue{ background: var(--sky-blue); }
+
+.home-btn{
+  position:absolute; bottom:22px; left:22px; z-index:6;
+  width:64px; height:64px; border-radius:50%;
+  background: var(--mint);
+  box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--ink), 0 5px 0 var(--ink);
+}
+
+.repair-wrap{ position:absolute; bottom:20px; right:24px; z-index:6; display:flex; align-items:flex-end; gap:16px; }
+.repair-btn{
+  width:92px; height:92px; border-radius:50%;
+  background: var(--mint);
+  box-shadow: 0 0 0 5px var(--paper), 0 0 0 9px var(--ink), 0 7px 0 var(--ink);
+}
+.repair-example{
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+}
+.repair-example .lbl{
+  background: var(--night-1); color: var(--paper);
+  font-size:11px; font-weight:800; padding:3px 10px;
+  border-radius:999px; border:2px solid var(--paper);
+}
+.repair-cd{
+  width:66px; height:66px; border-radius:50%;
+  background: #7a7391;
+  box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--ink), 0 5px 0 var(--ink);
+  display:flex; align-items:center; justify-content:center;
+  color: var(--paper); font-weight:900; font-size:22px;
+  position:relative;
+}
+.repair-cd svg{ position:absolute; inset:0; transform:rotate(-90deg); }
+
+.hud-toast{
+  position:absolute; top: 148px; left:50%; transform: translateX(-50%) rotate(-1.5deg);
+  z-index:7;
+  padding: 9px 18px; font-size:15px; font-weight:800;
+  background: var(--magenta); color: var(--paper);
+  border-radius: 16px;
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--ink), 0 5px 0 var(--ink);
+}
+.hud-toast::after{
+  content:""; position:absolute; top:-11px; left: 40px;
+  width: 20px; height:20px; background:var(--magenta);
+  border-left:6px solid var(--ink); border-top:6px solid var(--ink);
+  transform: rotate(45deg);
+}
+
+/* ===================== FRAME 3 — BUILD CONTEXT MENU ===================== */
+
+.frame-build{ background: var(--night-1); }
+.build-scene{
+  position:absolute; inset:0;
+  background:
+    radial-gradient(90% 70% at 50% 40%, var(--night-3), var(--night-1) 80%);
+}
+.build-grid{
+  position:absolute; left: 300px; top: 210px; width: 560px; height: 380px;
+  display:grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: repeat(5, 1fr);
+  gap: 3px;
+}
+.build-grid .cell{
+  background: rgba(255,255,255,.04);
+  border: 2px solid rgba(255,255,255,.06);
+  border-radius: 6px;
+}
+.build-grid .cell.sel{
+  background: rgba(125,255,176,.14);
+  border: 3px dashed var(--mint);
+  border-radius: 8px;
+  box-shadow: 0 0 22px rgba(125,255,176,.5);
+}
+
+.build-popup{
+  position:absolute; left: 720px; top: 260px; width: 340px;
+  border-radius: 24px;
+  padding: 16px;
+  z-index:5;
+}
+.build-popup .tail{ left:-16px; top: 64px; transform: rotate(-45deg) scaleX(-1); }
+.build-title{
+  font-size: 22px; font-weight:900; color: var(--ink);
+  background: var(--moon);
+  display:inline-block;
+  padding: 4px 14px; border-radius: 10px;
+  border: 3px solid var(--ink);
+  transform: rotate(-2deg);
+  margin-bottom: 12px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+.build-opt{
+  width:100%;
+  display:flex; align-items:center; gap:12px;
+  background: var(--mint);
+  border-radius: 16px;
+  border: 3px solid var(--ink);
+  box-shadow: 0 4px 0 var(--ink);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  min-height: 56px;
+}
+.build-opt .ico{
+  width:42px; height:42px; border-radius:50%;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  display:flex; align-items:center; justify-content:center;
+  flex:none;
+  overflow:hidden;
+}
+.build-opt .ico img{ width:80%; height:80%; object-fit:contain; }
+.build-opt .lbl{ flex:1; text-align:left; font-size:17px; font-weight:900; color:var(--ink); }
+.build-opt .cost{
+  display:flex; align-items:center; gap:5px;
+  background: var(--paper);
+  border:2px solid var(--ink);
+  border-radius:999px;
+  padding: 4px 10px 4px 6px;
+  font-size:14px; font-weight:900; color:var(--ink);
+}
+.build-opt .cost img{ width:18px; height:18px; object-fit:contain; }
+
+.build-opt.disabled{
+  background: #cfc9dd;
+  opacity:.85;
+}
+.build-opt.disabled .lbl{ color:#665f7d; }
+.build-opt-wrap{ margin-bottom: 4px; }
+.disabled-reason{
+  font-size: 12px; font-weight:700; color: #b8a6ff;
+  background: rgba(0,0,0,.25);
+  border-radius: 10px;
+  padding: 4px 10px;
+  margin: -6px 0 12px 8px;
+  display:inline-flex; align-items:center; gap:5px;
+}
+
+.build-hint{
+  position:absolute; left: 300px; top: 128px;
+  font-size: 15px; font-weight:800; color:#cfc3ee;
+  display:flex; align-items:center; gap:8px;
+}
+
+/* ===================== FRAME 4 — RESULT SCREEN ===================== */
+
+.frame-result{
+  background:
+    radial-gradient(70% 60% at 50% 30%, #4a3f79, transparent 70%),
+    radial-gradient(120% 100% at 50% 120%, var(--night-3), var(--night-1) 70%);
+}
+.result-confetti{
+  position:absolute; inset:0; pointer-events:none;
+}
+.result-confetti i{
+  position:absolute; width:14px; height:14px; border-radius:4px;
+  border: 2px solid var(--ink);
+}
+.result-card{
+  position:absolute; left:50%; top:50%; transform: translate(-50%,-50%);
+  width: 620px;
+  border-radius: 30px;
+  padding: 30px 40px 34px;
+  text-align:center;
+  z-index:5;
+}
+.result-title{
+  font-size: 33px;
+  margin: 4px 0 6px;
+  white-space: nowrap;
+}
+.result-mascot{
+  width: 132px; margin: -74px auto 6px;
+  filter: drop-shadow(0 8px 0 rgba(0,0,0,.3));
+}
+.result-mascot img{ width:100%; display:block; }
+.stat-row{
+  display:flex; gap:14px; justify-content:center; margin: 18px 0 24px;
+}
+.stat{
+  background: var(--night-2); color:var(--paper);
+  border-radius:16px; border:3px solid var(--ink);
+  box-shadow: 0 4px 0 var(--ink);
+  padding: 10px 16px;
+  min-width: 108px;
+}
+.stat .n{ font-size:24px; font-weight:900; display:flex; align-items:center; justify-content:center; gap:6px;}
+.stat .n img{ width:20px; height:20px; object-fit:contain; }
+.stat .k{ font-size:11px; font-weight:700; opacity:.65; margin-top:2px; }
+.result-btns{ display:flex; gap:18px; justify-content:center; }
+.big-btn{
+  width: 220px; height: 66px;
+  border-radius: 20px;
+  font-size: 21px;
+  box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--ink), 0 6px 0 var(--ink);
+}
+.big-btn.mint{ background: var(--mint); }
+.big-btn.ghost{ background: var(--night-2); border:4px solid var(--ink); color:var(--paper); box-shadow: 0 0 0 3px var(--paper), 0 6px 0 var(--ink); }
+
+/* ===================== FRAME 5 — TUTORIAL BUBBLE ===================== */
+
+.frame-tut{ background: var(--night-3); }
+.tut-dim{ position:absolute; inset:0; background: rgba(8,4,20,.5); }
+.tut-hole{
+  position:absolute; left: 640px; top: 400px; width: 220px; height:150px;
+  border-radius: 20px;
+  box-shadow: 0 0 0 2000px rgba(8,4,20,.62);
+  outline: 5px solid var(--moon);
+  animation: hole-glow 1s ease-in-out infinite alternate;
+}
+@keyframes hole-glow{ to{ outline-color: var(--mint); outline-width:8px; } }
+.tut-sofa{ position:absolute; left: 640px; top: 400px; width:220px; height:150px; }
+.tut-sofa img{ width:100%; height:100%; object-fit:contain; filter: drop-shadow(0 6px 0 rgba(0,0,0,.35)); }
+.tut-finger{
+  position:absolute; left: 726px; top: 470px; z-index:8;
+  animation: tap 0.9s ease-in-out infinite;
+}
+@keyframes tap{ 50%{ transform: translateY(14px) scale(.92); } }
+
+.tut-guide{
+  position:absolute; left: 90px; bottom: 90px; display:flex; align-items:flex-end; gap:14px; z-index:9;
+}
+.tut-cat{ width: 168px; filter: drop-shadow(0 10px 0 rgba(0,0,0,.3)); transform: rotate(-2deg); }
+.tut-cat img{ width:100%; display:block; }
+.tut-speech{
+  padding: 18px 26px; font-size: 26px; font-weight:800; margin-bottom: 46px;
+  max-width: 360px;
+  transform: rotate(1deg);
+}
+.tut-speech .tail{ left:-6px; bottom: 20px; }
+
+.tut-stars{
+  position:absolute; top: 26px; left:50%; transform:translateX(-50%);
+  display:flex; gap:8px; z-index:9;
+}
+.tut-stars .st{ width:30px; height:30px; }
+.tut-skip{
+  position:absolute; top: 22px; right: 26px; z-index:9;
+  width: 54px; height:54px; border-radius:50%;
+  background: var(--night-1);
+  box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--ink);
+  display:flex; align-items:center; justify-content:center;
+}
+
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>Полночь у двери — UI, вариант C: «Ночная наклейка»</h1>
+  <p>Детский комикс-стикербук / субботнее утро мультфильмов: каждый элемент — наклейка с белым кантом и тёмной обводкой, комикс-панели с halftone-точками, пузыри реплик, объёмный леттеринг. Шрифт Rubik 900. Акценты: мятный свет, лунный жёлтый, призрачная магента на глубокой тёмно-фиолетовой ночи.</p>
+  <div class="swatches">
+    <div class="swatch" style="background:#241c3f" title="#241c3f"></div>
+    <div class="swatch" style="background:#7dffb0" title="#7dffb0"></div>
+    <div class="swatch" style="background:#ff5fd2" title="#ff5fd2"></div>
+    <div class="swatch" style="background:#ffe066" title="#ffe066"></div>
+    <div class="swatch" style="background:#e2b98a" title="#e2b98a"></div>
+    <div class="swatch" style="background:#1c1330" title="#1c1330"></div>
+  </div>
+</div>
+
+<!-- ============ SVG ICON DEFS ============ -->
+<svg width="0" height="0" style="position:absolute">
+<defs>
+<symbol id="ic-pause" viewBox="0 0 64 64">
+  <rect class="fill" x="18" y="14" width="12" height="36" rx="5" fill="#fff8ec"/>
+  <rect class="fill" x="36" y="14" width="12" height="36" rx="5" fill="#fff8ec"/>
+</symbol>
+<symbol id="ic-sound" viewBox="0 0 64 64">
+  <path class="fill" d="M10 24h10l14-12v40l-14-12H10z" fill="#fff8ec"/>
+  <path class="stroke" d="M42 22c5 4 5 16 0 20" fill="none"/>
+  <path class="stroke" d="M49 15c9 7 9 27 0 34" fill="none"/>
+</symbol>
+<symbol id="ic-home" viewBox="0 0 64 64">
+  <path class="fill" d="M32 8 58 30v26H40V40H24v16H6V30z" fill="#fff8ec"/>
+  <rect class="fill" x="24" y="40" width="16" height="16" fill="#ffe066"/>
+</symbol>
+<symbol id="ic-wrench" viewBox="0 0 64 64">
+  <path class="fill" d="M43 8a15 15 0 0 0-19 19L8 43l13 13 16-16a15 15 0 0 0 19-19l-9 9-8-8z" fill="#ff8a3d"/>
+  <circle class="gloss" cx="22" cy="18" r="4"/>
+</symbol>
+<symbol id="ic-flame" viewBox="0 0 64 64">
+  <path class="fill" d="M32 6c4 10-8 12-8 22a8 8 0 0 0 16 0c3 2 5 6 5 10a13 13 0 0 1-26 0c0-14 13-16 13-32z" fill="#ff8a3d"/>
+  <path class="fill" d="M32 30c2 4-2 6-2 10a4 4 0 0 0 8 0c0-6-6-6-6-10z" fill="#ffe066" stroke="none"/>
+</symbol>
+<symbol id="ic-clock" viewBox="0 0 64 64">
+  <circle class="fill" cx="32" cy="34" r="22" fill="#7dd6ff"/>
+  <path class="stroke" d="M32 22v12l9 6" fill="none" stroke="#1c1330"/>
+  <path class="fill" d="M22 8c4-3 16-3 20 0l-4 8H26z" fill="#fff8ec"/>
+</symbol>
+<symbol id="ic-lock" viewBox="0 0 64 64">
+  <rect class="fill" x="14" y="28" width="36" height="28" rx="6" fill="#cfc9dd"/>
+  <path class="stroke" d="M20 28v-6a12 12 0 0 1 24 0v6" fill="none"/>
+  <circle cx="32" cy="40" r="5" fill="#1c1330" stroke="none"/>
+</symbol>
+<symbol id="ic-book" viewBox="0 0 64 64">
+  <path class="fill" d="M32 14c-6-5-16-6-22-3v34c6-3 16-2 22 3z" fill="#7dffb0"/>
+  <path class="fill" d="M32 14c6-5 16-6 22-3v34c-6-3-16-2-22 3z" fill="#ff5fd2"/>
+</symbol>
+<symbol id="ic-star" viewBox="0 0 64 64">
+  <path class="fill" d="M32 6 39 24 58 26 44 39 48 58 32 48 16 58 20 39 6 26 25 24z" fill="#ffe066"/>
+</symbol>
+<symbol id="ic-skull" viewBox="0 0 64 64">
+  <path class="fill" d="M32 8a20 20 0 0 0-14 34v10h6v-6h6v6h4v-6h6v6h6V42A20 20 0 0 0 32 8z" fill="#fff8ec"/>
+  <circle cx="24" cy="30" r="5" fill="#1c1330" stroke="none"/>
+  <circle cx="40" cy="30" r="5" fill="#1c1330" stroke="none"/>
+</symbol>
+<symbol id="ic-bolt" viewBox="0 0 64 64">
+  <path class="fill" d="M36 6 14 36h14l-4 22 24-32H34z" fill="#ffe066"/>
+</symbol>
+<symbol id="ic-trophy" viewBox="0 0 64 64">
+  <path class="fill" d="M18 10h28v14a14 14 0 0 1-28 0z" fill="#ffe066"/>
+  <path class="stroke" d="M18 14H8a10 10 0 0 0 10 12" fill="none"/>
+  <path class="stroke" d="M46 14h10a10 10 0 0 1-10 12" fill="none"/>
+  <rect class="fill" x="26" y="38" width="12" height="10" fill="#ff8a3d"/>
+  <rect class="fill" x="18" y="48" width="28" height="8" rx="3" fill="#fff8ec"/>
+</symbol>
+<symbol id="ic-ghost-mini" viewBox="0 0 64 64">
+  <path class="fill" d="M32 6C18 6 10 16 10 30v24l6-6 6 6 6-6 4 6 4-6 6 6 6-6V30C42 16 46 6 32 6z" fill="#ff5fd2"/>
+  <circle cx="24" cy="28" r="4" fill="#1c1330" stroke="none"/>
+  <circle cx="40" cy="28" r="4" fill="#1c1330" stroke="none"/>
+</symbol>
+<symbol id="ic-hand" viewBox="0 0 64 64">
+  <path class="fill" d="M26 58V30a5 5 0 0 1 10 0v-8a5 5 0 0 1 10 0v6a5 5 0 0 1 9 3v9c0 12-6 18-15 18z" fill="#ffe066"/>
+</symbol>
+<symbol id="ic-skip" viewBox="0 0 64 64">
+  <path class="fill" d="M8 14v36l22-18z" fill="#fff8ec"/>
+  <path class="fill" d="M30 14v36l22-18z" fill="#fff8ec"/>
+  <rect class="fill" x="52" y="14" width="6" height="36" rx="2" fill="#fff8ec"/>
+</symbol>
+<symbol id="ic-check" viewBox="0 0 64 64">
+  <circle class="fill" cx="32" cy="32" r="24" fill="#7dffb0"/>
+  <path class="stroke" d="M20 33l8 8 16-18" fill="none" stroke="#1c1330"/>
+</symbol>
+</defs>
+</svg>
+
+<!-- ============ 1. MAIN MENU ============ -->
+<div class="section-label"><span class="num">1</span><span class="txt">Главное меню</span></div>
+<div class="frame frame-menu">
+  <div class="menu-stars"></div>
+  <div class="menu-moon"></div>
+  <div class="menu-floorline"></div>
+
+  <div class="menu-ghost"><img src="../../src/assets/sprites/ghost_down_idle.png" alt="Призрак"></div>
+  <div class="menu-door"><img src="../../src/assets/sprites/door_l1.png" alt="Дверь"></div>
+
+  <div class="title-wrap">
+    <h1>
+      <span class="l1">СЕГОДНЯ</span>
+      <span class="l2">ПОЛНОЧЬ<br>У ДВЕРИ</span>
+    </h1>
+    <div class="title-sub">Держись до рассвета!</div>
+  </div>
+
+  <div class="diffs">
+    <button class="btn sticker diff-btn diff-easy r2">
+      <span class="pin win-pin">×2 🏆</span>
+      <span class="ico-wrap"><svg class="icon" width="46" height="46"><use href="#ic-star"/></svg></span>
+      <span class="name">Лёгкая</span>
+      <span class="desc">для начала</span>
+    </button>
+    <button class="btn sticker diff-btn diff-hard r1" style="transform:translateY(-10px) rotate(-1deg)">
+      <span class="pin win-pin" style="background:#fff8ec">×0</span>
+      <span class="ico-wrap"><svg class="icon" width="46" height="46"><use href="#ic-bolt"/></svg></span>
+      <span class="name">Сложная</span>
+      <span class="desc">призрак хитрее</span>
+    </button>
+    <button class="btn sticker diff-btn diff-night r4">
+      <span class="pin win-pin">×1 👑</span>
+      <span class="ico-wrap"><svg class="icon" width="46" height="46"><use href="#ic-skull"/></svg></span>
+      <span class="name">Кошмар</span>
+      <span class="desc">только для смелых</span>
+    </button>
+  </div>
+
+  <button class="btn tut-btn">
+    <svg class="icon" width="28" height="28"><use href="#ic-book"/></svg>
+    Обучение
+  </button>
+
+  <div class="mascot-bubble speech r3">Погнали спасать дом!<div class="tail"></div></div>
+  <div class="mascot-menu"><img src="../../src/assets/sprites/mascot_wave.png" alt="Кот-маскот машет"></div>
+
+  <div class="ver-tag">вариант C · sticker-comic</div>
+</div>
+
+<!-- ============ 2. IN-MATCH HUD ============ -->
+<div class="section-label"><span class="num">2</span><span class="txt">HUD во время матча (поверх вида сверху)</span></div>
+<div class="frame frame-hud">
+  <div class="scene">
+    <div class="plank-shadow"></div>
+    <div class="corridor left"></div>
+    <div class="corridor right"></div>
+    <div class="prop" style="left:120px; top:520px; width:110px; height:80px;"><img src="../../src/assets/sprites/sofa.png" alt=""></div>
+    <div class="prop" style="left:980px; top:470px; width:70px; height:90px;"><img src="../../src/assets/sprites/pumpkin.png" alt=""></div>
+    <div class="prop" style="left:560px; top:250px; width:64px; height:96px; display:flex; flex-direction:column;">
+      <img src="../../src/assets/sprites/cannon_base.png" alt="" style="position:absolute; bottom:0;">
+      <img src="../../src/assets/sprites/cannon_barrel.png" alt="" style="position:absolute; bottom:10px;">
+    </div>
+    <div class="prop" style="left:760px; top:560px; width:60px; height:76px;"><img src="../../src/assets/sprites/toolbox.png" alt=""></div>
+    <div class="prop" style="left:300px; top:180px; width:170px; height:220px; opacity:.9;"><img src="../../src/assets/sprites/door_l4.png" alt="Дверь"></div>
+  </div>
+
+  <div class="hud-topbar">
+    <div class="chip candy"><span class="icon-box"><img src="../../src/assets/sprites/candy_shot.png" alt="Конфеты"></span>128</div>
+    <div class="chip flame"><span class="icon-box"><svg class="icon" width="22" height="22"><use href="#ic-flame"/></svg></span>3</div>
+    <div class="chip timer"><span class="lbl">ночь до</span><span class="icon-box"><svg class="icon" width="20" height="20"><use href="#ic-clock"/></svg></span>02:14</div>
+    <div class="chip level"><span class="icon-box"><svg class="icon" width="22" height="22"><use href="#ic-skull"/></svg></span>Ур. 3</div>
+  </div>
+
+  <div class="portrait-row">
+    <div class="portrait me" style="background-color:#ff9f6b; background-image:url('../../src/assets/sprites/char0_idle.png')"><span class="tag">ТЫ</span></div>
+    <div class="portrait" style="background-color:#7dc4ff; background-image:url('../../src/assets/sprites/char1_idle.png')"></div>
+    <div class="portrait" style="background-color:#b98aff; background-image:url('../../src/assets/sprites/char2_idle.png')"></div>
+    <div class="portrait tgt" style="background-color:#7dffb0; background-image:url('../../src/assets/sprites/char3_idle.png')"><span class="tag">ЦЕЛЬ</span></div>
+    <div class="portrait gone" style="background-color:#ff8ad1; background-image:url('../../src/assets/sprites/char4_idle.png')"></div>
+    <div class="portrait" style="background-color:#ffe066; background-image:url('../../src/assets/sprites/char5_idle.png')"></div>
+  </div>
+
+  <div class="hud-side">
+    <button class="btn round-btn"><svg class="icon" width="20" height="20"><use href="#ic-pause"/></svg></button>
+    <button class="btn round-btn blue"><svg class="icon" width="22" height="22"><use href="#ic-sound"/></svg></button>
+  </div>
+
+  <button class="btn home-btn"><svg class="icon" width="30" height="30"><use href="#ic-home"/></svg></button>
+
+  <div class="repair-wrap">
+    <div class="repair-example">
+      <span class="lbl">пример: перезарядка</span>
+      <div class="repair-cd">
+        3с
+        <svg viewBox="0 0 66 66"><circle cx="33" cy="33" r="28" fill="none" stroke="#ffe066" stroke-width="6" stroke-dasharray="176" stroke-dashoffset="60" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    <button class="btn repair-btn"><svg class="icon" width="46" height="46"><use href="#ic-wrench"/></svg></button>
+  </div>
+
+  <div class="hud-toast">Нужно ещё 20 <img src="../../src/assets/sprites/candy_shot.png" style="width:14px;height:14px;vertical-align:-2px" alt=""></div>
+</div>
+
+<!-- ============ 3. BUILD CONTEXT MENU ============ -->
+<div class="section-label"><span class="num">3</span><span class="txt">Контекстное меню постройки (клик по клетке)</span></div>
+<div class="frame frame-build">
+  <div class="build-scene"></div>
+  <div class="build-hint"><svg class="icon" width="18" height="18"><use href="#ic-hand"/></svg> Выбери, что построить</div>
+  <div class="build-grid">
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell sel"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+  </div>
+
+  <div class="build-popup speech">
+    <div class="tail"></div>
+    <div class="build-title">Пол</div>
+
+    <div class="build-opt-wrap">
+      <div class="build-opt">
+        <span class="ico"><img src="../../src/assets/sprites/cannon_base.png" alt=""></span>
+        <span class="lbl">Пушка</span>
+        <span class="cost"><img src="../../src/assets/sprites/candy_shot.png" alt="">50</span>
+      </div>
+    </div>
+
+    <div class="build-opt-wrap">
+      <div class="build-opt disabled">
+        <span class="ico"><img src="../../src/assets/sprites/lavender.png" alt=""></span>
+        <span class="lbl">Лаванда</span>
+        <span class="cost" style="opacity:.6"><svg class="icon" width="16" height="16"><use href="#ic-lock"/></svg></span>
+      </div>
+      <div class="disabled-reason"><svg class="icon" width="14" height="14"><use href="#ic-lock"/></svg> Нужна мастерская 2 уровня</div>
+    </div>
+
+    <div class="build-opt-wrap" style="margin-bottom:0">
+      <div class="build-opt" style="background:var(--moon)">
+        <span class="ico"><img src="../../src/assets/sprites/safe.png" alt=""></span>
+        <span class="lbl">Сейф</span>
+        <span class="cost"><img src="../../src/assets/sprites/candy_shot.png" alt="">80</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 4. RESULT SCREEN ============ -->
+<div class="section-label"><span class="num">4</span><span class="txt">Экран результата</span></div>
+<div class="frame frame-result">
+  <div class="result-confetti">
+    <i style="left:14%; top:12%; background:#7dffb0; transform:rotate(20deg)"></i>
+    <i style="left:22%; top:70%; background:#ffe066; transform:rotate(-15deg)"></i>
+    <i style="left:80%; top:18%; background:#ff5fd2; transform:rotate(40deg)"></i>
+    <i style="left:88%; top:66%; background:#7dd6ff; transform:rotate(-30deg)"></i>
+    <i style="left:8%; top:44%; background:#ff8a3d; transform:rotate(10deg)"></i>
+    <i style="left:92%; top:42%; background:#7dffb0; transform:rotate(-8deg)"></i>
+    <i style="left:50%; top:8%; background:#ffe066; transform:rotate(25deg)"></i>
+  </div>
+
+  <div class="result-card sticker halftone">
+    <div class="result-mascot"><img src="../../src/assets/sprites/mascot_cheer.png" alt="Кот радуется"></div>
+    <h1 class="result-title stroke-title" style="-webkit-text-stroke-width:4px; filter:drop-shadow(0 4px 0 var(--ink)); color:var(--night-1)">Призрак побеждён!</h1>
+    <div class="title-sub" style="background:var(--mint); color:var(--ink)">Ночь пережита ✦ Уровень 3</div>
+
+    <div class="stat-row">
+      <div class="stat r1">
+        <div class="n"><img src="../../src/assets/sprites/candy_shot.png" alt="">96</div>
+        <div class="k">конфет</div>
+      </div>
+      <div class="stat r2">
+        <div class="n"><svg class="icon" width="18" height="18"><use href="#ic-clock"/></svg>04:52</div>
+        <div class="k">время</div>
+      </div>
+      <div class="stat r1">
+        <div class="n"><svg class="icon" width="18" height="18"><use href="#ic-trophy"/></svg>3</div>
+        <div class="k">победы подряд</div>
+      </div>
+    </div>
+
+    <div class="result-btns">
+      <button class="btn big-btn mint r2">Ещё раз</button>
+      <button class="btn big-btn ghost r1">Меню</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 5. TUTORIAL BUBBLE ============ -->
+<div class="section-label"><span class="num">5</span><span class="txt">Обучение — подсказка-пузырь</span></div>
+<div class="frame frame-tut">
+  <div class="scene">
+    <div class="plank-shadow"></div>
+  </div>
+  <div class="tut-hole"></div>
+  <div class="tut-sofa"><img src="../../src/assets/sprites/sofa.png" alt="Диван"></div>
+  <div class="tut-finger"><svg class="icon" width="54" height="54"><use href="#ic-hand"/></svg></div>
+
+  <div class="tut-stars">
+    <svg class="icon st" style="opacity:1"><use href="#ic-star"/></svg>
+    <svg class="icon st" style="opacity:.3"><use href="#ic-star"/></svg>
+    <svg class="icon st" style="opacity:.3"><use href="#ic-star"/></svg>
+  </div>
+  <button class="btn tut-skip"><svg class="icon" width="22" height="22" style="filter:none"><use href="#ic-skip"/></svg></button>
+
+  <div class="tut-guide">
+    <div class="tut-cat"><img src="../../src/assets/sprites/mascot_point.png" alt="Кот показывает"></div>
+    <div class="tut-speech speech r3">Нажми на диван<div class="tail"></div></div>
+  </div>
+</div>
+
+</body>
+</html>

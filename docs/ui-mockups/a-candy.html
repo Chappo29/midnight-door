@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Полночь у двери — UI Вариант A: Карамельная ночь</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --outline:#1c1530;
+    --night-1:#241c3d;
+    --night-2:#2a2342;
+    --night-3:#33304f;
+    --night-4:#100c1c;
+    --wood-1:#e2b98a;
+    --wood-2:#cea06e;
+    --wood-3:#a67c4e;
+    --mint:#2fe3a6;
+    --mint-light:#8bf7d6;
+    --mint-dark:#0e9c6e;
+    --strawberry:#ff4d6d;
+    --strawberry-light:#ff8fa3;
+    --strawberry-dark:#c31e42;
+    --grape:#8b5cf6;
+    --grape-light:#c3a6ff;
+    --grape-dark:#5a32b8;
+    --amber:#ffb238;
+    --amber-light:#ffd98a;
+    --amber-dark:#d97f0e;
+    --cream:#fff6e6;
+    --cream-dark:#f0d9ad;
+    --nightmare:#ff3b57;
+    --nightmare-dark:#5c0f22;
+    --ink:#241a3d;
+    --gold:#ffd166;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--night-4);
+    font-family:'Nunito',sans-serif;
+    color:#fff;
+    padding:56px 24px 120px;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:72px;
+    min-width:1414px; /* 1366 frame + side padding, keeps every frame fully reachable via scroll instead of centering it off-screen */
+  }
+
+  /* ============ doc chrome (not part of the actual game UI) ============ */
+  .doc-header{max-width:1366px;width:100%;text-align:left;margin-bottom:-24px;}
+  .doc-header .kicker{
+    font-family:'Baloo 2',cursive;font-weight:700;font-size:15px;letter-spacing:3px;
+    color:var(--mint);text-transform:uppercase;margin:0 0 6px;
+  }
+  .doc-header h1{
+    font-family:'Baloo 2',cursive;font-weight:800;font-size:40px;margin:0 0 10px;
+    color:#fff;
+  }
+  .doc-header p{margin:0;color:#b9b0d6;font-size:16px;font-weight:700;max-width:900px;line-height:1.5;}
+  .swatches{display:flex;gap:10px;margin-top:18px;}
+  .swatch{width:34px;height:34px;border-radius:10px;border:3px solid var(--outline);}
+
+  .frame-section{display:flex;flex-direction:column;align-items:flex-start;gap:14px;}
+  .frame-label{
+    display:inline-flex;align-items:center;gap:10px;
+    font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;letter-spacing:.5px;
+    background:linear-gradient(180deg,#3a3060,#241c3d);
+    border:2px solid #4b4178;border-radius:999px;
+    padding:8px 20px 8px 10px;color:#e7e1ff;
+  }
+  .frame-label .num{
+    width:26px;height:26px;border-radius:50%;background:var(--mint);color:var(--ink);
+    display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;
+  }
+
+  .frame{
+    position:relative;width:1366px;height:768px;overflow:hidden;
+    border-radius:22px;border:7px solid var(--outline);
+    box-shadow:0 30px 70px rgba(0,0,0,.55), inset 0 0 0 2px rgba(255,255,255,.04);
+    background:var(--night-2);
+  }
+
+  /* ============ shared backdrops ============ */
+  .bg-night{
+    background:
+      radial-gradient(circle at 18% 12%, rgba(255,255,255,.10), transparent 38%),
+      radial-gradient(circle at 82% 8%, rgba(139,92,246,.35), transparent 46%),
+      linear-gradient(180deg, var(--night-1) 0%, var(--night-2) 55%, var(--night-3) 100%);
+  }
+  .stars::before{
+    content:"";position:absolute;inset:0;pointer-events:none;opacity:.65;
+    background-image:
+      radial-gradient(2px 2px at 8% 15%, #fff, transparent 60%),
+      radial-gradient(2px 2px at 22% 8%, #fff, transparent 60%),
+      radial-gradient(1.5px 1.5px at 35% 20%, #fff, transparent 60%),
+      radial-gradient(2px 2px at 48% 6%, #fff, transparent 60%),
+      radial-gradient(1.5px 1.5px at 63% 14%, #fff, transparent 60%),
+      radial-gradient(2px 2px at 72% 5%, #fff, transparent 60%),
+      radial-gradient(1.5px 1.5px at 88% 10%, #fff, transparent 60%),
+      radial-gradient(2px 2px at 95% 18%, #fff, transparent 60%),
+      radial-gradient(1.5px 1.5px at 15% 28%, #fff, transparent 60%),
+      radial-gradient(1.5px 1.5px at 55% 24%, #fff, transparent 60%);
+  }
+  .floor{
+    position:absolute;left:0;right:0;bottom:0;
+    background:
+      repeating-linear-gradient(90deg, var(--wood-1) 0 64px, var(--wood-2) 64px 68px),
+      repeating-linear-gradient(0deg, rgba(0,0,0,.05) 0 2px, transparent 2px 96px);
+  }
+  .floor::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg, rgba(26,18,46,.55) 0%, rgba(26,18,46,0) 22%);
+  }
+  .floor .knot{position:absolute;width:14px;height:22px;border-radius:50%;background:rgba(120,82,42,.35);filter:blur(.5px);}
+
+  img.sprite{image-rendering:-webkit-optimize-contrast;user-select:none;pointer-events:none;}
+
+  /* ============ candy button ============ */
+  .candy-btn{
+    position:relative;display:inline-flex;align-items:center;justify-content:center;gap:14px;
+    font-family:'Baloo 2',cursive;font-weight:800;color:#fff;
+    border:5px solid var(--outline);border-radius:999px;cursor:pointer;
+    text-shadow:0 2px 0 rgba(0,0,0,.28);
+    box-shadow:0 7px 0 var(--btn-dark,#0e9c6e), 0 14px 22px rgba(0,0,0,.4);
+    background:linear-gradient(180deg, var(--btn-light,#8bf7d6) 0%, var(--btn-base,#2fe3a6) 48%, var(--btn-mid,#1bc78e) 100%);
+  }
+  .candy-btn::before{
+    content:"";position:absolute;top:7px;left:10%;width:80%;height:34%;
+    background:linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,0));
+    border-radius:50%;pointer-events:none;
+  }
+  .candy-btn.round{
+    padding:0;width:var(--sz,60px);height:var(--sz,60px);border-radius:50%;box-shadow:0 6px 0 var(--btn-dark,#5a32b8), 0 10px 16px rgba(0,0,0,.4);
+  }
+
+  /* ============ wrapper pill (candy-wrapper counters) ============ */
+  .wrapper-pill{
+    position:relative;display:inline-flex;align-items:center;gap:9px;
+    background:linear-gradient(180deg, var(--p-light,#fff) 0%, var(--p-base,#fff6e6) 100%);
+    border:4px solid var(--outline);border-radius:999px;padding:9px 20px 9px 9px;
+    font-family:'Baloo 2',cursive;font-weight:800;font-size:22px;color:var(--ink);
+  }
+  .wrapper-pill .twist{
+    position:absolute;top:50%;width:16px;height:22px;background:inherit;border:4px solid var(--outline);
+    transform:translateY(-50%);
+  }
+  .wrapper-pill .twist.left{left:-13px;clip-path:polygon(100% 0,0% 50%,100% 100%);}
+  .wrapper-pill .twist.right{right:-13px;clip-path:polygon(0 0,100% 50%,0 100%);}
+  .wrapper-pill .icon-badge{
+    width:38px;height:38px;border-radius:50%;background:#fff;border:3px solid var(--outline);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;
+  }
+  .wrapper-pill .icon-badge img{width:100%;height:100%;object-fit:contain;}
+
+  /* ============ portraits ============ */
+  .portrait{
+    width:76px;height:76px;border-radius:50%;border:5px solid var(--outline);overflow:hidden;
+    position:relative;background:var(--cream);box-shadow:0 5px 0 rgba(0,0,0,.3);
+  }
+  .portrait img{width:100%;height:100%;object-fit:cover;object-position:50% 12%;}
+  .portrait.you{border-color:var(--mint);box-shadow:0 0 0 4px rgba(47,227,166,.35), 0 5px 0 rgba(0,0,0,.3);}
+  .portrait.target{border-color:var(--nightmare);box-shadow:0 0 0 4px rgba(255,59,87,.4), 0 5px 0 rgba(0,0,0,.3);}
+  .portrait-tag{
+    position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);
+    font-family:'Baloo 2',cursive;font-weight:800;font-size:11px;padding:2px 9px;border-radius:999px;
+    border:3px solid var(--outline);white-space:nowrap;
+  }
+  .portrait-tag.you{background:var(--mint);color:var(--ink);}
+  .portrait-tag.target{background:var(--nightmare);color:#fff;}
+
+  h2,h3{font-family:'Baloo 2',cursive;margin:0;}
+
+  /* helper */
+  .abs{position:absolute;}
+  .flex{display:flex;}
+</style>
+</head>
+<body>
+
+<!-- shared gradient / pattern defs used by every inline icon below -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="gMint" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8bf7d6"/><stop offset=".55" stop-color="#2fe3a6"/><stop offset="1" stop-color="#0e9c6e"/>
+    </linearGradient>
+    <linearGradient id="gStrawberry" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff8fa3"/><stop offset=".55" stop-color="#ff4d6d"/><stop offset="1" stop-color="#c31e42"/>
+    </linearGradient>
+    <linearGradient id="gAmber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd98a"/><stop offset=".55" stop-color="#ffb238"/><stop offset="1" stop-color="#d97f0e"/>
+    </linearGradient>
+    <linearGradient id="gGrape" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c3a6ff"/><stop offset=".55" stop-color="#8b5cf6"/><stop offset="1" stop-color="#5a32b8"/>
+    </linearGradient>
+    <linearGradient id="gNightmare" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff7c8f"/><stop offset=".55" stop-color="#ff3b57"/><stop offset="1" stop-color="#8a1230"/>
+    </linearGradient>
+    <linearGradient id="gCream" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f0d9ad"/>
+    </linearGradient>
+    <linearGradient id="gSilver" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f6fb"/><stop offset=".6" stop-color="#c7ccd6"/><stop offset="1" stop-color="#8c93a3"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="doc-header">
+  <p class="kicker">Полночь у двери — UI mockup · направление A</p>
+  <h1>Карамельная ночь / Candy Night</h1>
+  <p>Интерфейс собран как леденец: глянцевые желейные кнопки с толстым тёмным контуром (как у спрайтов), тёмный нижний край для «нажимаемого» объёма, блик сверху. Красно-белая карамельная полоска — акцент (как на пушках). Мятно-клубнично-виноградная палитра на глубоком ночном фиоле. Шрифт «Baloo 2» для заголовков, «Nunito» для текста — оба с полной поддержкой кириллицы.</p>
+  <div class="swatches">
+    <div class="swatch" style="background:var(--night-2)"></div>
+    <div class="swatch" style="background:var(--mint)"></div>
+    <div class="swatch" style="background:var(--strawberry)"></div>
+    <div class="swatch" style="background:var(--grape)"></div>
+    <div class="swatch" style="background:var(--amber)"></div>
+    <div class="swatch" style="background:var(--wood-1)"></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 1. MAIN MENU -->
+<!-- ============================================================ -->
+<div class="frame-section">
+  <div class="frame-label"><span class="num">1</span>Главное меню</div>
+  <div class="frame bg-night stars" style="display:flex;flex-direction:column;align-items:center;">
+
+    <!-- floor strip -->
+    <div class="floor abs" style="height:170px;">
+      <div class="knot" style="left:120px;bottom:60px;"></div>
+      <div class="knot" style="left:540px;bottom:30px;"></div>
+      <div class="knot" style="left:980px;bottom:80px;"></div>
+    </div>
+
+    <!-- title lockup -->
+    <div style="margin-top:44px;text-align:center;position:relative;z-index:2;">
+      <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:84px;line-height:.95;
+                  color:#fff;-webkit-text-stroke:6px var(--outline);
+                  text-shadow:5px 5px 0 var(--strawberry-dark), 5px 5px 0 var(--outline), 0 18px 30px rgba(0,0,0,.45);
+                  letter-spacing:2px;">ПОЛНОЧЬ</div>
+      <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:52px;line-height:1;margin-top:4px;
+                  color:var(--mint-light);-webkit-text-stroke:5px var(--outline);
+                  text-shadow:4px 4px 0 var(--mint-dark), 4px 4px 0 var(--outline);
+                  letter-spacing:6px;">У ДВЕРИ</div>
+    </div>
+
+    <!-- hero art: door + ghost -->
+    <div style="position:relative;width:520px;height:250px;margin-top:2px;z-index:1;">
+      <div class="abs" style="left:50%;top:36px;transform:translateX(-50%);width:280px;height:280px;border-radius:50%;
+           background:radial-gradient(circle, rgba(255,214,102,.22), transparent 65%);"></div>
+      <img class="sprite abs" src="../../src/assets/sprites/door_l1.png" style="left:50%;top:20px;transform:translateX(-50%);height:230px;filter:drop-shadow(0 18px 14px rgba(0,0,0,.5));">
+      <img class="sprite abs" src="../../src/assets/sprites/ghost_down_idle.png" style="right:36px;top:-34px;height:180px;filter:drop-shadow(0 14px 10px rgba(0,0,0,.5)); animation:floatGhost 3.4s ease-in-out infinite;">
+    </div>
+
+    <!-- difficulty buttons -->
+    <div style="display:flex;gap:26px;margin-top:6px;z-index:2;">
+      <!-- EASY -->
+      <button class="candy-btn" style="flex-direction:column;gap:4px;padding:16px 26px 14px;min-width:250px;border-radius:34px;
+        --btn-light:#8bf7d6;--btn-base:#2fe3a6;--btn-mid:#1bc78e;--btn-dark:#0e9c6e;">
+        <span class="abs" style="top:-16px;right:-14px;background:var(--gold);border:4px solid var(--outline);border-radius:50%;
+              width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--ink);box-shadow:0 4px 0 #b8862a;">
+          <svg width="16" height="16" viewBox="0 0 24 24" style="margin-right:1px"><path d="M12 1l2.9 6.9L22 9l-5.5 4.8L18 21l-6-3.9L6 21l1.5-7.2L2 9l7.1-1.1L12 1z" fill="var(--outline)"/></svg>4
+        </span>
+        <div style="display:flex;align-items:center;gap:10px;font-size:26px;">
+          <svg width="26" height="26" viewBox="0 0 24 24"><path d="M12 2c1 3-1 4-1 6.5A3.5 3.5 0 0 0 15 12c2-1 2.5-3 2.5-3C19 11 19 14 16.5 16c-2 1.7-6.5 1.7-8.7-1-2-2.4-1-6 1-8 1-1.2 2.7-3 3.2-5z" fill="url(#gAmber)" stroke="var(--outline)" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          Лёгкая
+        </div>
+        <div style="font-size:14px;font-weight:700;opacity:.9;">3 соседа · спокойный призрак</div>
+      </button>
+
+      <!-- HARD -->
+      <button class="candy-btn" style="flex-direction:column;gap:4px;padding:16px 26px 14px;min-width:250px;border-radius:34px;
+        --btn-light:#ffd98a;--btn-base:#ffb238;--btn-mid:#f29c1c;--btn-dark:#d97f0e;">
+        <span class="abs" style="top:-16px;right:-14px;background:var(--gold);border:4px solid var(--outline);border-radius:50%;
+              width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--ink);box-shadow:0 4px 0 #b8862a;">
+          <svg width="16" height="16" viewBox="0 0 24 24" style="margin-right:1px"><path d="M12 1l2.9 6.9L22 9l-5.5 4.8L18 21l-6-3.9L6 21l1.5-7.2L2 9l7.1-1.1L12 1z" fill="var(--outline)"/></svg>1
+        </span>
+        <div style="display:flex;align-items:center;gap:10px;font-size:26px;">
+          <svg width="26" height="26" viewBox="0 0 24 24"><path d="M12 2c1 3-1 4-1 6.5A3.5 3.5 0 0 0 15 12c2-1 2.5-3 2.5-3C19 11 19 14 16.5 16c-2 1.7-6.5 1.7-8.7-1-2-2.4-1-6 1-8 1-1.2 2.7-3 3.2-5z" fill="url(#gStrawberry)" stroke="var(--outline)" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          <svg width="26" height="26" viewBox="0 0 24 24"><path d="M12 2c1 3-1 4-1 6.5A3.5 3.5 0 0 0 15 12c2-1 2.5-3 2.5-3C19 11 19 14 16.5 16c-2 1.7-6.5 1.7-8.7-1-2-2.4-1-6 1-8 1-1.2 2.7-3 3.2-5z" fill="url(#gStrawberry)" stroke="var(--outline)" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          Сложная
+        </div>
+        <div style="font-size:14px;font-weight:700;opacity:.9;">5 соседей · хитрый призрак</div>
+      </button>
+
+      <!-- NIGHTMARE -->
+      <button class="candy-btn" style="flex-direction:column;gap:4px;padding:16px 26px 14px;min-width:250px;border-radius:34px;
+        --btn-light:#ff7c8f;--btn-base:#ff3b57;--btn-mid:#c31e3f;--btn-dark:#8a1230;">
+        <span class="abs" style="top:-16px;right:-14px;background:var(--gold);border:4px solid var(--outline);border-radius:50%;
+              width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--ink);box-shadow:0 4px 0 #b8862a;">
+          <svg width="16" height="16" viewBox="0 0 24 24" style="margin-right:1px"><path d="M12 1l2.9 6.9L22 9l-5.5 4.8L18 21l-6-3.9L6 21l1.5-7.2L2 9l7.1-1.1L12 1z" fill="var(--outline)"/></svg>0
+        </span>
+        <div style="display:flex;align-items:center;gap:8px;font-size:26px;">
+          <svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 2c1 3-1 4-1 6.5A3.5 3.5 0 0 0 15 12c2-1 2.5-3 2.5-3C19 11 19 14 16.5 16c-2 1.7-6.5 1.7-8.7-1-2-2.4-1-6 1-8 1-1.2 2.7-3 3.2-5z" fill="#3a0d16" stroke="var(--outline)" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          <svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 2c1 3-1 4-1 6.5A3.5 3.5 0 0 0 15 12c2-1 2.5-3 2.5-3C19 11 19 14 16.5 16c-2 1.7-6.5 1.7-8.7-1-2-2.4-1-6 1-8 1-1.2 2.7-3 3.2-5z" fill="#3a0d16" stroke="var(--outline)" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          <svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 2c1 3-1 4-1 6.5A3.5 3.5 0 0 0 15 12c2-1 2.5-3 2.5-3C19 11 19 14 16.5 16c-2 1.7-6.5 1.7-8.7-1-2-2.4-1-6 1-8 1-1.2 2.7-3 3.2-5z" fill="#3a0d16" stroke="var(--outline)" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          Кошмар
+        </div>
+        <div style="font-size:14px;font-weight:700;opacity:.9;">7 соседей · злой призрак</div>
+      </button>
+    </div>
+
+    <!-- tutorial secondary -->
+    <button class="candy-btn" style="margin-top:22px;padding:12px 30px;border-radius:999px;font-size:19px;z-index:2;
+      --btn-light:#ffffff;--btn-base:#fff6e6;--btn-mid:#f0d9ad;--btn-dark:#c9ab6c;color:var(--ink);text-shadow:none;box-shadow:0 6px 0 #c9ab6c, 0 10px 16px rgba(0,0,0,.3);">
+      <svg width="24" height="24" viewBox="0 0 24 24"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5v-13z" fill="url(#gGrape)" stroke="var(--outline)" stroke-width="1.3"/><path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5v-13z" fill="url(#gGrape)" stroke="var(--outline)" stroke-width="1.3"/></svg>
+      Обучение
+    </button>
+
+    <!-- mascot -->
+    <img class="sprite abs" src="../../src/assets/sprites/mascot_wave.png" style="left:26px;bottom:8px;height:210px;filter:drop-shadow(0 12px 10px rgba(0,0,0,.5));animation:bob 2.6s ease-in-out infinite;z-index:2;">
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 2. IN-MATCH HUD -->
+<!-- ============================================================ -->
+<div class="frame-section">
+  <div class="frame-label"><span class="num">2</span>HUD во время матча</div>
+  <div class="frame" style="background:var(--wood-1);">
+
+    <!-- mocked game view floor -->
+    <div class="floor" style="inset:0;"></div>
+    <div class="abs" style="top:0;left:0;right:0;height:150px;background:linear-gradient(180deg, rgba(36,24,61,.85), rgba(36,24,61,0));"></div>
+
+    <!-- scattered props for game-view feel -->
+    <img class="sprite abs" src="../../src/assets/sprites/sofa.png" style="left:120px;top:300px;width:170px;opacity:.92;filter:drop-shadow(0 8px 6px rgba(0,0,0,.35));">
+    <img class="sprite abs" src="../../src/assets/sprites/furniture1.png" style="left:970px;top:280px;width:120px;opacity:.9;filter:drop-shadow(0 8px 6px rgba(0,0,0,.35));">
+    <img class="sprite abs" src="../../src/assets/sprites/pumpkin.png" style="left:640px;top:520px;width:80px;opacity:.92;filter:drop-shadow(0 6px 5px rgba(0,0,0,.35));">
+    <img class="sprite abs" src="../../src/assets/sprites/toolbox.png" style="left:1060px;top:560px;width:78px;opacity:.9;filter:drop-shadow(0 6px 5px rgba(0,0,0,.35));">
+    <img class="sprite abs" src="../../src/assets/sprites/cannon_base.png" style="left:330px;top:430px;width:70px;opacity:.92;filter:drop-shadow(0 6px 5px rgba(0,0,0,.35));">
+
+    <!-- top bar -->
+    <div class="abs" style="top:0;left:0;right:0;height:96px;display:flex;align-items:center;justify-content:space-between;
+        padding:0 24px;background:linear-gradient(180deg, rgba(36,24,61,.92), rgba(36,24,61,.8));
+        border-bottom:6px solid var(--outline);
+        box-shadow:0 6px 16px rgba(0,0,0,.35);">
+
+      <div style="display:flex;gap:14px;">
+        <!-- candy counter -->
+        <div class="wrapper-pill" style="--p-light:#fff;--p-base:#ffe3ec;">
+          <span class="twist left"></span><span class="twist right"></span>
+          <span class="icon-badge"><img src="../../src/assets/sprites/candy_shot.png" style="width:80%"></span>
+          128
+        </div>
+        <!-- flame counter -->
+        <div class="wrapper-pill" style="--p-light:#fff;--p-base:#ffe9cf;">
+          <span class="twist left"></span><span class="twist right"></span>
+          <span class="icon-badge">
+            <svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 2c1 3-1 4-1 6.5A3.5 3.5 0 0 0 15 12c2-1 2.5-3 2.5-3C19 11 19 14 16.5 16c-2 1.7-6.5 1.7-8.7-1-2-2.4-1-6 1-8 1-1.2 2.7-3 3.2-5z" fill="url(#gAmber)" stroke="var(--outline)" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          </span>
+          6
+        </div>
+      </div>
+
+      <!-- timer -->
+      <div class="wrapper-pill" style="--p-light:#4b4178;--p-base:#2a2342;color:#fff;">
+        <span class="twist left" style="background:#2a2342"></span><span class="twist right" style="background:#2a2342"></span>
+        <span class="icon-badge" style="background:#fff;">
+          <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8" fill="url(#gSilver)" stroke="var(--outline)" stroke-width="1.4"/><path d="M12 8v5l3.5 2" stroke="var(--outline)" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M9.5 2h5" stroke="var(--outline)" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </span>
+        02:47
+      </div>
+
+      <!-- ghost level chip -->
+      <div class="wrapper-pill" style="--p-light:#c3a6ff;--p-base:#8b5cf6;color:#fff;">
+        <span class="twist left" style="background:#8b5cf6"></span><span class="twist right" style="background:#8b5cf6"></span>
+        <span class="icon-badge"><img src="../../src/assets/sprites/ghost_down_idle.png" style="width:120%;margin-top:6px;"></span>
+        Ур. 3
+      </div>
+    </div>
+
+    <!-- portraits row -->
+    <div class="abs" style="top:112px;left:50%;transform:translateX(-50%);display:flex;gap:20px;">
+      <div class="portrait"><img src="../../src/assets/sprites/char0_idle.png"></div>
+      <div class="portrait you"><img src="../../src/assets/sprites/char1_idle.png"><span class="portrait-tag you">ТЫ</span></div>
+      <div class="portrait"><img src="../../src/assets/sprites/char2_idle.png"></div>
+      <div class="portrait target"><img src="../../src/assets/sprites/char3_idle.png">
+        <span class="portrait-tag target">ЦЕЛЬ</span>
+        <svg class="abs" style="top:-8px;right:-8px;" width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#fff" stroke-width="2"/><circle cx="12" cy="12" r="9" fill="none" stroke="var(--nightmare)" stroke-width="2" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="2" fill="var(--nightmare)"/></svg>
+      </div>
+      <div class="portrait"><img src="../../src/assets/sprites/char4_idle.png"></div>
+      <div class="portrait"><img src="../../src/assets/sprites/char5_idle.png"></div>
+    </div>
+
+    <!-- right side: pause + sound -->
+    <div class="abs" style="top:116px;right:26px;display:flex;flex-direction:column;gap:16px;">
+      <button class="candy-btn round" style="--sz:60px;--btn-light:#c3a6ff;--btn-base:#8b5cf6;--btn-mid:#6f42d6;--btn-dark:#5a32b8;">
+        <svg width="24" height="24" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.6" fill="#fff" stroke="var(--outline)" stroke-width="1.3"/><rect x="14" y="5" width="4" height="14" rx="1.6" fill="#fff" stroke="var(--outline)" stroke-width="1.3"/></svg>
+      </button>
+      <button class="candy-btn round" style="--sz:60px;--btn-light:#c3a6ff;--btn-base:#8b5cf6;--btn-mid:#6f42d6;--btn-dark:#5a32b8;">
+        <svg width="26" height="26" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4H4z" fill="#fff" stroke="var(--outline)" stroke-width="1.3" stroke-linejoin="round"/><path d="M16.5 9a4.5 4.5 0 0 1 0 6" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <!-- bottom-left: home -->
+    <button class="candy-btn round abs" style="--sz:64px;left:24px;bottom:24px;--btn-light:#c3a6ff;--btn-base:#8b5cf6;--btn-mid:#6f42d6;--btn-dark:#5a32b8;">
+      <svg width="28" height="28" viewBox="0 0 24 24"><path d="M4 11.5 12 4l8 7.5" stroke="var(--outline)" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M6 10.5V20h12v-9.5" fill="#fff" stroke="var(--outline)" stroke-width="1.4" stroke-linejoin="round"/><rect x="10" y="14" width="4" height="6" fill="url(#gGrape)" stroke="var(--outline)" stroke-width="1.2"/></svg>
+    </button>
+
+    <!-- bottom-right: big repair (cooldown state) -->
+    <div class="abs" style="right:30px;bottom:22px;text-align:center;">
+      <button class="candy-btn round" style="--sz:100px;--btn-light:#7ee0c0;--btn-base:#2b8f6e;--btn-mid:#1f6d54;--btn-dark:#134338;opacity:.92;">
+        <svg width="46" height="46" viewBox="0 0 24 24" style="opacity:.55">
+          <path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4l-6 6 2 2 6-6a3.5 3.5 0 0 0 4-4.6l-2.1 2.1-1.6-1.6 2.1-2.1z" fill="url(#gSilver)" stroke="var(--outline)" stroke-width="1.3" stroke-linejoin="round"/>
+        </svg>
+        <svg class="abs" style="inset:0;" width="100" height="100" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(10,6,20,.6)" stroke-width="10" stroke-dasharray="212 283" stroke-dashoffset="0" transform="rotate(-90 50 50)"/>
+        </svg>
+        <span class="abs" style="bottom:8px;font-family:'Baloo 2',cursive;font-size:15px;background:var(--outline);color:#fff;border-radius:8px;padding:1px 7px;">3с</span>
+      </button>
+      <div style="margin-top:8px;font-family:'Baloo 2',cursive;font-weight:700;font-size:13px;color:#fff;text-shadow:0 2px 3px rgba(0,0,0,.6);">ПОЧИНКА</div>
+    </div>
+
+    <!-- toast -->
+    <div class="abs" style="top:126px;right:170px;background:linear-gradient(180deg,#fff,#fff6e6);border:4px solid var(--outline);
+        border-radius:16px;padding:8px 16px;display:flex;align-items:center;gap:8px;box-shadow:0 6px 0 var(--cream-dark),0 10px 14px rgba(0,0,0,.3);
+        font-family:'Baloo 2',cursive;font-weight:700;font-size:14px;color:var(--ink);">
+      <svg width="20" height="20" viewBox="0 0 24 24"><path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4l-6 6 2 2 6-6a3.5 3.5 0 0 0 4-4.6l-2.1 2.1-1.6-1.6 2.1-2.1z" fill="url(#gMint)" stroke="var(--outline)" stroke-width="1.2" stroke-linejoin="round"/></svg>
+      Толя чинит пол!
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 3. CONTEXT BUILD MENU -->
+<!-- ============================================================ -->
+<div class="frame-section">
+  <div class="frame-label"><span class="num">3</span>Контекстное меню постройки</div>
+  <div class="frame" style="background:var(--wood-1);">
+
+    <div class="floor" style="inset:0;"></div>
+    <img class="sprite abs" src="../../src/assets/sprites/lavender.png" style="left:1120px;top:120px;width:90px;opacity:.85;">
+    <img class="sprite abs" src="../../src/assets/sprites/furniture2.png" style="left:90px;top:520px;width:130px;opacity:.85;">
+    <div class="abs" style="inset:0;background:rgba(15,9,26,.6);"></div>
+
+    <!-- highlighted tapped cell -->
+    <div class="abs" style="left:520px;top:430px;width:120px;height:120px;border-radius:18px;border:5px dashed var(--mint);
+        box-shadow:0 0 0 6px rgba(47,227,166,.18);animation:pulseCell 1.6s ease-in-out infinite;"></div>
+
+    <!-- popup -->
+    <div class="abs" style="left:470px;top:150px;width:420px;background:linear-gradient(180deg,#fff,#fff6e6);
+        border:6px solid var(--outline);border-radius:26px;box-shadow:0 16px 0 var(--cream-dark), 0 24px 40px rgba(0,0,0,.5);overflow:hidden;">
+
+      <!-- pointer tail -->
+      <div class="abs" style="left:70px;bottom:-38px;width:0;height:0;border-left:22px solid transparent;border-right:22px solid transparent;
+          border-top:26px solid var(--outline);"></div>
+      <div class="abs" style="left:76px;bottom:-28px;width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;
+          border-top:20px solid #fff6e6;"></div>
+
+      <!-- header -->
+      <div style="position:relative;background:repeating-linear-gradient(135deg, var(--nightmare) 0 16px, #fff 16px 32px);
+          padding:4px;">
+        <div style="background:linear-gradient(180deg,#4b4178,#2a2342);margin:4px;border-radius:16px;padding:14px 20px;
+            display:flex;align-items:center;justify-content:space-between;">
+          <h3 style="font-size:26px;color:#fff;">Пол</h3>
+          <button class="candy-btn round" style="--sz:38px;--btn-light:#ff8fa3;--btn-base:#ff4d6d;--btn-mid:#e0335a;--btn-dark:#c31e42;">
+            <svg width="16" height="16" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- options -->
+      <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+
+        <!-- enabled option -->
+        <div style="display:flex;align-items:center;gap:14px;background:linear-gradient(180deg,#8bf7d6,#2fe3a6);
+            border:5px solid var(--outline);border-radius:20px;padding:10px 14px;min-height:84px;
+            box-shadow:0 6px 0 var(--mint-dark);">
+          <div style="width:60px;height:60px;border-radius:16px;background:#fff;border:4px solid var(--outline);
+              display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <img src="../../src/assets/sprites/cannon_base.png" style="width:84%;">
+          </div>
+          <div style="flex:1;">
+            <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:22px;color:var(--ink);">Пушка</div>
+            <div style="font-size:13px;font-weight:700;color:#0e5c42;">стреляет по коридору</div>
+          </div>
+          <div class="wrapper-pill" style="--p-light:#fff;--p-base:#fff6e6;font-size:18px;">
+            <span class="twist left"></span><span class="twist right"></span>
+            <span class="icon-badge" style="width:30px;height:30px;"><img src="../../src/assets/sprites/candy_shot.png" style="width:85%;"></span>
+            50
+          </div>
+        </div>
+
+        <!-- disabled option -->
+        <div style="position:relative;display:flex;align-items:center;gap:14px;background:linear-gradient(180deg,#d9d3ea,#b7aed1);
+            border:5px solid var(--outline);border-radius:20px;padding:10px 14px;min-height:84px;opacity:.72;">
+          <div style="width:60px;height:60px;border-radius:16px;background:#e9e5f2;border:4px solid var(--outline);
+              display:flex;align-items:center;justify-content:center;flex-shrink:0;filter:grayscale(.7);">
+            <img src="../../src/assets/sprites/safe.png" style="width:84%;">
+          </div>
+          <div style="flex:1;">
+            <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:22px;color:#4a4460;">Сейф</div>
+            <div style="font-size:13px;font-weight:700;color:#5a5470;">нужен жетон соседа</div>
+          </div>
+          <div class="abs" style="right:12px;top:10px;width:32px;height:32px;border-radius:50%;background:#6b6482;
+              border:3px solid var(--outline);display:flex;align-items:center;justify-content:center;">
+            <svg width="16" height="16" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2" fill="#fff" stroke="var(--outline)" stroke-width="1.3"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="#fff" stroke-width="1.6"/></svg>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 4. RESULT SCREEN -->
+<!-- ============================================================ -->
+<div class="frame-section">
+  <div class="frame-label"><span class="num">4</span>Экран результата</div>
+  <div class="frame bg-night stars" style="display:flex;flex-direction:column;align-items:center;">
+
+    <!-- confetti -->
+    <span class="abs" style="left:90px;top:70px;width:14px;height:14px;border-radius:4px;background:var(--strawberry);transform:rotate(18deg);"></span>
+    <span class="abs" style="left:220px;top:40px;width:10px;height:10px;border-radius:50%;background:var(--mint);"></span>
+    <span class="abs" style="left:360px;top:90px;width:12px;height:12px;border-radius:3px;background:var(--amber);transform:rotate(-12deg);"></span>
+    <span class="abs" style="left:1010px;top:60px;width:14px;height:14px;border-radius:4px;background:var(--grape);transform:rotate(30deg);"></span>
+    <span class="abs" style="left:1150px;top:110px;width:10px;height:10px;border-radius:50%;background:var(--mint);"></span>
+    <span class="abs" style="left:1260px;top:50px;width:12px;height:12px;border-radius:3px;background:var(--strawberry);transform:rotate(-20deg);"></span>
+    <span class="abs" style="left:150px;top:200px;width:10px;height:10px;border-radius:50%;background:var(--amber);"></span>
+    <span class="abs" style="left:1220px;top:220px;width:12px;height:12px;border-radius:4px;background:var(--grape);transform:rotate(10deg);"></span>
+
+    <div class="abs" style="left:50%;top:34px;transform:translateX(-50%);width:340px;height:340px;border-radius:50%;
+         background:radial-gradient(circle, rgba(47,227,166,.28), transparent 65%);"></div>
+
+    <img class="sprite" src="../../src/assets/sprites/mascot_cheer.png" style="height:230px;margin-top:36px;filter:drop-shadow(0 16px 12px rgba(0,0,0,.5));animation:bob 2.2s ease-in-out infinite;">
+
+    <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:52px;color:#fff;-webkit-text-stroke:5px var(--outline);
+        text-shadow:4px 4px 0 var(--mint-dark), 4px 4px 0 var(--outline);margin-top:8px;letter-spacing:1px;">ПРИЗРАК ПОБЕЖДЁН!</div>
+
+    <!-- stats row -->
+    <div style="display:flex;gap:16px;margin-top:26px;">
+      <div class="wrapper-pill" style="--p-light:#fff;--p-base:#fff6e6;">
+        <span class="twist left"></span><span class="twist right"></span>
+        <span class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8" fill="url(#gSilver)" stroke="var(--outline)" stroke-width="1.4"/><path d="M12 8v5l3.5 2" stroke="var(--outline)" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>
+        02:14
+      </div>
+      <div class="wrapper-pill" style="--p-light:#fff;--p-base:#ffe3ec;">
+        <span class="twist left"></span><span class="twist right"></span>
+        <span class="icon-badge"><img src="../../src/assets/sprites/candy_shot.png" style="width:80%"></span>
+        128
+      </div>
+      <div class="wrapper-pill" style="--p-light:#fff;--p-base:#e6f2ff;">
+        <span class="twist left"></span><span class="twist right"></span>
+        <span class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4l-6 6 2 2 6-6a3.5 3.5 0 0 0 4-4.6l-2.1 2.1-1.6-1.6 2.1-2.1z" fill="url(#gMint)" stroke="var(--outline)" stroke-width="1.2" stroke-linejoin="round"/></svg></span>
+        5
+      </div>
+      <div class="wrapper-pill" style="--p-light:#fff;--p-base:#f1e6ff;">
+        <span class="twist left"></span><span class="twist right"></span>
+        <span class="icon-badge"><img src="../../src/assets/sprites/ghost_down_idle.png" style="width:120%;margin-top:6px;"></span>
+        Ур. 3
+      </div>
+    </div>
+
+    <!-- buttons -->
+    <div style="display:flex;gap:24px;margin-top:34px;">
+      <button class="candy-btn" style="padding:20px 48px;border-radius:999px;font-size:26px;
+          --btn-light:#ff8fa3;--btn-base:#ff4d6d;--btn-mid:#e0335a;--btn-dark:#c31e42;">
+        <svg width="26" height="26" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.6 5.9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><path d="M4 12V7M4 12h5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Ещё раз
+      </button>
+      <button class="candy-btn" style="padding:20px 44px;border-radius:999px;font-size:26px;color:var(--ink);text-shadow:none;
+          --btn-light:#ffffff;--btn-base:#fff6e6;--btn-mid:#f0d9ad;--btn-dark:#c9ab6c;box-shadow:0 7px 0 #c9ab6c, 0 14px 22px rgba(0,0,0,.4);">
+        <svg width="24" height="24" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke="var(--grape)" stroke-width="2.6" stroke-linecap="round"/></svg>
+        Меню
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 5. TUTORIAL BUBBLE -->
+<!-- ============================================================ -->
+<div class="frame-section">
+  <div class="frame-label"><span class="num">5</span>Обучающая подсказка</div>
+  <div class="frame" style="background:var(--wood-1);">
+
+    <div class="floor" style="inset:0;"></div>
+    <div class="abs" style="inset:0;background:rgba(15,9,26,.35);"></div>
+
+    <!-- skip -->
+    <div class="abs" style="right:26px;top:22px;font-family:'Baloo 2',cursive;font-weight:700;font-size:15px;color:#fff;
+        background:rgba(36,24,61,.7);border:3px solid var(--outline);border-radius:999px;padding:7px 16px;">Пропустить ›</div>
+
+    <!-- target: sofa with tap ring -->
+    <div class="abs" style="left:560px;top:300px;">
+      <div class="abs" style="left:-30px;top:-20px;width:180px;height:150px;border-radius:50%;
+          box-shadow:0 0 0 6px rgba(47,227,166,.5);animation:pulseCell 1.5s ease-in-out infinite;"></div>
+      <img class="sprite" src="../../src/assets/sprites/sofa.png" style="width:200px;filter:drop-shadow(0 10px 8px rgba(0,0,0,.4));">
+      <svg class="abs" style="left:70px;top:50px;" width="46" height="46" viewBox="0 0 46 46">
+        <circle cx="23" cy="23" r="10" fill="none" stroke="#fff" stroke-width="3" opacity=".9"/>
+        <circle cx="23" cy="23" r="18" fill="none" stroke="#fff" stroke-width="2.4" opacity=".55"/>
+      </svg>
+    </div>
+
+    <!-- mascot + speech bubble -->
+    <img class="sprite abs" src="../../src/assets/sprites/mascot_point.png" style="left:770px;top:330px;height:220px;filter:drop-shadow(0 12px 10px rgba(0,0,0,.5));">
+
+    <div class="abs" style="left:790px;top:150px;width:400px;background:linear-gradient(180deg,#fff,#fff6e6);
+        border:6px solid var(--outline);border-radius:30px 30px 6px 30px;padding:22px 26px;
+        box-shadow:0 12px 0 var(--cream-dark), 0 20px 30px rgba(0,0,0,.4);">
+      <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:26px;color:var(--ink);line-height:1.25;">
+        Нажми на диван!
+      </div>
+      <div style="font-size:14px;font-weight:700;color:#7a6f95;margin-top:6px;">Соседи любят прятаться за мебелью — обыщи её первой.</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">
+        <div style="display:flex;gap:7px;">
+          <span style="width:10px;height:10px;border-radius:50%;background:var(--mint);"></span>
+          <span style="width:10px;height:10px;border-radius:50%;background:#e2d9c5;"></span>
+          <span style="width:10px;height:10px;border-radius:50%;background:#e2d9c5;"></span>
+        </div>
+        <button class="candy-btn" style="padding:9px 22px;border-radius:999px;font-size:16px;
+            --btn-light:#8bf7d6;--btn-base:#2fe3a6;--btn-mid:#1bc78e;--btn-dark:#0e9c6e;">Далее ›</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  @keyframes floatGhost{0%,100%{transform:translateY(0);}50%{transform:translateY(-14px);}}
+  @keyframes bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-10px);}}
+  @keyframes pulseCell{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.55;transform:scale(1.04);}}
+</style>
+
+</body>
+</html>

@@ -1,0 +1,22 @@
+night_c1 2026/05/04/audio_3d749cfb74 Pillow Fight at Monster Manor (OpenMindAudio)
+night_c2 2026/05/04/audio_f2900c85d2 The Missing Candy Trail (OpenMindAudio)
+night_c3 2026/05/04/audio_785234b14f Trick or Treat on Haunted Hill (OpenMindAudio)
+night_c4 2022/12/28/audio_f0df7e22f4 Halloween Playful (The_Mountain)
+night_c5 2026/05/04/audio_419ab544fd Friendly Ghost House (OpenMindAudio)
+menu_c1 2024/06/29/audio_af006b33ee Haunted Music Box
+menu_c2 2025/06/13/audio_29bd11e39b Music Box Sleep Lullaby
+menu_c3 2025/06/24/audio_f55bb99a17 Baby Ghosts Creepy Lullaby
+menu_c4 2026/01/22/audio_39207e3bd9 Spooky Echoes of Time
+night_c6 2025/08/30/audio_11eb9abc12 playfully-spooky-halloween-tune
+night_c7 2025/09/22/audio_4ab4427316 funny-spooky-halloween
+night_c8 2023/09/17/audio_92de10cff4 halloween-cartoon
+night_c9 2026/04/20/audio_09beec2bbd cartoon
+night_c10 2023/11/09/audio_bab3d98202 witches-brew
+night_c11 2025/05/26/audio_26f7cd5cf4 sneaky-halloween
+night_c12 2025/03/10/audio_10a4c78634 the-mischievous-wizard
+night_c13 2025/09/22/audio_8c06569968 ghost-parade-halloween
+night_c14 2025/10/08/audio_3353666c62 halloween-kids-background-music
+night_c15 2022/12/20/audio_f8621d52df spooky-fun
+night_c16 2025/06/13/audio_148ff161b0 halloween-quirky
+night_c17 2026/04/01/audio_ac5a8fae80 a-cute-ghost-story
+# Выбрано: меню = menu_c1 → src/assets/bgm/menu.mp3; ночь (плейлист) = night_c4, night_c15, night_c8 → bgm/night1..3.mp3
