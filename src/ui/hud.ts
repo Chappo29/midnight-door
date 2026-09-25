@@ -5,6 +5,7 @@ import { SPRITES } from '../view/sprites';
 import { B } from '../sim/balance';
 import { BOOSTER_MAX } from '../meta/economy';
 import type { BoosterId, Reward, SkinSlot } from '../meta/economy';
+import type { CaughtTip, CaughtTipKind } from './caughtTip';
 import { HOLDOVER_MS, INPUT_GUARD_MS, isEchoAfterScreenChange, isHoldover, menuTopAwayFromFinger } from './inputGuard';
 
 export interface MenuOption {
@@ -172,6 +173,14 @@ function costPill(c: Cost): string {
 /** Доля HP двери: ниже — «опасно» (красное, ключ мигает); ниже DOOR_HURT — «повреждена». */
 const DOOR_DANGER = 0.4;
 const DOOR_HURT = 0.7;
+
+/** Картинка к совету на карточке поимки: понятна и тому, кто не читает. */
+const TIP_ICON: Record<CaughtTipKind, () => string> = {
+  cannon: () => img('cannon_base'),
+  repair: () => ICON.wrench,
+  door: () => img('door_l2'),
+  strong: () => img('ghost_down_idle'),
+};
 
 /** Монеты, которые ребёнок заберёт, выйдя в меню, — прямо на кнопке: выход ничего не отнимает. */
 function exitCoinsPill(coins: number): string {
@@ -1016,12 +1025,13 @@ export class Hud {
   }
 
   /** Игрока поймали: игра стоит, пока не выберет — играть духом или выйти в меню (без монет, без рекламы). */
-  showCaught(onSpirit: () => void, onMenu: () => void, coins = 0): void {
+  showCaught(onSpirit: () => void, onMenu: () => void, coins = 0, tip?: CaughtTip): void {
     this.clearMessages();
     this.showScreen(`
       <div class="card caught-card halftone">
         ${img('mascot_oh', 'result-mascot')}
         <h1 class="stroke-title small">Тебя поймали!</h1>
+        ${tip ? `<div class="caught-tip tip-${tip.kind}"><span class="caught-tip-ico">${TIP_ICON[tip.kind]()}</span><span class="caught-tip-text">${tip.text}</span></div>` : ''}
         <div class="diffs">
           <button class="btn-big mint" id="spirit" type="button">${ICON.boo}Играть духом</button>
           <button class="btn-big cream" id="tomenu" type="button">${ICON.menuList}Выйти в меню${exitCoinsPill(coins)}</button>

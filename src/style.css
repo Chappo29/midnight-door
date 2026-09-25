@@ -2936,3 +2936,55 @@ img.ico-img,
     animation: none;
   }
 }
+
+/* Совет на карточке «Тебя поймали!»: картинка + одна короткая фраза (что попробовать в следующий раз). */
+.caught-tip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 2px auto 6px;
+  padding: 8px 16px 8px 8px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--ink), 0 4px 0 var(--cream-dark);
+  width: fit-content;
+  max-width: 100%;
+}
+.caught-tip-ico {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: var(--cream);
+}
+.caught-tip-ico img,
+.caught-tip-ico svg {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+.caught-tip-text {
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: 19px;
+  color: var(--ink);
+  text-align: left;
+}
+@media (max-height: 460px) {
+  .caught-card .caught-tip-ico {
+    width: 40px;
+    height: 40px;
+  }
+  .caught-card .caught-tip-ico img,
+  .caught-card .caught-tip-ico svg {
+    width: 34px;
+    height: 34px;
+  }
+  .caught-card .caught-tip-text {
+    font-size: 16px;
+  }
+}

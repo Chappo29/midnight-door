@@ -12,6 +12,7 @@ import { TutorialDirector, type TutorialTrack } from '../tutorial/director';
 import { TutorialOverlay } from '../tutorial/overlay';
 import { HintDirector } from '../tutorial/hints';
 import { isDrag } from '../ui/inputGuard';
+import { caughtTip } from '../ui/caughtTip';
 import type { Target } from '../tutorial/steps';
 
 const TS = 48;
@@ -196,6 +197,9 @@ export class GameScene extends Phaser.Scene {
   private unlockPrimed = false;
   /** Открылись в этом матче и ещё не построены — в меню с меткой «Новое!». */
   private newKinds = new Set<LateKind>();
+  /** Сколько секунд подряд дверь мигает, а готовый ключ не жмут; и было ли так в этой осаде (совет на карточке поимки). */
+  private missedRepairT = 0;
+  private missedRepair = false;
 
   constructor() {
     super('game');
@@ -246,6 +250,8 @@ export class GameScene extends Phaser.Scene {
     this.seenUnlock = new Set();
     this.unlockPrimed = false;
     this.newKinds = new Set();
+    this.missedRepairT = 0;
+    this.missedRepair = false;
   }
 
   preload(): void {
@@ -328,7 +334,33 @@ export class GameScene extends Phaser.Scene {
       },
       () => this.gd.onMenu(),
       this.gd.exitCoins?.() ?? 0,
+      this.caughtAdvice(),
     );
+  }
+
+  /** Один совет на следующий раз — из того, что было в комнате в момент поимки. */
+  private caughtAdvice(): ReturnType<typeof caughtTip> | undefined {
+    const m = this.m;
+    const r = m.playerRoom;
+    if (!r) return undefined;
+    const up = m.doorUpgradeCost(r);
+    return caughtTip({
+      cannons: r.buildings.filter((b) => b.kind === 'cannon').length,
+      doorLevel: r.door.level,
+      missedRepair: this.missedRepair,
+      couldUpgradeDoor: !!up && m.canAfford(r, up),
+    });
+  }
+
+  /** Дверь мигает (<40 %), ключ готов, а его не жмут дольше 1,5 с — запомним для совета. */
+  private trackMissedRepair(dt: number): void {
+    const m = this.m;
+    const r = m.playerRoom;
+    if (!r || m.player.caught || m.phase !== 'night') return;
+    const d = r.door;
+    const idleKey = !d.broken && d.hp < d.maxHp * 0.4 && d.repairCd <= 0 && m.player.task?.kind !== 'repair';
+    this.missedRepairT = idleKey ? this.missedRepairT + dt : 0;
+    if (this.missedRepairT > 1.5) this.missedRepair = true;
   }
 
   /** Дух: тап по пушке соседа — «Искорка» (если готова и дотягивается), иначе лететь в эту клетку. */
@@ -483,7 +515,10 @@ export class GameScene extends Phaser.Scene {
       }
     }
     const a = paused ? 1 : this.acc / TICK;
-    if (!paused) this.handleKeys();
+    if (!paused) {
+      this.handleKeys();
+      this.trackMissedRepair(deltaMs / 1000);
+    }
     this.renderChars(a, time);
     this.followPlayerToRoom();
     this.renderGhost(a, time, deltaMs);
@@ -1441,6 +1476,7 @@ export class GameScene extends Phaser.Scene {
           break;
         case 'doorUpgraded':
         case 'repaired': {
+          if (e.type === 'repaired' && e.roomId === mineId) this.missedRepair = false;
           const d = m.rooms[e.roomId].door;
           this.roomSound('upgrade', e.roomId, { volume: 0.8 });
           if (e.type === 'doorUpgraded') this.floatText((d.x + 0.5) * TS, d.y * TS, '⬆', '#7dff7a');
