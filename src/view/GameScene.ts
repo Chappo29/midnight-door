@@ -165,6 +165,8 @@ export class GameScene extends Phaser.Scene {
   private doorPulse = new Map<number, number>();
   private selected: { x: number; y: number } | null = null;
   private drag = { down: false, sx: 0, sy: 0, scrollX: 0, scrollY: 0, dragging: false };
+  /** Когда (performance.now) палец коснулся поля: тап засчитываем, только если жест начался после смены экрана. */
+  private downAt = 0;
   private pinch = { active: false, dist: 0, zoom: 1 };
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private doorImgs: (Phaser.GameObjects.Image | null)[] = [];
@@ -215,6 +217,7 @@ export class GameScene extends Phaser.Scene {
     this.doorPulse = new Map();
     this.selected = null;
     this.drag = { down: false, sx: 0, sy: 0, scrollX: 0, scrollY: 0, dragging: false };
+    this.downAt = 0;
     this.pinch = { active: false, dist: 0, zoom: 1 };
     this.ghostFlash = 0;
     this.ghostImg = null;
@@ -1702,6 +1705,7 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       this.drag = { down: true, sx: p.x, sy: p.y, scrollX: cam.scrollX, scrollY: cam.scrollY, dragging: false };
+      this.downAt = performance.now();
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (this.pinch.active) {
@@ -1734,7 +1738,9 @@ export class GameScene extends Phaser.Scene {
         this.drag.down = false;
         return;
       }
-      if (this.drag.down && !this.drag.dragging) this.tap(p);
+      // Второй тап двойного тапа по «Ещё раз» / «Играть духом» не выбирает комнату и не уводит духа (B5).
+      const echo = this.downAt < this.hud.inputReadyAt || this.hud.isEchoOfPress(this.downAt, p.x, p.y);
+      if (this.drag.down && !this.drag.dragging && !echo) this.tap(p);
       this.drag.down = false;
     });
     this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {

@@ -5,6 +5,7 @@ import { SPRITES } from '../view/sprites';
 import { B } from '../sim/balance';
 import { BOOSTER_MAX } from '../meta/economy';
 import type { BoosterId, Reward, SkinSlot } from '../meta/economy';
+import { HOLDOVER_MS, INPUT_GUARD_MS, isHoldover, menuTopAwayFromFinger } from './inputGuard';
 
 export interface MenuOption {
   /** Код пункта (для обучения: какой пункт показать и куда указать пальцем; и для подбора иконки). */
@@ -183,6 +184,17 @@ export class Hud {
   private shopTab: ShopTab = 'heroes';
   private shopView?: ShopView;
   private shopHandlers?: ShopHandlers;
+  /**
+   * До этого момента (performance.now) нажатия глотаются: второй тап двойного тапа не должен
+   * попадать в только что открытое окно или меню, а через него — в игру (GAME_AUDIT.md, B5).
+   * GameScene сверяет с ним начало жеста на поле.
+   */
+  inputReadyAt = 0;
+  /** Меню постройки: когда и у какой точки открыли — повторный тап ребёнка рядом не покупает. */
+  private menuOpenedAt = 0;
+  private menuAnchor = { x: 0, y: 0 };
+  /** Последнее нажатие мышью/пальцем по интерфейсу — чтобы его повтор не ушёл в игру под окном. */
+  private lastPress = { t: -Infinity, x: 0, y: 0 };
   /** Звук интерфейса (клик, открытие меню); подключает main.ts. */
   onSound: (key: string) => void = () => {};
   /** Переключатель звука; возвращает новое состояние «выключен». */
@@ -224,6 +236,18 @@ export class Hud {
     for (const id of ['candy', 'flame', 'clock', 'pause', 'sound', 'banner', 'toast', 'home', 'repair', 'boo', 'spark', 'menu', 'screen', 'portraits', 'toastScreen']) {
       this.el[id] = root.querySelector<HTMLElement>(`#${id}`)!;
     }
+    // Первым: пока окно/меню только появились, клик до кнопок не доходит (и не щёлкает звуком).
+    root.addEventListener(
+      'click',
+      (e) => {
+        if (e.detail > 0) this.lastPress = { t: performance.now(), x: e.clientX, y: e.clientY };
+        if (performance.now() < this.inputReadyAt) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      },
+      true,
+    );
     this.el.repair.addEventListener('click', () => this.handlers.repair());
     this.el.home.addEventListener('click', () => this.handlers.home());
     // Серая «Бу!» (призрак далеко) не реагирует — без ругательного тоста.
@@ -237,6 +261,19 @@ export class Hud {
     root.addEventListener('click', (e) => {
       if ((e.target as HTMLElement).closest('button')) this.onSound('click');
     }, true);
+  }
+
+  /**
+   * Касание поля в момент t в точке (x, y) — повтор последнего нажатия по интерфейсу
+   * (двойной тап по «Ещё раз» / «Играть духом»), а не новое действие в игре.
+   */
+  isEchoOfPress(t: number, x: number, y: number): boolean {
+    return isHoldover(t, this.lastPress.t, this.lastPress, { x, y });
+  }
+
+  /** Глотать нажатия ms миллисекунд: экран или меню только что сменились. */
+  armInput(ms = INPUT_GUARD_MS): void {
+    this.inputReadyAt = Math.max(this.inputReadyAt, performance.now() + ms);
   }
 
   setMuteIcon(muted: boolean): void {
@@ -439,6 +476,8 @@ export class Hud {
       const b = wrap.querySelector('button')!;
       b.addEventListener('click', (e) => {
         e.stopPropagation();
+        // Тот же тап, что открыл меню (ребёнок жмёт дважды), — не покупка.
+        if (e.detail > 0 && isHoldover(performance.now(), this.menuOpenedAt, this.menuAnchor, { x: e.clientX, y: e.clientY })) return;
         const o = this.menuOpts[i];
         this.hideMenu();
         o?.onPick();
@@ -447,6 +486,9 @@ export class Hud {
     });
     this.refreshMenu(title, options);
     menu.style.display = 'block';
+    this.menuOpenedAt = performance.now();
+    this.menuAnchor = { x, y };
+    this.armInput();
     this.onSound('popup');
     this.placeMenu(x, y);
     // Шрифт/картинки могли догрузиться и поменять размер — поправим ещё раз после раскладки.
@@ -455,7 +497,8 @@ export class Hud {
 
   /**
    * Ставит меню у точки нажатия, но целиком в экране (с учётом толстой обводки-тени).
-   * На узком экране — по центру по ширине: у края пальцем не попасть и меню обрезается.
+   * На узком экране — по центру по ширине: у края пальцем не попасть и меню обрезается;
+   * по высоте тогда — над пальцем или под ним, а не на нём (иначе второй тап покупает пункт).
    */
   private placeMenu(x: number, y: number): void {
     const menu = this.el.menu;
@@ -465,9 +508,11 @@ export class Hud {
     const h = menu.offsetHeight;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const left = vw <= 600 ? (vw - w) / 2 : Math.min(vw - w - edge, x + 16);
+    const narrow = vw <= 600;
+    const left = narrow ? (vw - w) / 2 : Math.min(vw - w - edge, x + 16);
+    const top = narrow ? menuTopAwayFromFinger(y, h, vh, edge) : Math.max(edge, Math.min(vh - h - edge, y - h / 2));
     menu.style.left = `${Math.max(edge, left)}px`;
-    menu.style.top = `${Math.max(edge, Math.min(vh - h - edge, y - h / 2))}px`;
+    menu.style.top = `${top}px`;
   }
 
   /**
@@ -748,6 +793,8 @@ export class Hud {
           const coins = onClaim();
           const tile = this.el.screen.querySelector<HTMLElement>(`.daily-tile[data-day="${view.step}"]`);
           this.popCoins(tile ?? btn, coins);
+          // Та же кнопка станет «Отлично!» → меню: быстрые тапы не должны проскочить в меню и дальше.
+          this.armInput(HOLDOVER_MS);
           btn.innerHTML = `${ICON.check}Отлично!`;
           btn.onclick = () => onClose();
         },
@@ -865,6 +912,7 @@ export class Hud {
 
   private showScreen(html: string): void {
     this.hideMenu();
+    this.armInput();
     this.el.screen.innerHTML = html;
     this.el.screen.classList.add('show');
     // Игровой HUD прячется под окном: иначе фантики и портреты лежат поверх карточки (GAME_AUDIT.md, B15).
@@ -872,6 +920,8 @@ export class Hud {
   }
 
   hideScreen(): void {
+    // Окно закрылось — второй тап не должен уйти в игру под ним (выбрать комнату, увести духа).
+    if (this.el.screen.classList.contains('show')) this.armInput();
     this.el.screen.classList.remove('show');
     this.el.screen.innerHTML = '';
     this.root.classList.remove('screen-open');
