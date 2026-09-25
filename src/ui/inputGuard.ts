@@ -14,6 +14,19 @@ export const INPUT_GUARD_MS = 350;
 export const HOLDOVER_MS = 1000;
 export const HOLDOVER_PX = 60;
 
+/**
+ * Сколько px может «уехать» палец, чтобы это всё ещё был тап, а не перетаскивание карты.
+ * Детский тап смазанный: при 12 px тап со сдвигом 14–20 px молча терялся (регрессия R2).
+ * 24 CSS px ≈ 3–4 мм на телефоне — перетаскивание начинается чуть позже, щипок не затронут.
+ */
+export const TAP_SLOP_TOUCH_PX = 24;
+export const TAP_SLOP_MOUSE_PX = 12;
+
+/** Сдвиг dist px — уже перетаскивание карты (touch — палец, иначе мышь). */
+export function isDrag(dist: number, touch: boolean): boolean {
+  return dist > (touch ? TAP_SLOP_TOUCH_PX : TAP_SLOP_MOUSE_PX);
+}
+
 interface Pt {
   x: number;
   y: number;

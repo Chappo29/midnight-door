@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HOLDOVER_MS, HOLDOVER_PX, isEchoAfterScreenChange, isHoldover, menuTopAwayFromFinger } from '../src/ui/inputGuard';
+import { HOLDOVER_MS, HOLDOVER_PX, TAP_SLOP_TOUCH_PX, isDrag, isEchoAfterScreenChange, isHoldover, menuTopAwayFromFinger } from '../src/ui/inputGuard';
 
 describe('защита от повторных тапов (GAME_AUDIT.md, B5)', () => {
   const anchor = { x: 200, y: 400 };
@@ -32,6 +32,13 @@ describe('защита от повторных тапов (GAME_AUDIT.md, B5)', 
   it('test_input_guard_tap_elsewhere_in_new_screen_is_not_echo', () => {
     const last = { t: 0, x: 200, y: 400 };
     expect(isEchoAfterScreenChange(300, last, 5, { x: 200, y: 520 })).toBe(false);
+  });
+
+  it('test_input_guard_smudged_child_tap_is_still_a_tap', () => {
+    // Палец ребёнка уезжает на 14–20 px — это тап, а не перетаскивание (регрессия R2: 14 px терялся).
+    for (const d of [6, 14, 20, TAP_SLOP_TOUCH_PX]) expect(isDrag(d, true), `${d} px`).toBe(false);
+    expect(isDrag(40, true)).toBe(true);
+    expect(isDrag(14, false)).toBe(true);
   });
 
   it('test_input_guard_menu_on_narrow_screen_never_covers_finger', () => {

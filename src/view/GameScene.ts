@@ -11,6 +11,7 @@ import type { PlayOpts, Sfx } from '../audio/sfx';
 import { TutorialDirector, type TutorialTrack } from '../tutorial/director';
 import { TutorialOverlay } from '../tutorial/overlay';
 import { HintDirector } from '../tutorial/hints';
+import { isDrag } from '../ui/inputGuard';
 import type { Target } from '../tutorial/steps';
 
 const TS = 48;
@@ -1740,7 +1741,7 @@ export class GameScene extends Phaser.Scene {
       if (this.tut && !this.tut.done) return;
       const dx = p.x - this.drag.sx;
       const dy = p.y - this.drag.sy;
-      if (!this.drag.dragging && Math.hypot(dx, dy) > 12) {
+      if (!this.drag.dragging && isDrag(Math.hypot(dx, dy), p.wasTouch)) {
         this.drag.dragging = true;
         this.hud.hideMenu();
       }
