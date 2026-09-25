@@ -70,10 +70,15 @@ body {
 
 #ui button {
   pointer-events: auto;
-  font: inherit;
-  color: inherit;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Сброс шрифта и цвета — с нулевой специфичностью: классы кнопок (.btn-big, .diff-btn…) его перекрывают.
+   В общем `#ui button` он перебивал их все (GAME_AUDIT.md, UI1). pointer-events — выше: без :where() не отвалится. */
+:where(#ui) button {
+  font: inherit;
+  color: inherit;
 }
 
 #ui button:focus-visible {
