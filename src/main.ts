@@ -183,7 +183,8 @@ async function start(difficulty: Difficulty): Promise<void> {
   const match = new Match({
     seed: Math.floor(Math.random() * 2 ** 31),
     difficulty,
-    flameUnlocked: progress.matches >= 1,
+    // Тыквы и пламя — сразу, с первого матча («со 2-го матча» было непонятным запретом, 2026-09-25).
+    flameUnlocked: true,
     hero: progress.meta.hero,
     skin: { ...progress.meta.skin },
     boosters,
@@ -203,7 +204,6 @@ async function start(difficulty: Difficulty): Promise<void> {
       },
     },
     onEnd: () => {
-      const flameJustUnlocked = progress.matches === 0;
       progress.matches++;
       // Командная победа (игрок был духом) — тоже победа: для ребёнка это общий успех.
       if (match.result === 'win') progress.wins[difficulty]++;
@@ -214,7 +214,7 @@ async function start(difficulty: Difficulty): Promise<void> {
       track('match_end', { difficulty, result: match.result, team: match.teamWin, coins: reward.coins, night: Math.round(match.nightTime) });
       sfx.playMusic(null, 400);
       sfx.play(match.result === 'win' ? 'win' : 'lose', { pitch: 0 });
-      hud.showResult(match, flameJustUnlocked, () => start(difficulty), showMenu, reward);
+      hud.showResult(match, false, () => start(difficulty), showMenu, reward);
     },
     onMenu: showMenu,
     onRevive: () => track('spirit_revive', { difficulty, night: Math.round(match.nightTime) }),

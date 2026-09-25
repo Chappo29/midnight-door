@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TICK } from '../src/sim/balance';
+import { B, TICK } from '../src/sim/balance';
 import { Match } from '../src/sim/match';
 import { TutorialDirector } from '../src/tutorial/director';
 import { HintDirector } from '../src/tutorial/hints';
@@ -27,7 +27,8 @@ describe('подсказки по ходу игры', () => {
   it('test_hints_weak_door_at_night_shows_repair_once', () => {
     // Arrange
     const m = nightMatch();
-    const seen = new Set<string>();
+    // Подсказки «на будущее» (тыква, новые постройки) уже видели — проверяем только ремонт.
+    const seen = new Set<string>(['flame', 'trap', 'workbench', 'fridge']);
     const saved: string[] = [];
     const h = new HintDirector(m, seen, (id) => saved.push(id));
     run(m, h, 6); // первые секунды ночи — тишина
@@ -92,5 +93,30 @@ describe('обучение: неточный тап', () => {
     const sofa = m.playerRoom!.sofa;
     expect(d.gateTap(sofa.x + 1, sofa.y)).toEqual({ x: sofa.x, y: sofa.y });
     expect(d.gateTap(sofa.x + 3, sofa.y)).toBeNull();
+  });
+});
+
+describe('подсказки «на будущее»', () => {
+  /** Матч в начале подготовки: игрок у себя в комнате, конфет с запасом. */
+  function prepMatch(): Match {
+    const m = new Match({ seed: 7, difficulty: 'easy', flameUnlocked: true });
+    m.command(0, { type: 'pickRoom', roomId: 2 });
+    while (m.phase !== 'prep') m.step();
+    m.playerRoom!.candy = 9999;
+    return m;
+  }
+
+  it('test_hints_flame_shows_in_prep_when_pumpkin_affordable', () => {
+    const m = prepMatch();
+    const h = new HintDirector(m, new Set(), () => {});
+    expect(run(m, h, 5)).toContain('flame');
+  });
+
+  it('test_hints_trap_shows_only_after_door_unlocks_it', () => {
+    const m = prepMatch();
+    const h = new HintDirector(m, new Set(['flame']), () => {});
+    expect(run(m, h, 5)).not.toContain('trap');
+    m.playerRoom!.door.level = B.unlock.trap;
+    expect(run(m, h, 25)).toContain('trap');
   });
 });

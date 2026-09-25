@@ -1903,7 +1903,7 @@ export class GameScene extends Phaser.Scene {
       const up = m.sofaUpgradeCost(room);
       const need = m.sofaBlockedBy(room);
       const opt: MenuOption = need
-        ? { id: 'upgradeSofa', icon: '⬆', label: 'Больше конфет', lockDoor: need, onPick: () => this.pulseDoor(room) }
+        ? { id: 'upgradeSofa', icon: '⬆', label: 'Больше конфет', lockDoor: need, onPick: () => this.pulseDoor(room, need) }
         : {
             id: 'upgradeSofa',
             icon: '⬆',
@@ -1946,7 +1946,7 @@ export class GameScene extends Phaser.Scene {
     const id = `build:${kind}`;
     const icon = kind === 'cannon' ? '💥' : '';
     const need = m.buildLocked(room, kind);
-    if (need) return { id, icon, label, desc, lockDoor: need, onPick: () => this.pulseDoor(room) };
+    if (need) return { id, icon, label, desc, lockDoor: need, onPick: () => this.pulseDoor(room, need) };
     const cost = m.buildCost(kind);
     const opt: MenuOption = { id, icon, label, desc, cost, poor: !m.canAfford(room, cost), onPick: () => this.cmd({ type: 'build', kind, x, y }) };
     const err = m.canPlace(room, x, y, kind);
@@ -1957,8 +1957,12 @@ export class GameScene extends Phaser.Scene {
     return opt;
   }
 
-  /** Пункт меню упёрся в дверь — вместо тоста-ругани подсвечиваем свою дверь коротким пульсом. */
-  private pulseDoor(room: Room): void {
+  /**
+   * Пункт меню упёрся в дверь: красная плашка с причиной (одной подсветки двери игроки не понимали)
+   * и короткий пульс своей двери — где она.
+   */
+  private pulseDoor(room: Room, need: number): void {
+    this.hud.toast(`Сначала дверь до ур. ${need}`);
     this.doorPulse.set(room.id, this.time.now + 1500);
     this.sfx.play('click', { volume: 0.7 });
   }

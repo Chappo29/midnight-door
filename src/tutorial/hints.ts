@@ -1,5 +1,6 @@
+import { B } from '../sim/balance';
 import type { Match } from '../sim/match';
-import type { SimEvent } from '../sim/types';
+import type { BuildKind, SimEvent } from '../sim/types';
 import type { Pose, Target } from './steps';
 
 /**
@@ -40,6 +41,29 @@ interface HintState {
 }
 
 const mine = (m: Match) => m.playerRoom;
+
+/**
+ * Спокойный момент для подсказки «на будущее» (тыквы, новые постройки): подготовка или ночь,
+ * когда призрак не у моей двери и она цела хотя бы наполовину — иначе перебьём подсказку про ремонт.
+ */
+const calm = (m: Match, s: HintState) => {
+  const r = mine(m);
+  if (!r) return false;
+  if (m.phase === 'prep') return s.prepTime > 3;
+  return m.phase === 'night' && m.ghost.targetRoom !== r.id && r.door.hp >= r.door.maxHp * 0.5;
+};
+
+/**
+ * Открылась поздняя постройка (дверь дошла до нужного уровня), а у игрока её ещё нет —
+ * показать пальцем, куда её можно поставить. Клетки без rng (placeableCells): правила зовутся из вида.
+ */
+const lateBuild = (kind: 'trap' | 'workbench' | 'fridge') => (m: Match, s: HintState) => {
+  const r = mine(m);
+  if (!r || r.door.level < B.unlock[kind] || r.buildings.some((b) => b.kind === (kind as BuildKind))) return null;
+  if (!calm(m, s)) return null;
+  const at = m.placeableCells(r, kind)[0];
+  return at ? { kind: 'cell' as const, at } : null;
+};
 
 /**
  * Порядок = важность: сначала то, от чего можно потерять дверь прямо сейчас.
@@ -97,13 +121,35 @@ const RULES: Rule[] = [
   },
   {
     id: 'flame',
-    text: '🎃 Тыква на грядке даёт 🔥',
+    text: '🎃 Посади тыкву — она даёт 🔥',
     pose: 'point',
+    // Первый раз, когда хватает конфет на тыкву, а тыкв ещё нет: огоньки нужны для крутых построек.
     when: (m, s) => {
       const r = mine(m);
-      const soil = r?.soil.find((c) => !r.buildings.some((b) => b.x === c.x && b.y === c.y));
-      return m.opts.flameUnlocked && m.phase === 'prep' && s.prepTime > 3 && soil ? { kind: 'cell', at: soil } : null;
+      if (!r || !m.opts.flameUnlocked || r.buildings.some((b) => b.kind === 'pumpkin')) return null;
+      if (!calm(m, s)) return null;
+      if (!m.canAfford(r, m.buildCost('pumpkin'))) return null;
+      const soil = r.soil.find((c) => !r.buildings.some((b) => b.x === c.x && b.y === c.y));
+      return soil ? { kind: 'cell', at: soil } : null;
     },
+  },
+  {
+    id: 'trap',
+    text: 'Ловушка-липучка задержит призрака',
+    pose: 'point',
+    when: lateBuild('trap'),
+  },
+  {
+    id: 'workbench',
+    text: 'Верстак сам чинит дверь',
+    pose: 'point',
+    when: lateBuild('workbench'),
+  },
+  {
+    id: 'fridge',
+    text: 'Холодильник: призрак стучит реже',
+    pose: 'point',
+    when: lateBuild('fridge'),
   },
   {
     id: 'pan',
