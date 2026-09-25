@@ -196,8 +196,8 @@ export class HintDirector {
     const sieged = g.state === 'attacking' && g.targetRoom === m.player.roomId;
     this.state.silentSiege = sieged ? this.state.silentSiege + dt : 0;
 
-    // Поймали — недосказанная подсказка про свою комнату больше не нужна.
-    if (m.player.caught) this.current = null;
+    // Поймали или матч кончился — недосказанная подсказка больше не нужна (иначе висит поверх итогов).
+    if (m.player.caught || m.phase === 'end') this.current = null;
     if (this.current) {
       this.current.left -= dt;
       if (this.current.left <= 0) this.current = null;

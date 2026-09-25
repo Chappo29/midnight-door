@@ -47,6 +47,22 @@ describe('подсказки по ходу игры', () => {
     expect(saved.filter((id) => id === 'repair')).toHaveLength(1);
   });
 
+  it('test_hints_current_hint_disappears_when_match_ends', () => {
+    // Arrange: подсказка про ремонт на экране.
+    const m = nightMatch();
+    const h = new HintDirector(m, new Set(['flame', 'trap', 'workbench', 'fridge']), () => {});
+    run(m, h, 6);
+    m.playerRoom!.door.hp = m.playerRoom!.door.maxHp * 0.2;
+    expect(run(m, h, 1)).toEqual(['repair']);
+
+    // Act: матч закончился (итоги выходят поверх), подсказке оставалось жить ещё несколько секунд.
+    m.phase = 'end';
+    const hint = h.update(TICK);
+
+    // Assert: палец кота не остаётся поверх экрана итогов (GAME_AUDIT.md, B10).
+    expect(hint).toBeNull();
+  });
+
   it('test_hints_first_seconds_of_night_are_quiet', () => {
     const m = nightMatch();
     const h = new HintDirector(m, new Set(), () => {});

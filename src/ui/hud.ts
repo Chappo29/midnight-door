@@ -867,10 +867,13 @@ export class Hud {
     this.hideMenu();
     this.el.screen.innerHTML = html;
     this.el.screen.classList.add('show');
+    // Игровой HUD прячется под окном: иначе фантики и портреты лежат поверх карточки (GAME_AUDIT.md, B15).
+    this.root.classList.add('screen-open');
   }
 
   hideScreen(): void {
     this.el.screen.classList.remove('show');
     this.el.screen.innerHTML = '';
+    this.root.classList.remove('screen-open');
   }
 }

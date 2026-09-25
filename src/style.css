@@ -94,6 +94,15 @@ body {
   display: none;
 }
 
+/* Открыто окно (пауза, поимка, итоги): игровой HUD под ним не виден и не перекрывает карточку. */
+#ui.screen-open .hud-top,
+#ui.screen-open #repair,
+#ui.screen-open .spirit-btn,
+#ui.screen-open #home,
+#ui.screen-open #banner {
+  visibility: hidden;
+}
+
 img.ico-img,
 .chip .ico img,
 .ico img {

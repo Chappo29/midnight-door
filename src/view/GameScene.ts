@@ -398,10 +398,10 @@ export class GameScene extends Phaser.Scene {
     return zAll * TS >= 34;
   }
 
-  /** Подсказка по ходу игры: облачко с котом, палец на цель, без затемнения. */
-  private renderHint(dt: number): void {
+  /** Подсказка по ходу игры: облачко с котом, палец на цель, без затемнения. hidden — на экране окно (пауза, итоги). */
+  private renderHint(dt: number, hidden = false): void {
     const hint = this.hints?.update(dt) ?? null;
-    if (!hint) {
+    if (!hint || hidden) {
       this.hintOverlay?.hide();
       return;
     }
@@ -485,8 +485,11 @@ export class GameScene extends Phaser.Scene {
       }
     }
     if (!paused) this.tut?.update(deltaMs / 1000);
-    this.renderTutorial();
-    this.renderHint(paused ? 0 : deltaMs / 1000);
+    // Пауза, поимка, итоги: кот и палец не лежат поверх карточки и не показывают на её кнопки.
+    const modal = this.userPaused || this.caughtPaused || this.ended;
+    if (modal) this.tutOverlay?.hide();
+    else this.renderTutorial();
+    this.renderHint(paused ? 0 : deltaMs / 1000, modal);
     this.menuTimer -= deltaMs;
     if (this.menuTimer <= 0) {
       this.menuTimer = 150;
