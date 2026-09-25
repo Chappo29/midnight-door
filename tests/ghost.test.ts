@@ -4,7 +4,7 @@ import { ghostDamage, ghostXpNeed } from '../src/sim/ghost';
 import { Match } from '../src/sim/match';
 import type { SimEvent } from '../src/sim/types';
 import { TutorialDirector } from '../src/tutorial/director';
-import { inRoomMatch, nightNow, pinGhostAtDoor, stepSec } from './helpers';
+import { inRoomMatch, nightNow, pinGhostAtDoor, quietFloor, runUntil, stepSec } from './helpers';
 
 /** Ночь, призрак бьёт дверь игрока; дверь почти вечная, пушек на этаже нет — ничто не мешает считать. */
 function siege(): Match {
@@ -114,5 +114,82 @@ describe('уровень призрака от ударов', () => {
     expect(hits).toBeGreaterThan(0);
     expect(m.ghost.xp).toBe(0);
     expect(m.ghost.level).toBe(1);
+  });
+});
+
+/**
+ * Призрак прилетает в гнездо с 10% HP и лечится до конца отдыха; возвращает, сколько вылечил (доля макс. HP).
+ * Соседи спят, пушки убраны — ничто не мешает лечению.
+ */
+function nestVisit(m: Match): number {
+  const g = m.ghost;
+  g.x = g.prevX = m.nest.x;
+  g.y = g.prevY = m.nest.y;
+  g.waypoints = [];
+  g.state = 'retreating';
+  g.levelTimer = 0;
+  g.hp = g.maxHp * 0.1;
+  const before = g.hp;
+  m.step();
+  expect(g.state).toBe('healing');
+  runUntil(m, (mm) => mm.ghost.state !== 'healing', B.ghost.healTime + 1);
+  return (g.hp - before) / g.maxHp;
+}
+
+describe('лечение в гнезде', () => {
+  function nestMatch(): Match {
+    const m = inRoomMatch();
+    nightNow(m);
+    quietFloor(m);
+    m.playerRoom!.buildings = [];
+    return m;
+  }
+
+  it('test_ghost_nest_first_visit_heals_full_frac', () => {
+    const m = nestMatch();
+    expect(nestVisit(m)).toBeCloseTo(B.ghost.healFrac, 2);
+  });
+
+  // Регрессия: раньше каждый заход лечил одинаково (+40%), призрак бегал лечиться бесконечно,
+  // а к 35-й минуте перерастал пушки — матчи тянулись по 48–54 минуты (сиды 4, 40, 195 × 7919, лёгкая, пламя закрыто).
+  it('test_ghost_nest_heal_weakens_each_visit', () => {
+    const m = nestMatch();
+    const first = nestVisit(m);
+    const second = nestVisit(m);
+    const third = nestVisit(m);
+    expect(second).toBeCloseTo(first * B.ghost.healDecay, 2);
+    expect(third).toBeCloseTo(first * B.ghost.healDecay ** 2, 2);
+  });
+
+  it('test_ghost_nest_heal_above_retreat_still_retreats_later', () => {
+    const m = nestMatch();
+    const g = m.ghost;
+    nestVisit(m);
+    expect(g.desperate).toBe(false);
+    g.hp = g.maxHp * B.ghost.retreatAt * 0.5;
+    let retreats = 0;
+    for (let i = 0; i < 20 && !retreats; i++) {
+      m.step();
+      retreats += m.events.filter((e) => e.type === 'ghostRetreat').length;
+    }
+    expect(retreats).toBe(1);
+  });
+
+  // Гнездо больше не поднимает выше порога бегства — раньше призрак тут же убегал снова и крутился у гнезда сотни раз.
+  it('test_ghost_nest_cant_heal_above_retreat_fights_to_end', () => {
+    const m = nestMatch();
+    const g = m.ghost;
+    g.nestVisits = 100;
+    nestVisit(m);
+    expect(g.hp / g.maxHp).toBeLessThan(B.ghost.retreatAt);
+    expect(g.state).toBe('moving');
+    const visits = g.nestVisits;
+    let retreats = 0;
+    for (let i = 0; i < 20 * 30; i++) {
+      m.step();
+      retreats += m.events.filter((e) => e.type === 'ghostRetreat').length;
+    }
+    expect(retreats).toBe(0);
+    expect(g.nestVisits).toBe(visits);
   });
 });

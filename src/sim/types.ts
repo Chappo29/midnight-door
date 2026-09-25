@@ -193,6 +193,10 @@ export interface Ghost {
   siegeDoorHp: number;
   siegeTime: number;
   healTimer: number;
+  /** Сколько раз уже отлечился в гнезде за матч — каждый следующий заход лечит слабее (B.ghost.healDecay). */
+  nestVisits: number;
+  /** Гнездо уже не подняло выше порога бегства (B.ghost.retreatAt) — больше не убегает, дерётся до конца. */
+  desperate: boolean;
   /** Секунд без нового уровня — страховка DIFF.levelFallback (сбрасывается любым новым уровнем). */
   levelTimer: number;
   /** «Злость»: удары по дверям к следующему уровню (частичный удар — доля). */

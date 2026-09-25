@@ -23,6 +23,8 @@ export function createGhost(nest: Vec): Ghost {
     siegeDoorHp: 0,
     siegeTime: 0,
     healTimer: 0,
+    nestVisits: 0,
+    desperate: false,
     levelTimer: 0,
     xp: 0,
     held: 0,
@@ -43,6 +45,8 @@ export const fridgeSlowOf = (r: Room) => {
 };
 /** Пауза между ударами по двери этой комнаты — одна на симуляцию и отрисовку (кадр удара считается от неё же). */
 export const ghostHitIntervalAt = (m: Match, r: Room) => ghostHitInterval(m.ghost.level) / (1 - fridgeSlowOf(r));
+/** Какую долю макс. HP вылечит этот заход в гнездо: каждый следующий слабее в B.ghost.healDecay раз. */
+export const nestHealFrac = (g: Ghost) => B.ghost.healFrac * B.ghost.healDecay ** g.nestVisits;
 /** Сколько ударов по дверям нужно с уровня level на следующий: каждый уровень на xpGrowth дороже. */
 export const ghostXpNeed = (m: Match, level: number) =>
   // Не меньше 0.01: при hitsPerLevel ≤ 0 (подбор чисел в tune.ts) цикл набора уровней не кончился бы.
@@ -61,6 +65,8 @@ export function spawnGhost(m: Match): void {
   g.y = g.prevY = m.nest.y;
   g.levelTimer = 0;
   g.xp = 0;
+  g.nestVisits = 0;
+  g.desperate = false;
   g.held = 0;
   g.holdImmune = 0;
   chooseTarget(m);
@@ -106,7 +112,8 @@ export function updateGhost(m: Match, dt: number): void {
     return;
   }
 
-  if (!m.script && (g.state === 'moving' || g.state === 'attacking' || g.state === 'entering') && g.hp <= g.maxHp * B.ghost.retreatAt) {
+  const fleeing = g.state === 'moving' || g.state === 'attacking' || g.state === 'entering';
+  if (!m.script && !g.desperate && fleeing && g.hp <= g.maxHp * B.ghost.retreatAt) {
     g.state = 'retreating';
     g.waypoints = route(m, m.nest);
     m.events.push({ type: 'ghostRetreat' });
@@ -185,9 +192,14 @@ export function updateGhost(m: Match, dt: number): void {
       break;
     case 'healing':
       g.healTimer -= dt;
-      // Лечится не до конца: урон прошлых атак копится, и призрака можно добить за несколько заходов.
-      g.hp = Math.min(g.maxHp, g.hp + ((g.maxHp * B.ghost.healFrac) / B.ghost.healTime) * dt);
-      if (g.healTimer <= 0) chooseTarget(m);
+      // Лечится не до конца и с каждым заходом слабее: урон прошлых атак копится, и призрака можно добить за несколько заходов.
+      g.hp = Math.min(g.maxHp, g.hp + ((g.maxHp * nestHealFrac(g)) / B.ghost.healTime) * dt);
+      if (g.healTimer <= 0) {
+        g.nestVisits++;
+        // Не поднялся выше порога бегства — иначе тут же убежал бы обратно и крутился у гнезда без конца.
+        g.desperate = g.hp <= g.maxHp * B.ghost.retreatAt;
+        chooseTarget(m);
+      }
       break;
   }
 }

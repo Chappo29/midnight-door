@@ -117,6 +117,11 @@ export const B = {
     healTime: 10,
     /** Какую долю макс. HP восстанавливает в гнезде (не до конца — урон копится). */
     healFrac: 0.4,
+    /**
+     * Каждый следующий заход в гнездо лечит в столько раз слабее (healFrac × healDecay^заходов). Без этого призрак
+     * бегал лечиться бесконечно, а к 35-й минуте перерастал пушки — матчи тянулись по 48–54 минуты.
+     */
+    healDecay: 0.85,
     /** Терпение у двери, с: случайное (было 20–60 — «бьёт очень долго»; выбрано 4–12, с 2026-09-25 — 8–12). Кроме него уходит, если осада не идёт (см. ghost.ts).
      *  Короче осада — меньше ударов, а уровень теперь растёт от ударов (hitsPerLevel в DIFF). */
     switchMin: 8,
@@ -167,10 +172,13 @@ export interface DiffParams {
 
 // Подобрано scripts/tune.ts (2026-09-25, 160 матчей): подготовка 30 с (таймер ждёт игрока), бегство лечиться
 // ускорено по сложности (1 / 1.1 / 1.2). Итог: лёгкая 99%, сложная ~74%, кошмар ~33%, призрака убивают за 8–14 мин.
+// Потом (2026-09-25) гнездо стало лечить слабее с каждым заходом (B.ghost.healDecay) — это сильно помогло игрокам,
+// и призрака на hard/nightmare усилили под цели «сложнее» (лёгкая ~100%, сложная ~55%, кошмар ~20%): ghostMul 0.85→1.0
+// и 0.95→1.2 (easy не трогали; сверено на 240 матчах: 100 / 56 / 18%).
 export const DIFF: Record<Difficulty, DiffParams> = {
   easy: { ghostMul: 0.7, hitsPerLevel: 27, levelFallback: 200, retreatSpeedMul: 1, npcSkill: 0.3 },
-  hard: { ghostMul: 0.85, hitsPerLevel: 21, levelFallback: 110, retreatSpeedMul: 1.1, npcSkill: 0.6 },
-  nightmare: { ghostMul: 0.95, hitsPerLevel: 22, levelFallback: 125, retreatSpeedMul: 1.2, npcSkill: 0.9 },
+  hard: { ghostMul: 1.0, hitsPerLevel: 21, levelFallback: 110, retreatSpeedMul: 1.1, npcSkill: 0.6 },
+  nightmare: { ghostMul: 1.2, hitsPerLevel: 22, levelFallback: 125, retreatSpeedMul: 1.2, npcSkill: 0.9 },
 };
 
 export const sofaIncome = (level: number) => B.sofa.income * B.sofa.incomeMul ** (level - 1);
