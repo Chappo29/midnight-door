@@ -24,4 +24,12 @@ describe('style.css', () => {
     expect(strong).toMatch(/pointer-events:\s*auto/);
     expect(rule(':where(#ui) button')).toMatch(/font:\s*inherit/);
   });
+
+  it('test_result_card_stays_scrollable_on_low_screens', () => {
+    // .halftone объявлен после .card с той же специфичностью: overflow:hidden в нём отключал
+    // прокрутку, и на телефоне в альбоме кнопки «Ещё раз»/«Меню» были недостижимы (B2).
+    expect(rule('.card')).toMatch(/overflow-y:\s*auto/);
+    expect(rule('.halftone')).not.toMatch(/overflow\s*:/);
+    expect(css).toMatch(/@media \(max-height: 500px\)[\s\S]*?\.result-card \.result-mascot/);
+  });
 });

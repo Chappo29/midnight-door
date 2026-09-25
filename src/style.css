@@ -901,7 +901,9 @@ img.ico-img,
   text-align: center;
   max-width: min(560px, 92vw);
   max-height: 92vh;
+  max-height: 92dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   color: var(--ink);
   position: relative;
 }
@@ -1388,19 +1390,13 @@ img.ico-img,
 
 /* --------------------- экран результата --------------------- */
 
+/* Точки — фоном карточки, а не слоем с overflow:hidden: тот отключал прокрутку .card, и на низком
+   экране кнопки итогов оказывались за краем без возможности до них добраться (GAME_AUDIT.md, B2). */
 .halftone {
   position: relative;
-  overflow: hidden;
-}
-
-.halftone::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(var(--ink) 1.2px, transparent 1.4px);
+  background-image: radial-gradient(rgba(28, 19, 48, 0.06) 1.2px, transparent 1.4px);
   background-size: 11px 11px;
-  opacity: 0.06;
-  pointer-events: none;
+  background-attachment: local;
 }
 
 .result-mascot {
@@ -1480,6 +1476,51 @@ img.ico-img,
   font-weight: 700;
   font-size: 10px;
   color: rgba(28, 19, 48, 0.6);
+}
+
+/* Низкий экран (телефон в альбоме): итоги и поимка без прокрутки — кнопки видны сразу. */
+@media (max-height: 500px) {
+  .result-card,
+  .caught-card {
+    padding: 12px 20px 16px;
+  }
+  .result-card .result-mascot,
+  .caught-card .result-mascot {
+    width: 60px;
+    margin: 0 auto;
+  }
+  .result-card .stroke-title {
+    font-size: 22px;
+    margin: 2px 0 4px;
+  }
+  .result-card .stat-row {
+    margin: 4px 0 2px;
+    gap: 8px;
+  }
+  .result-card .stat {
+    padding: 4px 10px;
+    min-width: 72px;
+  }
+  .result-card .reward-block {
+    margin-top: 6px;
+    gap: 4px;
+  }
+  .result-card .reward-total {
+    font-size: 28px;
+  }
+  .result-card .diffs,
+  .caught-card .diffs {
+    margin-top: 10px;
+  }
+}
+
+@media (max-height: 400px) {
+  .result-card .stat-ico {
+    display: none;
+  }
+  .result-card .btn-big {
+    min-height: 50px;
+  }
 }
 
 /* --------------------- награда за матч --------------------- */
