@@ -25,6 +25,15 @@ export function isHoldover(now: number, openedAt: number, anchor: Pt, point: Pt)
 }
 
 /**
+ * Нажатие — повтор прошлого тапа по кнопке, которой при том тапе ещё не было: между ними сменилось
+ * окно (screenChangedAt позже прошлого нажатия), а палец почти там же и почти сразу. Так второй тап
+ * по «Выйти в меню» не нажимает «Кошмар» в открывшемся меню, а двойной тап в магазине не покупает дважды.
+ */
+export function isEchoAfterScreenChange(now: number, last: Pt & { t: number }, screenChangedAt: number, point: Pt): boolean {
+  return screenChangedAt > last.t && isHoldover(now, last.t, last, point);
+}
+
+/**
  * Куда поставить меню по вертикали на узком экране: не на палец (иначе второй тап попадает в пункт),
  * а над ним или под ним — где больше места.
  */

@@ -5,7 +5,7 @@ import { SPRITES } from '../view/sprites';
 import { B } from '../sim/balance';
 import { BOOSTER_MAX } from '../meta/economy';
 import type { BoosterId, Reward, SkinSlot } from '../meta/economy';
-import { HOLDOVER_MS, INPUT_GUARD_MS, isHoldover, menuTopAwayFromFinger } from './inputGuard';
+import { HOLDOVER_MS, INPUT_GUARD_MS, isEchoAfterScreenChange, isHoldover, menuTopAwayFromFinger } from './inputGuard';
 
 export interface MenuOption {
   /** Код пункта (для обучения: какой пункт показать и куда указать пальцем; и для подбора иконки). */
@@ -195,6 +195,8 @@ export class Hud {
   private menuAnchor = { x: 0, y: 0 };
   /** Последнее нажатие мышью/пальцем по интерфейсу — чтобы его повтор не ушёл в игру под окном. */
   private lastPress = { t: -Infinity, x: 0, y: 0 };
+  /** Когда последний раз сменилось окно (#screen открыли, перерисовали или закрыли). */
+  private screenChangedAt = -Infinity;
   /** Звук интерфейса (клик, открытие меню); подключает main.ts. */
   onSound: (key: string) => void = () => {};
   /** Переключатель звука; возвращает новое состояние «выключен». */
@@ -237,11 +239,16 @@ export class Hud {
       this.el[id] = root.querySelector<HTMLElement>(`#${id}`)!;
     }
     // Первым: пока окно/меню только появились, клик до кнопок не доходит (и не щёлкает звуком).
+    // Плюс повтор тапа ребёнка (до 1 с, рядом) по кнопке, которой ещё не было при первом тапе:
+    // иначе двойной тап «Выйти в меню» попадал в «Кошмар» в открывшемся меню.
     root.addEventListener(
       'click',
       (e) => {
-        if (e.detail > 0) this.lastPress = { t: performance.now(), x: e.clientX, y: e.clientY };
-        if (performance.now() < this.inputReadyAt) {
+        const now = performance.now();
+        const pt = { x: e.clientX, y: e.clientY };
+        const echo = e.detail > 0 && isEchoAfterScreenChange(now, this.lastPress, this.screenChangedAt, pt);
+        if (e.detail > 0) this.lastPress = { t: now, ...pt };
+        if (now < this.inputReadyAt || echo) {
           e.stopImmediatePropagation();
           e.preventDefault();
         }
@@ -913,6 +920,7 @@ export class Hud {
   private showScreen(html: string): void {
     this.hideMenu();
     this.armInput();
+    this.screenChangedAt = performance.now();
     this.el.screen.innerHTML = html;
     this.el.screen.classList.add('show');
     // Игровой HUD прячется под окном: иначе фантики и портреты лежат поверх карточки (GAME_AUDIT.md, B15).
@@ -921,7 +929,10 @@ export class Hud {
 
   hideScreen(): void {
     // Окно закрылось — второй тап не должен уйти в игру под ним (выбрать комнату, увести духа).
-    if (this.el.screen.classList.contains('show')) this.armInput();
+    if (this.el.screen.classList.contains('show')) {
+      this.armInput();
+      this.screenChangedAt = performance.now();
+    }
     this.el.screen.classList.remove('show');
     this.el.screen.innerHTML = '';
     this.root.classList.remove('screen-open');

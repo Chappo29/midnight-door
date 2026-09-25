@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HOLDOVER_MS, HOLDOVER_PX, isHoldover, menuTopAwayFromFinger } from '../src/ui/inputGuard';
+import { HOLDOVER_MS, HOLDOVER_PX, isEchoAfterScreenChange, isHoldover, menuTopAwayFromFinger } from '../src/ui/inputGuard';
 
 describe('защита от повторных тапов (GAME_AUDIT.md, B5)', () => {
   const anchor = { x: 200, y: 400 };
@@ -15,6 +15,23 @@ describe('защита от повторных тапов (GAME_AUDIT.md, B5)', 
 
   it('test_input_guard_late_tap_on_same_spot_is_not_holdover', () => {
     expect(isHoldover(HOLDOVER_MS + 1, 0, anchor, anchor)).toBe(false);
+  });
+
+  it('test_input_guard_second_tap_into_new_screen_is_echo', () => {
+    // «Выйти в меню» в t=0, меню открылось в t=5, второй тап того же пальца через 0,6 с — не «Кошмар».
+    const last = { t: 0, x: 200, y: 400 };
+    expect(isEchoAfterScreenChange(600, last, 5, { x: 205, y: 402 })).toBe(true);
+  });
+
+  it('test_input_guard_second_tap_on_same_screen_is_not_echo', () => {
+    // Экран не менялся (например, две кнопки одного окна) — второй тап настоящий.
+    const last = { t: 100, x: 200, y: 400 };
+    expect(isEchoAfterScreenChange(600, last, 50, { x: 205, y: 402 })).toBe(false);
+  });
+
+  it('test_input_guard_tap_elsewhere_in_new_screen_is_not_echo', () => {
+    const last = { t: 0, x: 200, y: 400 };
+    expect(isEchoAfterScreenChange(300, last, 5, { x: 200, y: 520 })).toBe(false);
   });
 
   it('test_input_guard_menu_on_narrow_screen_never_covers_finger', () => {
