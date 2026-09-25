@@ -191,6 +191,10 @@ export class GameScene extends Phaser.Scene {
     super('game');
   }
 
+  /**
+   * Phaser переиспользует объект сцены между матчами, поэтому здесь сбрасывается ВСЁ состояние,
+   * которое живёт в пределах одного матча. Новое поле сцены — добавь его сюда.
+   */
   init(data: GameData): void {
     this.gd = data;
     this.m = data.match;
@@ -200,6 +204,7 @@ export class GameScene extends Phaser.Scene {
     this.acc = 0;
     this.userPaused = false;
     this.hiddenPaused = document.hidden;
+    this.caughtPaused = false;
     this.ended = false;
     this.buildingViews = new Map();
     this.popKeys = new Set();
@@ -209,10 +214,24 @@ export class GameScene extends Phaser.Scene {
     this.doorShake = new Map();
     this.doorPulse = new Map();
     this.selected = null;
+    this.drag = { down: false, sx: 0, sy: 0, scrollX: 0, scrollY: 0, dragging: false };
+    this.pinch = { active: false, dist: 0, zoom: 1 };
     this.ghostFlash = 0;
+    this.ghostImg = null;
+    this.ghostDir = 'down';
+    this.ghostHurtUntil = 0;
+    this.ghostLaughUntil = 0;
     this.doorImgs = [];
+    this.menuBuild = null;
+    this.menuTimer = 0;
+    this.tut = null;
+    this.tutOverlay = null;
+    this.tutIndex = -1;
+    this.tutFollow = false;
     this.pickOverview = false;
     this.walkFollow = false;
+    this.hints = null;
+    this.hintOverlay = null;
     this.seenUnlock = new Set();
     this.unlockPrimed = false;
   }
