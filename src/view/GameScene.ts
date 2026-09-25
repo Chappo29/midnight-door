@@ -447,8 +447,10 @@ export class GameScene extends Phaser.Scene {
 
   /** Подсказка по ходу игры: облачко с котом, палец на цель, без затемнения. hidden — на экране окно (пауза, итоги). */
   private renderHint(dt: number, hidden = false): void {
-    const hint = this.hints?.update(dt) ?? null;
-    if (!hint || hidden) {
+    // Под окном (пауза, «Тебя поймали!», итоги) подсказки не выбираем вовсе: иначе одноразовая
+    // засчитывалась «показанной», пока ребёнок её не видел (проверка v1: «Жми «Бу!»» под карточкой поимки).
+    const hint = hidden ? null : (this.hints?.update(dt) ?? null);
+    if (!hint) {
       this.hintOverlay?.hide();
       return;
     }

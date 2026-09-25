@@ -101,6 +101,8 @@ const RULES: Rule[] = [
     text: '👻 Жми «Бу!»',
     pose: 'point',
     spirit: true,
+    // Раз за матч, а не раз в жизни: духом играют редко, и к моменту «долетел» подсказка должна быть.
+    once: 'match',
     sticky: 8,
     when: (m) => (m.player.spirit && m.phase === 'night' && !m.result && m.player.booCd <= 0 && m.booInRange(m.player) ? { kind: 'dom', sel: '#boo' } : null),
   },

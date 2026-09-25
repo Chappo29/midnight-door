@@ -3,6 +3,7 @@ import { B, TICK } from '../src/sim/balance';
 import { Match } from '../src/sim/match';
 import { TutorialDirector } from '../src/tutorial/director';
 import { HintDirector } from '../src/tutorial/hints';
+import { inRoomMatch, nightNow, pinGhostAtDoor } from './helpers';
 
 /** Матч, где игрок уже в комнате и наступила ночь. */
 function nightMatch(): Match {
@@ -160,5 +161,27 @@ describe('подсказки «на будущее»', () => {
     expect(run(m, h, 5)).not.toContain('trap');
     m.playerRoom!.door.level = B.unlock.trap;
     expect(run(m, h, 25)).toContain('trap');
+  });
+});
+
+describe('подсказки духа', () => {
+  it('test_hints_spirit_boo_is_per_match_not_saved_forever', () => {
+    // Arrange: игрока поймали, призрак рядом с духом, «Бу!» готово.
+    const m = inRoomMatch();
+    nightNow(m);
+    const room = m.playerRoom!;
+    room.door.hp = 1;
+    pinGhostAtDoor(m, room);
+    for (let i = 0; i < 20 * 20 && !m.player.spirit; i++) m.step();
+    const g = m.ghost;
+    g.x = g.prevX = m.player.x + 1;
+    g.y = g.prevY = m.player.y;
+    const saved: string[] = [];
+    const h = new HintDirector(m, new Set(['spirit']), (id) => saved.push(id));
+    // Act
+    const hint = h.update(TICK);
+    // Assert: подсказка есть, но в профиль не записана — в следующем матче ребёнок увидит её снова (проверка v1).
+    expect(hint?.id).toBe('spirit-boo');
+    expect(saved).not.toContain('spirit-boo');
   });
 });
