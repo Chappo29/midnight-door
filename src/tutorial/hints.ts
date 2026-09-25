@@ -161,7 +161,7 @@ const RULES: Rule[] = [
   },
   {
     id: 'sell',
-    text: '💰 Нет места? Продай старое',
+    text: '🗑 Нет места? Убери старое',
     pose: 'point',
     when: (m) => {
       const r = mine(m);

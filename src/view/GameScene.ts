@@ -3,7 +3,7 @@ import { B, LATE_KINDS, TICK, benchHeal, fridgeSlow, isLateKind, trapHold, type 
 import { H, Tile, W } from '../sim/map';
 import type { Match } from '../sim/match';
 import { inRoom, isSoil, key, occupantAt, roomAtCell, roomByDoor, roomCells, roomCenter, walkable } from '../sim/roomgrid';
-import type { BuildKind, Building, Character, Cmd, Room, SimEvent } from '../sim/types';
+import type { BuildKind, Building, Character, Cmd, Cost, Room, SimEvent } from '../sim/types';
 import type { Hud, MenuOption } from '../ui/hud';
 import { anchorY, doorKeys, firstSprite, fitImage, hasSprite, preloadSprites } from './sprites';
 import { ghostHitIntervalAt, ghostXpNeed } from '../sim/ghost';
@@ -194,6 +194,8 @@ export class GameScene extends Phaser.Scene {
   private seenUnlock = new Set<LateKind>();
   /** Первая проверка уже была: всё, что открыто к этому моменту (усилитель двери), — без баннера. */
   private unlockPrimed = false;
+  /** Открылись в этом матче и ещё не построены — в меню с меткой «Новое!». */
+  private newKinds = new Set<LateKind>();
 
   constructor() {
     super('game');
@@ -243,6 +245,7 @@ export class GameScene extends Phaser.Scene {
     this.hintOverlay = null;
     this.seenUnlock = new Set();
     this.unlockPrimed = false;
+    this.newKinds = new Set();
   }
 
   preload(): void {
@@ -1422,6 +1425,7 @@ export class GameScene extends Phaser.Scene {
           }
           break;
         case 'built':
+          if (e.roomId === mineId && isLateKind(e.kind)) this.newKinds.delete(e.kind);
           this.roomSound('build', e.roomId, { volume: 0.8 });
           this.popKeys.add(key(e.x, e.y));
           this.puff((e.x + 0.5) * TS, (e.y + 0.5) * TS, 0xfff1c9, 10, 30, 5);
@@ -1899,7 +1903,9 @@ export class GameScene extends Phaser.Scene {
     this.openMenu(p, () => {
       if (!isSoil(room, tx, ty)) {
         // Пол: пушка и поздние постройки (капкан, верстак, холодильник). В обучении поздних нет вовсе — иначе вечный замок.
-        const kinds: BuildKind[] = m.script ? ['cannon'] : ['cannon', ...LATE_KINDS];
+        // Запертые (дверь ещё низкая) не показываем вовсе: яркий пункт с замком ребёнок жмёт и не понимает,
+        // почему «не работает». Откроется — баннер «Новое!» и метка в меню.
+        const kinds: BuildKind[] = m.script ? ['cannon'] : ['cannon', ...LATE_KINDS.filter((k) => !m.buildLocked(room, k))];
         return { title: 'Пол', options: kinds.map((kind) => this.buildOption(room, kind, tx, ty)) };
       }
       const cost = m.buildCost('pumpkin');
@@ -1911,7 +1917,7 @@ export class GameScene extends Phaser.Scene {
         cost,
         note: locked ? 'во 2-м матче' : undefined,
         disabled: locked,
-        poor: !m.canAfford(room, cost),
+        ...this.affordance(room, cost),
         onPick: () => this.cmd({ type: 'build', kind: 'pumpkin', x: tx, y: ty }),
       };
       const err = m.canPlace(room, tx, ty, 'pumpkin');
@@ -1973,7 +1979,7 @@ export class GameScene extends Phaser.Scene {
           cost: up,
           note: up ? undefined : 'макс.',
           disabled: !up || d.broken,
-          poor: !!up && !m.canAfford(room, up),
+          ...this.affordance(room, up),
           onPick: () => this.cmd({ type: 'upgradeDoor' }),
         },
         {
@@ -2004,7 +2010,7 @@ export class GameScene extends Phaser.Scene {
             cost: up,
             note: up ? undefined : 'макс.',
             disabled: !up,
-            poor: !!up && !m.canAfford(room, up),
+            ...this.affordance(room, up),
             onPick: () => this.cmd({ type: 'upgradeSofa' }),
           };
       return {
@@ -2026,10 +2032,27 @@ export class GameScene extends Phaser.Scene {
       if (this.seenUnlock.has(kind) || m.buildLocked(r, kind)) continue;
       this.seenUnlock.add(kind);
       if (!this.unlockPrimed) continue;
+      this.newKinds.add(kind);
       this.hud.banner(`Новое! ${BUILD_INFO[kind].label} в меню постройки`, 3500);
       this.sfx.play('popup', { volume: 0.8 });
     }
     this.unlockPrimed = true;
+  }
+
+  /**
+   * Хватает ли на покупку: poor + «сколько есть» для банки у кнопки; нажали, а не хватает пламени —
+   * повод для подсказки про тыкву (CHILD_UX, части 2–3).
+   */
+  private affordance(room: Room, cost: Cost | null | undefined): Pick<MenuOption, 'poor' | 'have' | 'onPoor'> {
+    if (!cost) return { poor: false };
+    const poor = !this.m.canAfford(room, cost);
+    return {
+      poor,
+      have: { candy: room.candy, flame: room.flame },
+      onPoor: () => {
+        if (room.candy + 1e-6 >= cost.candy) this.hints?.noteFlameShort();
+      },
+    };
   }
 
   /** Пункт «построить kind» на полу: заперт дверью — замок и пульс двери, упёрся в правило — серый с причиной. */
@@ -2041,7 +2064,8 @@ export class GameScene extends Phaser.Scene {
     const need = m.buildLocked(room, kind);
     if (need) return { id, icon, label, desc, lockDoor: need, onPick: () => this.pulseDoor(room, need) };
     const cost = m.buildCost(kind);
-    const opt: MenuOption = { id, icon, label, desc, cost, poor: !m.canAfford(room, cost), onPick: () => this.cmd({ type: 'build', kind, x, y }) };
+    const isNew = isLateKind(kind) && this.newKinds.has(kind);
+    const opt: MenuOption = { id, icon, label, desc, cost, isNew, ...this.affordance(room, cost), onPick: () => this.cmd({ type: 'build', kind, x, y }) };
     const err = m.canPlace(room, x, y, kind);
     if (err) {
       opt.disabled = true;
@@ -2088,10 +2112,19 @@ export class GameScene extends Phaser.Scene {
             cost: up,
             note: up ? undefined : 'макс.',
             disabled: !up,
-            poor: !!up && !m.canAfford(room, up),
+            ...this.affordance(room, up),
             onPick: () => this.cmd({ type: 'upgrade', x: b.x, y: b.y }),
           },
-          { id: 'sell', icon: '💰', label: 'Продать', note: `+🍬${m.sellValue(b)}`, onPick: () => this.cmd({ type: 'sell', x: b.x, y: b.y }) },
+          {
+            // Уничтожает постройку: приглушённый второстепенный пункт с корзиной и подтверждением.
+            id: 'sell',
+            icon: '',
+            label: 'Убрать',
+            note: `🍬${m.sellValue(b)}`,
+            secondary: true,
+            confirm: 'Точно убрать?',
+            onPick: () => this.cmd({ type: 'sell', x: b.x, y: b.y }),
+          },
         ],
       };
     });

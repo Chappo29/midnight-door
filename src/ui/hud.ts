@@ -21,6 +21,16 @@ export interface MenuOption {
   /** Пункт упёрся в уровень двери (диван, поздние постройки): кликабелен, но выглядит запертым —
    *  вместо цены пилюля с замком и номером нужного уровня; onPick решает сам, что делать (например, подсветить дверь). */
   lockDoor?: number;
+  /** Сколько у игрока сейчас: для «банки», которая наполняется до цены (не хватает — видно без чисел). */
+  have?: Cost;
+  /** Нажали, а денег не хватает: меню не закрываем, кнопка вздрагивает; тут — доп. реакция (подсказка про тыкву). */
+  onPoor?: () => void;
+  /** Опасное действие (продать): первый тап спрашивает этот текст и показывает «Да» в стороне от пальца. */
+  confirm?: string;
+  /** Второстепенный пункт — приглушённый, не зовёт нажать. */
+  secondary?: boolean;
+  /** Только что открылась — метка «Новое!». */
+  isNew?: boolean;
   onPick: () => void;
 }
 
@@ -97,6 +107,7 @@ const ICON = {
   wrench: `<svg viewBox="0 0 24 24"><path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4l-6 6 2 2 6-6a3.5 3.5 0 0 0 4-4.6l-2.1 2.1-1.6-1.6 2.1-2.1z" fill="url(#hg-silver)" stroke="var(--ink)" stroke-width="1.3" stroke-linejoin="round"/></svg>`,
   close: `<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>`,
   up: `<svg viewBox="0 0 24 24"><path d="M12 19V6M6 11l6-6 6 6" stroke="var(--ink)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  trash: `<svg viewBox="0 0 24 24"><path d="M5 7h14l-1.2 12.4a2 2 0 0 1-2 1.6H8.2a2 2 0 0 1-2-1.6z" fill="#d9d3e6" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><path d="M3.5 7h17M9.5 7V4.5h5V7" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="var(--ink)" stroke-width="1.4" stroke-linecap="round"/></svg>`,
   lock: `<svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2" fill="#fff" stroke="var(--ink)" stroke-width="1.3"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="var(--ink)" stroke-width="1.6"/></svg>`,
   /** Поздние постройки — заглушки, пока нет спрайтов trap/workbench/fridge: капкан (тарелка с липким желе и леденцом), верстак с молотком, холодильник с магнитом-конфетой. */
   trap: `<svg viewBox="0 0 24 24"><ellipse cx="11" cy="16.5" rx="9" ry="5" fill="url(#hg-silver)" stroke="var(--ink)" stroke-width="1.4"/><ellipse cx="11" cy="15.8" rx="5.6" ry="2.8" fill="#ff7eb6" stroke="var(--ink)" stroke-width="1.1"/><path d="M15 14.5 18 6.5" stroke="var(--ink)" stroke-width="2.8" stroke-linecap="round"/><path d="M15 14.5 18 6.5" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/><circle cx="18.4" cy="5.4" r="3.7" fill="url(#hg-straw)" stroke="var(--ink)" stroke-width="1.3"/><path d="M16.9 5a1.6 1.6 0 1 1 1.6 1.8" fill="none" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/></svg>`,
@@ -144,7 +155,7 @@ const OPTION_ICON: Record<string, () => string> = {
   repair: () => ICON.wrench,
   upgradeSofa: () => img('sofa'),
   upgrade: () => ICON.up,
-  sell: () => img('candy_shot'),
+  sell: () => ICON.trash,
 };
 
 function optionIcon(o: MenuOption): string {
@@ -165,6 +176,18 @@ const DOOR_HURT = 0.7;
 /** Монеты, которые ребёнок заберёт, выйдя в меню, — прямо на кнопке: выход ничего не отнимает. */
 function exitCoinsPill(coins: number): string {
   return coins > 0 ? `<span class="exit-coins">+${coins}${ICON.coin}</span>` : '';
+}
+
+/**
+ * «Банка» вместо цены, когда не хватает: наполняется тем, чего не хватает (конфеты или пламя).
+ * Ребёнку не надо сравнивать «69 < 320» — видно, сколько ещё копить.
+ */
+function jarPill(c: Cost, have: Cost): string {
+  const shortCandy = have.candy + 1e-6 < c.candy;
+  const frac = shortCandy ? have.candy / c.candy : c.flame ? have.flame / c.flame : 1;
+  const pct = Math.round(Math.max(0.06, Math.min(1, frac)) * 100);
+  const ico = shortCandy ? img('candy_shot', 'cost-ico') : `<span class="cost-ico">${ICON.flame}</span>`;
+  return `<span class="jar${shortCandy ? '' : ' flame'}">${ico}<span class="jar-bar"><i style="width:${pct}%"></i></span></span>`;
 }
 
 /** Пункт заперт дверью: пилюля с замком, иконкой двери и нужным уровнем — вместо цены. */
@@ -547,8 +570,22 @@ export class Hud {
         // Тот же тап, что открыл меню (ребёнок жмёт дважды), — не покупка.
         if (e.detail > 0 && isHoldover(performance.now(), this.menuOpenedAt, this.menuAnchor, { x: e.clientX, y: e.clientY })) return;
         const o = this.menuOpts[i];
+        if (!o) return;
+        if (o.poor) {
+          // Не хватает: кнопка вздрагивает, «банка» рядом показывает, сколько копить. Без красной ошибки.
+          wrap.classList.remove('nope');
+          void wrap.offsetWidth;
+          wrap.classList.add('nope');
+          this.onSound('click');
+          o.onPoor?.();
+          return;
+        }
+        if (o.confirm) {
+          this.askConfirm(wrap, o);
+          return;
+        }
         this.hideMenu();
-        o?.onPick();
+        o.onPick();
       });
       body.appendChild(wrap);
     });
@@ -584,6 +621,34 @@ export class Hud {
   }
 
   /**
+   * Опасный пункт (продать): первый тап меняет подпись на вопрос и показывает «Да» справа — не под пальцем.
+   * «Да» срабатывает не раньше HOLDOVER_MS: второй тап двойного тапа не подтверждает. Через 3 с — отмена.
+   */
+  private askConfirm(wrap: HTMLElement, o: MenuOption): void {
+    if (wrap.classList.contains('confirming')) return;
+    wrap.classList.add('confirming');
+    const lbl = wrap.querySelector('.lbl');
+    if (lbl) lbl.textContent = o.confirm ?? '';
+    const yes = document.createElement('button');
+    yes.type = 'button';
+    yes.className = 'opt-yes';
+    yes.textContent = 'Да';
+    const armedAt = performance.now();
+    yes.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (performance.now() - armedAt < HOLDOVER_MS) return;
+      this.hideMenu();
+      o.onPick();
+    });
+    wrap.appendChild(yes);
+    window.setTimeout(() => {
+      wrap.classList.remove('confirming');
+      yes.remove();
+      if (lbl) lbl.textContent = o.label;
+    }, 3000);
+  }
+
+  /**
    * Обновляет открытое меню на месте: цены, «не хватает», доступность.
    * Кнопки остаются теми же, так что меню не прыгает и нажатие не теряется.
    */
@@ -598,12 +663,13 @@ export class Hud {
       const wrap = wraps[i];
       const b = wrap.querySelector<HTMLButtonElement>('button.opt')!;
       if (o.id && b.dataset.opt !== o.id) b.dataset.opt = o.id;
-      const cls = `opt${o.poor ? ' poor' : ''}`;
+      const cls = `opt${o.poor ? ' poor' : ''}${o.secondary ? ' secondary' : ''}`;
       if (b.className !== cls) b.className = cls;
       // Заперт дверью — кнопка остаётся активной (нажатие подсвечивает дверь), только disabled НЕ ставим.
       if (b.disabled !== !!o.disabled) b.disabled = !!o.disabled;
       wrap.classList.toggle('is-disabled', !!o.disabled);
       wrap.classList.toggle('is-locked', !!o.lockDoor);
+      wrap.classList.toggle('is-new', !!o.isNew);
 
       const setHtml = (sel: string, html: string, root: ParentNode = b) => {
         const el = root.querySelector(sel);
@@ -615,11 +681,19 @@ export class Hud {
       };
 
       setHtml('.ico', optionIcon(o));
-      setText('.lbl', o.label);
+      if (!wrap.classList.contains('confirming')) setText('.lbl', o.label);
       setText('.opt-desc', o.desc ?? '');
 
       const showReason = !!o.disabled && !!o.note;
-      const costHtml = o.lockDoor ? lockPill(o.lockDoor) : o.cost ? costPill(o.cost) : !showReason && o.note ? noteVisual(o.note) : '';
+      const costHtml = o.lockDoor
+        ? lockPill(o.lockDoor)
+        : o.cost && o.poor && o.have
+          ? jarPill(o.cost, o.have)
+          : o.cost
+            ? costPill(o.cost)
+            : !showReason && o.note
+              ? noteVisual(o.note)
+              : '';
       setHtml('.cost', costHtml);
 
       const reasonText = showReason ? stripEmoji(o.note!) : '';

@@ -646,6 +646,7 @@ img.ico-img,
 .opt-wrap {
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .opt {
@@ -815,13 +816,16 @@ img.ico-img,
   display: flex;
 }
 
+/* Не хватает — сильно отличается от доступного: серый и бледный; причина — «банка» у самой кнопки. */
 .opt.poor {
-  filter: saturate(0.7);
+  filter: grayscale(0.9);
+  opacity: 0.62;
 }
 
 /* Пункт кликабелен (нажатие подсвечивает дверь), но визуально «заперт» — не путать с .is-disabled. */
 .opt-wrap.is-locked .opt {
-  filter: grayscale(0.55);
+  filter: grayscale(0.9);
+  opacity: 0.7;
 }
 
 .lock-pill {
@@ -2819,6 +2823,116 @@ img.ico-img,
   .door-hud.danger,
   .ghost-arrow-ico,
   #repair.cd.alert {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------
+   Меню постройки (Child UX): банка «сколько копить», «Убрать» с подтверждением, «Новое!»
+   --------------------------------------------------------- */
+
+.jar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 5px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+.jar-bar {
+  width: 54px;
+  height: 12px;
+  border-radius: 999px;
+  background: #d9d3e6;
+  overflow: hidden;
+}
+.jar-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #ff7eb6;
+  transition: width 0.25s;
+}
+.jar.flame .jar-bar i {
+  background: #ff7a2e;
+}
+
+/* Нажали, а не хватает: кнопка вздрагивает (без красной ошибки). */
+.opt-wrap.nope .opt {
+  animation: opt-nope 0.36s;
+}
+@keyframes opt-nope {
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
+/* Второстепенное действие («Убрать»): приглушённое, ниже и не зелёное — не выглядит наградой. */
+.opt.secondary {
+  min-height: 48px;
+  background: linear-gradient(180deg, #f1ecf7 0%, #ddd5ea 100%);
+  box-shadow: 0 0 0 3px var(--ink), 0 3px 0 #b9aecd;
+}
+.opt.secondary .lbl {
+  color: #5a4f6e;
+  font-size: 15px;
+}
+.opt.secondary .cost-part.gain {
+  color: #7a7090;
+  filter: grayscale(1);
+  opacity: 0.8;
+}
+.opt-wrap.confirming .opt {
+  background: linear-gradient(180deg, #ffe3e6 0%, #ffc7cd 100%);
+  box-shadow: 0 0 0 3px var(--ink), 0 3px 0 #e39aa3;
+}
+.opt-wrap.confirming .opt .cost {
+  visibility: hidden;
+}
+.opt-yes {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 64px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ff8a96 0%, #ff4d5e 100%);
+  box-shadow: 0 0 0 3px var(--ink), 0 3px 0 #b92f3d;
+  color: #fff !important;
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: 17px;
+}
+
+/* Только что открылась — «Новое!». */
+.opt-wrap.is-new::after {
+  content: 'Новое!';
+  position: absolute;
+  top: -8px;
+  left: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink);
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: 12px;
+  pointer-events: none;
+  animation: new-pop 0.8s infinite alternate;
+}
+@keyframes new-pop {
+  to { transform: scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .opt-wrap.nope .opt,
+  .opt-wrap.is-new::after {
     animation: none;
   }
 }
