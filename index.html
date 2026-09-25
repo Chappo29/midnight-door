@@ -10,10 +10,84 @@
       href="https://fonts.googleapis.com/css2?family=Rubik:wght@700;800;900&family=Nunito:wght@700;800&display=swap"
       rel="stylesheet"
     />
+    <!-- Заставка загрузки: стили здесь, а не в style.css, — она нужна раньше, чем загрузится бандл. -->
+    <style>
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        background: #140f22;
+        color: #fff;
+        font-family: Rubik, 'Segoe UI', sans-serif;
+        transition: opacity 0.25s;
+      }
+      #boot.off {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #boot .boot-door {
+        width: 64px;
+        height: 92px;
+        border-radius: 32px 32px 6px 6px;
+        background: linear-gradient(180deg, #b07d42, #8b5a2b);
+        box-shadow: 0 0 0 5px #1c1330, 0 8px 0 #1c1330;
+        position: relative;
+        animation: boot-knock 1.2s infinite ease-in-out;
+      }
+      #boot .boot-door::after {
+        content: '';
+        position: absolute;
+        right: 12px;
+        top: 50px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #ffd35c;
+      }
+      #boot .boot-title {
+        font-weight: 900;
+        font-size: 26px;
+        letter-spacing: 0.02em;
+      }
+      #boot .boot-bar {
+        width: min(260px, 70vw);
+        height: 18px;
+        border-radius: 999px;
+        background: #2a2342;
+        box-shadow: 0 0 0 4px #1c1330;
+        overflow: hidden;
+      }
+      #boot .boot-bar i {
+        display: block;
+        height: 100%;
+        width: calc(8% + 92% * var(--p, 0));
+        border-radius: 999px;
+        background: linear-gradient(180deg, #7ff0c4, #2ed8a0);
+        transition: width 0.2s;
+      }
+      @keyframes boot-knock {
+        0%, 70%, 100% { transform: rotate(0); }
+        78% { transform: rotate(-4deg); }
+        86% { transform: rotate(4deg); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot .boot-door { animation: none; }
+      }
+    </style>
   </head>
   <body>
     <div id="game"></div>
     <div id="ui"></div>
+    <div id="boot" role="progressbar" aria-label="Загрузка">
+      <div class="boot-door"></div>
+      <div class="boot-title">Полночь у двери</div>
+      <div class="boot-bar"><i></i></div>
+    </div>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

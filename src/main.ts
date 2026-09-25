@@ -41,9 +41,25 @@ const game = new Phaser.Game({
 });
 /** Грузит все спрайты один раз при запуске, чтобы матч стартовал без ожидания. */
 let spritesLoaded: () => void = () => {};
-const spritesReady = new Promise<void>((resolve) => (spritesLoaded = resolve));
+let spritesAreReady = false;
+const spritesReady = new Promise<void>((resolve) => (spritesLoaded = resolve)).then(() => {
+  spritesAreReady = true;
+});
+/** Заставка из index.html: вместо чёрного экрана, пока грузятся картинки и звуки (GAME_AUDIT.md, Top-10). */
+const bootScreen = document.getElementById('boot');
+const hideBoot = () => bootScreen?.classList.add('off');
+/** Дождаться ассетов; если их ещё нет — всё это время видна заставка с полоской. */
+async function whenLoaded(): Promise<void> {
+  if (!spritesAreReady) {
+    bootScreen?.classList.remove('off');
+    await spritesReady;
+  }
+  hideBoot();
+}
 class BootScene extends Phaser.Scene {
   preload(): void {
+    // Полоска считает файлы, а не байты — зато двигается, и видно, что игра не зависла.
+    this.load.on('progress', (v: number) => bootScreen?.style.setProperty('--p', v.toFixed(3)));
     preloadSprites(this);
     preloadSfx(this);
   }
@@ -68,6 +84,7 @@ const GAME_MUSIC = ['night1', 'night2', 'night3'];
 const progress = loadProgress();
 
 function showMenu(): void {
+  hideBoot();
   game.scene.stop('game');
   // Музыка грузится вместе со спрайтами — включаем, как только она есть.
   spritesReady.then(() => sfx.playMusic('menu'));
@@ -134,7 +151,7 @@ const TUTORIAL_SEED = 20260924;
 /** «Ночь 0»: настоящий матч с подсказками, проиграть нельзя. Не считается в матчи и победы. */
 async function startTutorial(): Promise<void> {
   hud.hideScreen();
-  await spritesReady;
+  await whenLoaded();
   sfx.playMusic(GAME_MUSIC);
   const match = new Match({ seed: TUTORIAL_SEED, difficulty: 'easy', flameUnlocked: false, tutorial: true });
   const finish = (how: 'done' | 'skipped') => {
@@ -174,7 +191,7 @@ async function startTutorial(): Promise<void> {
 
 async function start(difficulty: Difficulty): Promise<void> {
   hud.hideScreen();
-  await spritesReady;
+  await whenLoaded();
   // Музыка меню — только в меню; с начала матча играет игровой плейлист.
   sfx.playMusic(GAME_MUSIC);
   // Купленные усилители срабатывают в этом матче (по одному каждого).
@@ -242,9 +259,11 @@ if (previewResult === 'win' || previewResult === 'lose' || previewResult === 'te
     m.rooms[0].eliminated = true;
   }
   const again = () => (location.search = '');
+  hideBoot();
   hud.showResult(m, false, again, again, matchReward(m.result === 'win', 'easy', m.nightTime, 4, m.teamWin));
 } else if (import.meta.env.DEV && new URLSearchParams(location.search).has('sounds')) {
   spritesReady.then(() => {
+    hideBoot();
     const box = document.getElementById('screen')!;
     box.classList.add('show');
     box.style.overflow = 'auto';
