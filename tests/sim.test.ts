@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { B, doorMaxHp, sofaNeedDoor } from '../src/sim/balance';
+import { B, TICK, doorMaxHp, sofaNeedDoor } from '../src/sim/balance';
 import { Match } from '../src/sim/match';
 import { Tile, generateMap, guardSlots } from '../src/sim/map';
 import { bfs } from '../src/sim/path';
@@ -276,5 +276,51 @@ describe('sofa gate', () => {
       if (r.ownerId === null) continue;
       expect(r.door.level).toBeGreaterThanOrEqual(sofaNeedDoor(r.sofa.level));
     }
+  });
+});
+
+describe('подготовка ждёт игрока', () => {
+  /** Игрок выбрал самую дальнюю комнату и ещё идёт к ней; подготовка только началась. */
+  function farPrep(): Match {
+    const m = new Match({ seed: 7, difficulty: 'easy', flameUnlocked: true });
+    const p = m.player;
+    const far = m.rooms
+      .filter((r) => r.ownerId === null)
+      .sort((a, b) => Math.hypot(b.door.x - p.x, b.door.y - p.y) - Math.hypot(a.door.x - p.x, a.door.y - p.y))[0];
+    m.command(0, { type: 'pickRoom', roomId: far.id });
+    runUntil(m, (q) => q.phase === 'prep', 30);
+    return m;
+  }
+  const outside = (m: Match) => {
+    const r = m.playerRoom!;
+    m.player.x = r.door.front.x;
+    m.player.y = r.door.front.y;
+    m.player.path = [];
+  };
+
+  it('test_prep_timer_holds_while_player_walks', () => {
+    const m = farPrep();
+    outside(m);
+    m.step();
+    expect(m.phaseLeft).toBe(B.phase.prep);
+  });
+
+  it('test_prep_timer_runs_when_player_in_room', () => {
+    const m = farPrep();
+    const d = m.playerRoom!.door.inside;
+    m.player.x = d.x + 0.5;
+    m.player.y = d.y + 0.5;
+    m.player.path = [];
+    stepSec(m, 1);
+    expect(m.phaseLeft).toBeLessThan(B.phase.prep - 0.9);
+  });
+
+  it('test_prep_timer_waits_at_most_walkMax', () => {
+    const m = farPrep();
+    for (let i = 0; i < (B.phase.walkMax + 1) / TICK; i++) {
+      outside(m);
+      m.step();
+    }
+    expect(m.phaseLeft).toBeLessThan(B.phase.prep - 0.9);
   });
 });

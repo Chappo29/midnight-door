@@ -177,7 +177,8 @@ export function updateGhost(m: Match, dt: number): void {
       break;
     }
     case 'retreating':
-      if (moveAlong(g, B.ghost.speed * 1.2, dt)) {
+      // Бегство лечиться: на лёгкой обычная скорость, на сложной/кошмаре — быстрее (DIFF.retreatSpeedMul).
+      if (moveAlong(g, B.ghost.speed * m.diff.retreatSpeedMul, dt)) {
         g.state = 'healing';
         g.healTimer = B.ghost.healTime;
       }

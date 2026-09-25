@@ -68,6 +68,8 @@ export class Match {
 
   phase: Phase = 'pick';
   phaseLeft: number = B.phase.pick;
+  /** Сколько подготовка уже ждала игрока, идущего к своей комнате (см. waitingForPlayer). */
+  prepWait = 0;
   time = 0;
   nightTime = 0;
   result: 'win' | 'lose' | null = null;
@@ -549,7 +551,7 @@ export class Match {
     if (this.phase === 'end') return;
     const dt = TICK;
     this.time += dt;
-    if (!this.script?.holdPhase) this.phaseLeft -= dt;
+    if (!this.script?.holdPhase && !this.waitingForPlayer(dt)) this.phaseLeft -= dt;
 
     if (this.phase === 'pick') this.stepPick(dt);
     else if (this.phase === 'prep' && this.phaseLeft <= 0) this.startNight();
@@ -577,6 +579,19 @@ export class Match {
         this.setPhase('end');
       }
     }
+  }
+
+  /**
+   * Подготовка не тикает, пока игрок идёт к своей комнате (иначе к приходу он терял половину таймера,
+   * если выбрал дальнюю комнату). Ждём не дольше B.phase.walkMax.
+   */
+  private waitingForPlayer(dt: number): boolean {
+    if (this.phase !== 'prep') return false;
+    const r = this.playerRoom;
+    const p = this.player;
+    if (!r || inRoom(r, Math.floor(p.x), Math.floor(p.y)) || this.prepWait >= B.phase.walkMax) return false;
+    this.prepWait += dt;
+    return true;
   }
 
   private isAi(c: Character): boolean {
@@ -613,6 +628,7 @@ export class Match {
       for (const c of this.chars) c.think = this.rng.range(0.3, 1.5);
       this.setPhase('prep');
       this.phaseLeft = B.phase.prep;
+      this.prepWait = 0;
     }
   }
 

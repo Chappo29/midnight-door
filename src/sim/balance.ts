@@ -6,7 +6,11 @@ export const TICK = 1 / 20;
 /** Все числа баланса в одном месте. Стартовые значения, подбираются плейтестами. */
 export const B = {
   /** night — только для часов в интерфейсе: рассвета нет, ночь до победы над призраком. */
-  phase: { pick: 10, prep: 45, night: 360 },
+  /**
+   * prep — подготовка до прихода призрака (было 45, по просьбе игроков 30).
+   * walkMax — сколько подготовка ждёт, пока игрок дойдёт до своей комнаты; дальше отсчёт идёт в любом случае.
+   */
+  phase: { pick: 10, prep: 30, night: 360, walkMax: 20 },
   startCandy: 20,
   walkSpeed: 3,
   work: { build: 1.2, plant: 1.0, upgrade: 1.2, door: 1.5, sofa: 1.2, sell: 0.5 },
@@ -156,15 +160,17 @@ export interface DiffParams {
   hitsPerLevel: number;
   /** Страховка: столько секунд без нового уровня — и уровень +1 сам (любой новый уровень сбрасывает счёт). */
   levelFallback: number;
+  /** Скорость бегства лечиться относительно обычной: на лёгкой без ускорения, чем сложнее — тем быстрее убегает. */
+  retreatSpeedMul: number;
   npcSkill: number;
 }
 
-// Подобрано scripts/tune.ts (этап E, 2026-09-24, сверено на 80 и 240 матчах): easy не трогали; hard — страховка 115→110;
-// nightmare — hitsPerLevel 22→20 и ghostMul 1.0→0.95 (призрак растёт быстрее, но слабее — убийство ~13.5 мин вместо 15).
+// Подобрано scripts/tune.ts (2026-09-25, 160 матчей): подготовка 30 с (таймер ждёт игрока), бегство лечиться
+// ускорено по сложности (1 / 1.1 / 1.2). Итог: лёгкая 99%, сложная ~74%, кошмар ~33%, призрака убивают за 8–14 мин.
 export const DIFF: Record<Difficulty, DiffParams> = {
-  easy: { ghostMul: 0.7, hitsPerLevel: 27, levelFallback: 200, npcSkill: 0.3 },
-  hard: { ghostMul: 0.85, hitsPerLevel: 21, levelFallback: 110, npcSkill: 0.6 },
-  nightmare: { ghostMul: 0.95, hitsPerLevel: 20, levelFallback: 125, npcSkill: 0.9 },
+  easy: { ghostMul: 0.7, hitsPerLevel: 27, levelFallback: 200, retreatSpeedMul: 1, npcSkill: 0.3 },
+  hard: { ghostMul: 0.85, hitsPerLevel: 21, levelFallback: 110, retreatSpeedMul: 1.1, npcSkill: 0.6 },
+  nightmare: { ghostMul: 0.95, hitsPerLevel: 22, levelFallback: 125, retreatSpeedMul: 1.2, npcSkill: 0.9 },
 };
 
 export const sofaIncome = (level: number) => B.sofa.income * B.sofa.incomeMul ** (level - 1);
