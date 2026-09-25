@@ -75,6 +75,23 @@ describe('дух', () => {
     expect(p.booCd).toBe(0);
   });
 
+  it('test_spirit_boo_event_survives_until_next_step', () => {
+    // Arrange: сцена шлёт команду из клика между тиками и разбирает m.events только после step().
+    const { m } = spiritMatch();
+    const p = m.player;
+    m.ghost.x = m.ghost.prevX = p.x + 1;
+    m.ghost.y = m.ghost.prevY = p.y;
+    // Act
+    expect(m.command(0, { type: 'boo' })).toBeNull();
+    m.step();
+    const afterFirst = m.events.filter((e) => e.type === 'boo').length;
+    m.step();
+    const afterSecond = m.events.filter((e) => e.type === 'boo').length;
+    // Assert: событие доходит ровно один раз (GAME_AUDIT.md, B3).
+    expect(afterFirst).toBe(1);
+    expect(afterSecond).toBe(0);
+  });
+
   it('test_spirit_boo_out_of_range_rejected', () => {
     const { m } = spiritMatch();
     const p = m.player;

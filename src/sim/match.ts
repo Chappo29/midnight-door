@@ -80,6 +80,8 @@ export class Match {
   /** Воскрешение (реклама за награду) уже было — второй раз нельзя. */
   reviveUsed = false;
   events: SimEvent[] = [];
+  /** Сколько событий в `events` принадлежит прошедшему тику; всё, что дописано после, — от команд между тиками. */
+  private settledEvents = 0;
   firstElimAt = -1;
   /** Ручки сценария обучения; null — обычный матч. */
   script: TutorialScript | null = null;
@@ -546,8 +548,18 @@ export class Match {
 
   // ---------- шаг симуляции ----------
 
+  /**
+   * Один тик симуляции. `events` после вызова — события этого тика плюс те, что команды
+   * игрока («Бу!», «Искорка», воскрешение) добавили между тиками: иначе они стирались,
+   * не дойдя до сцены, и действие проходило без звука и эффекта.
+   */
   step(): void {
-    this.events = [];
+    this.events = this.events.slice(this.settledEvents);
+    this.stepTick();
+    this.settledEvents = this.events.length;
+  }
+
+  private stepTick(): void {
     if (this.phase === 'end') return;
     const dt = TICK;
     this.time += dt;
