@@ -93,6 +93,59 @@ describe('обучение («Ночь 0»)', () => {
     expect(d.allowTap(suggested.door.inside.x, suggested.door.inside.y)).toBe(true);
   });
 
+  it('test_tutorial_repeated_taps_on_finger_do_not_cancel_cannon_build', () => {
+    // Arrange: довести до шага «Поставь пушку тут».
+    const m = new Match({ seed: SEED, difficulty: 'easy', flameUnlocked: false, tutorial: true });
+    const d = new TutorialDirector(m);
+    d.allowTap(0, 0);
+    for (let i = 0; i < 20 * 120 && d.view()?.step.id !== 'cannon'; i++) {
+      tick(m, d);
+      if (m.player.task) continue;
+      const id = d.view()?.step.id;
+      if (id === 'pick') m.command(0, { type: 'pickRoom', roomId: m.rooms.indexOf(m.rooms.find((r) => d.allowTap(r.door.x, r.door.y))!) });
+      if (id === 'sofa') m.command(0, { type: 'upgradeSofa' });
+    }
+    expect(d.view()?.step.id).toBe('cannon');
+
+    // Act: «ребёнок» жмёт на палец раз в 0,7 с, как это делает сцена: тап по пустой клетке — «иди сюда»,
+    // затем пункт меню «Пушка». Так бот в аудите крутился на шаге ~200 с (GAME_AUDIT.md, B6).
+    let sec = 0;
+    for (let i = 0; i < 20 * 60 && d.view()?.step.id === 'cannon'; i++) {
+      tick(m, d);
+      if (i % 14) continue;
+      const v = d.view()!;
+      if (v.target.kind !== 'cell') continue;
+      const at = d.gateTap(v.target.at.x, v.target.at.y);
+      if (!at) continue;
+      m.command(0, { type: 'move', x: at.x, y: at.y });
+      m.command(0, { type: 'build', kind: 'cannon', x: at.x, y: at.y });
+      sec = i * TICK;
+    }
+
+    // Assert: шаг пройден, пока строили — пальца нет и тапы не проходят.
+    expect(d.view()?.step.id).toBe('door');
+    expect(sec).toBeLessThan(5);
+  });
+
+  it('test_tutorial_hides_finger_while_player_builds', () => {
+    const m = new Match({ seed: SEED, difficulty: 'easy', flameUnlocked: false, tutorial: true });
+    const d = new TutorialDirector(m);
+    d.allowTap(0, 0);
+    for (let i = 0; i < 20 * 120 && d.view()?.step.id !== 'cannon'; i++) {
+      tick(m, d);
+      if (m.player.task) continue;
+      const id = d.view()?.step.id;
+      if (id === 'pick') m.command(0, { type: 'pickRoom', roomId: m.rooms.indexOf(m.rooms.find((r) => d.allowTap(r.door.x, r.door.y))!) });
+      if (id === 'sofa') m.command(0, { type: 'upgradeSofa' });
+    }
+    const v = d.view()!;
+    if (v.target.kind !== 'cell') throw new Error('палец должен показывать на клетку');
+    const at = v.target.at;
+    expect(m.command(0, { type: 'build', kind: 'cannon', x: at.x, y: at.y })).toBeNull();
+    expect(d.view()!.target.kind).toBe('none');
+    expect(d.allowTap(at.x, at.y)).toBe(false);
+  });
+
   it('обычный матч без обучения не трогает сценарий', () => {
     const m = new Match({ seed: SEED, difficulty: 'easy', flameUnlocked: false });
     expect(m.script).toBeNull();

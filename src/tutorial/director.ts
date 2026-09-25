@@ -1,7 +1,7 @@
 import type { Match } from '../sim/match';
 import { guardSlots } from '../sim/map';
 import { roomCenter } from '../sim/roomgrid';
-import type { SimEvent, Vec } from '../sim/types';
+import type { Cmd, SimEvent, Vec } from '../sim/types';
 import { STEPS, pickCannonCell, type Step, type Target, type TutorialCtx } from './steps';
 
 /** Что режиссёр отдаёт наружу для рисования (без Phaser и DOM — так его можно тестировать). */
@@ -13,6 +13,12 @@ export interface TutorialView {
   /** Сколько раз уже подсказывали бездействующему (растёт каждые NUDGE секунд). */
   nudge: number;
 }
+
+/**
+ * Действия, которым учат шаги. Пока игрок идёт их делать или делает, палец убран, а тапы по полю
+ * не проходят: повторный тап по пальцу превращался в «иди сюда» и отменял стройку — петля (GAME_AUDIT.md, B6).
+ */
+const BUSY: ReadonlySet<Cmd['type']> = new Set(['build', 'upgrade', 'sell', 'upgradeDoor', 'repair', 'upgradeSofa']);
 
 /** Через сколько секунд бездействия подсказывать сильнее (Sesame Workshop: 6–8 с). */
 const NUDGE = 7;
@@ -52,7 +58,8 @@ export class TutorialDirector {
 
   view(): TutorialView | null {
     if (this.finished) return null;
-    return { step: this.step, index: this.i, total: STEPS.length, target: this.step.target(this.m, this.ctx), nudge: Math.floor(this.idle / NUDGE) };
+    const target: Target = this.busy ? { kind: 'none' } : this.step.target(this.m, this.ctx);
+    return { step: this.step, index: this.i, total: STEPS.length, target, nudge: Math.floor(this.idle / NUDGE) };
   }
 
   /** Каждый тик симуляции: события этого тика. */
@@ -87,12 +94,19 @@ export class TutorialDirector {
       this.next();
       return null;
     }
+    if (this.busy) return null;
     const t = s.target(this.m, this.ctx);
     const ok = (cx: number, cy: number) =>
       s.allowCell ? s.allowCell(this.m, this.ctx, cx, cy) : t.kind === 'cell' && t.at.x === cx && t.at.y === cy;
     if (ok(x, y)) return { x, y };
     if (t.kind === 'cell' && Math.abs(t.at.x - x) <= 1 && Math.abs(t.at.y - y) <= 1 && ok(t.at.x, t.at.y)) return { x: t.at.x, y: t.at.y };
     return null;
+  }
+
+  /** Игрок уже выполняет действие шага (идёт к месту или работает руками). */
+  private get busy(): boolean {
+    const t = this.m.player.task;
+    return !!t && BUSY.has(t.cmd.type);
   }
 
   /** Центр подсказанной комнаты (пока идёт выбор) — туда смотрит камера. */
