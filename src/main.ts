@@ -39,6 +39,30 @@ const game = new Phaser.Game({
   render: { antialias: true },
   banner: false,
 });
+/**
+ * Поворот телефона: Phaser 3.90 в режиме RESIZE берёт размер родителя до того, как браузер его
+ * пересчитал (баг #7213), и поле остаётся в размере прошлой ориентации — полэкрана чёрное.
+ * Когда раскладка устоялась (два кадра + 150 мс), перечитываем размер сами (как upstream #7222).
+ */
+let resyncRaf = 0;
+let resyncTimer = 0;
+function scheduleScaleResync(): void {
+  cancelAnimationFrame(resyncRaf);
+  window.clearTimeout(resyncTimer);
+  resyncRaf = requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      resyncTimer = window.setTimeout(() => {
+        game.scale.getParentBounds();
+        game.scale.refresh();
+      }, 150);
+    }),
+  );
+}
+window.addEventListener('resize', scheduleScaleResync);
+window.addEventListener('orientationchange', scheduleScaleResync);
+window.visualViewport?.addEventListener('resize', scheduleScaleResync);
+screen.orientation?.addEventListener?.('change', scheduleScaleResync);
+
 /** Грузит все спрайты один раз при запуске, чтобы матч стартовал без ожидания. */
 let spritesLoaded: () => void = () => {};
 let spritesAreReady = false;
