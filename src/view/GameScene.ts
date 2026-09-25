@@ -1693,11 +1693,20 @@ export class GameScene extends Phaser.Scene {
     if (Math.abs(cx - mx) > 0.01 || Math.abs(cy - my) > 0.01) cam.centerOn(cx, cy);
   }
 
+  /**
+   * Касания, начатые на самом поле. Палец на кнопке интерфейса (или «зависшее» касание кнопки,
+   * которую убрали из-под пальца) — не второй палец щипка: иначе тапы по полю молча глотаются.
+   */
+  private fingersOnField(): Phaser.Input.Pointer[] {
+    const canvas = this.game.canvas;
+    return this.input.manager.pointers.filter((q) => q.isDown && q.downElement === canvas);
+  }
+
   private setupInput(): void {
     this.input.addPointer(1);
     const cam = this.cameras.main;
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      const touching = this.input.manager.pointers.filter((q) => q.isDown);
+      const touching = this.fingersOnField();
       if (touching.length >= 2) {
         const [a, b] = touching;
         this.pinch = { active: true, dist: Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y), zoom: cam.zoom };
@@ -1709,7 +1718,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (this.pinch.active) {
-        const touching = this.input.manager.pointers.filter((q) => q.isDown);
+        const touching = this.fingersOnField();
         if (touching.length >= 2) {
           const [a, b] = touching;
           const d = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
@@ -1734,7 +1743,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
       if (this.pinch.active) {
-        if (!this.input.manager.pointers.some((q) => q.isDown)) this.pinch.active = false;
+        if (!this.fingersOnField().length) this.pinch.active = false;
         this.drag.down = false;
         return;
       }

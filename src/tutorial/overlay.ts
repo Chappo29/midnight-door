@@ -158,7 +158,20 @@ export class TutorialOverlay {
   destroy(): void {
     window.clearTimeout(this.skipTimer);
     this.dim.remove();
-    this.top.remove();
+    // Пропуск срабатывает, пока палец ещё держит ⏭. Убери кнопку из DOM сейчас — её touchend
+    // не всплывёт до window, Phaser навсегда сочтёт касание нажатым, и каждый тап по полю станет
+    // «щипком» (игра не отвечает до перезагрузки). Прячем сразу, удаляем, когда палец отпустят.
+    if (!this.skipBtn.classList.contains('holding')) {
+      this.top.remove();
+      return;
+    }
+    this.top.style.display = 'none';
+    const done = () => this.top.remove();
+    // touchend приходит ПОСЛЕ pointerup: удалять по pointerup рано. Путь события уже посчитан,
+    // так что touchend дойдёт до window, даже если кнопку уберём в его обработчике.
+    for (const ev of ['touchend', 'touchcancel']) this.skipBtn.addEventListener(ev, done, { once: true });
+    // Мышь (touchend не будет) — убрать чуть позже отпускания.
+    for (const ev of ['pointerup', 'pointercancel']) this.skipBtn.addEventListener(ev, () => window.setTimeout(done, 500), { once: true });
   }
 }
 
