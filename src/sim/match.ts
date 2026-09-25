@@ -661,10 +661,13 @@ export class Match {
       r.flame += this.flameIncomeOf(r) * dt;
       const d = r.door;
       d.repairCd = Math.max(0, d.repairCd - dt);
-      if (this.phase === 'night' && !d.broken && r.items.some((i) => i.kind === 'toolbox')) {
+      // Обучение ждёт нажатия на ключ: сама дверь не лечится, иначе становится целой, ключ отвечает
+      // «Дверь целая», и шаг «Чини дверь!» не кончается никогда.
+      const heals = this.phase === 'night' && !d.broken && !this.script?.ghostHitHold;
+      if (heals && r.items.some((i) => i.kind === 'toolbox')) {
         d.hp = Math.min(d.maxHp, d.hp + d.maxHp * B.items.toolbox * dt);
       }
-      if (this.phase === 'night' && !d.broken) this.stepWorkbench(r, dt);
+      if (heals) this.stepWorkbench(r, dt);
     }
   }
 

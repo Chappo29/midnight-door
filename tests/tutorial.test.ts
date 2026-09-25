@@ -127,6 +127,36 @@ describe('обучение («Ночь 0»)', () => {
     expect(sec).toBeLessThan(5);
   });
 
+  it('test_tutorial_repair_step_survives_child_waiting_long', () => {
+    // Arrange: послушный ребёнок доходит до «Чини дверь!».
+    const m = new Match({ seed: SEED, difficulty: 'easy', flameUnlocked: false, tutorial: true });
+    const d = new TutorialDirector(m);
+    d.allowTap(0, 0);
+    for (let i = 0; i < 20 * 300 && d.view()?.step.id !== 'repair'; i++) {
+      tick(m, d);
+      if (m.player.task || i % 20) continue;
+      const v = d.view()!;
+      const at = v.target.kind === 'cell' ? v.target.at : null;
+      if (v.step.id === 'pick') m.command(0, { type: 'pickRoom', roomId: m.rooms.indexOf(m.rooms.find((r) => d.allowTap(r.door.x, r.door.y))!) });
+      if (v.step.id === 'sofa') m.command(0, { type: 'upgradeSofa' });
+      if (v.step.id === 'cannon' && at) m.command(0, { type: 'build', kind: 'cannon', x: at.x, y: at.y });
+      if (v.step.id === 'door') m.command(0, { type: 'upgradeDoor' });
+    }
+    expect(d.view()?.step.id).toBe('repair');
+
+    // Act: полторы минуты ребёнок не жмёт ключ (ящик с инструментами в комнате сам лечит дверь),
+    // потом жмёт. Раньше дверь успевала стать целой, ключ отвечал «Дверь целая» — шаг навсегда.
+    for (let i = 0; i < 20 * 90; i++) tick(m, d);
+    const door = m.playerRoom!.door;
+    const err = m.command(0, { type: 'repair' });
+    for (let i = 0; i < 20 * 10 && d.view()?.step.id === 'repair'; i++) tick(m, d);
+
+    // Assert
+    expect(door.hp).toBeLessThan(door.maxHp);
+    expect(err).toBeNull();
+    expect(d.view()?.step.id).toBe('upcannon');
+  });
+
   it('test_tutorial_hides_finger_while_player_builds', () => {
     const m = new Match({ seed: SEED, difficulty: 'easy', flameUnlocked: false, tutorial: true });
     const d = new TutorialDirector(m);
