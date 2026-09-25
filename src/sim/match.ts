@@ -51,6 +51,14 @@ export interface MatchOptions {
 export const HERO_NAMES = ['Сёма', 'Мия', 'Тимоха', 'Зоя', 'Лёва', 'Бублик'];
 export const CHAR_COLORS = [0x4aa3ff, 0xff7a7a, 0x7ad97a, 0xffc94a, 0xc58aff, 0x5ee0d0];
 
+/** Та же команда: тот же тип и та же клетка (и то же, что строить). */
+function sameCmd(a: Cmd, b: Cmd): boolean {
+  if (a.type !== b.type) return false;
+  if ('x' in a && 'x' in b && (a.x !== b.x || a.y !== b.y)) return false;
+  if (a.type === 'build' && b.type === 'build') return a.kind === b.kind;
+  return true;
+}
+
 /**
  * Весь матч: карта, персонажи, экономика, призрак. Без Phaser — то же самое
  * позже заработает на сервере для мультиплеера. Шаг фиксированный (TICK).
@@ -370,6 +378,9 @@ export class Match {
       }
     }
 
+    // Та же команда уже выполняется (ребёнок жмёт ключ снова и снова) — не начинать её заново:
+    // перезапуск отменял работу, и частые нажатия чинили дольше редких.
+    if (c.task && sameCmd(c.task.cmd, cmd)) return null;
     if (!stands.length) return 'Не подойти';
     const path = bfs(cur, stands, (x, y) => walkable(room, x, y));
     if (!path) return 'Не подойти';

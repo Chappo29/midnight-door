@@ -57,7 +57,7 @@ describe('обучение («Ночь 0»)', () => {
         }
       }
     }
-    expect(steps).toEqual(['intro', 'pick', 'walk', 'sofa', 'candy', 'cannon', 'door', 'midnight', 'repair', 'upcannon', 'finale']);
+    expect(steps).toEqual(['intro', 'pick', 'walk', 'sofa', 'candy', 'cannon', 'door', 'midnight', 'knock', 'repair', 'upcannon', 'finale']);
     expect(d.done).toBe(true);
     expect(m.result).toBe('win');
     expect(m.player.caught).toBe(false);
@@ -155,6 +155,28 @@ describe('обучение («Ночь 0»)', () => {
     expect(door.hp).toBeLessThan(door.maxHp);
     expect(err).toBeNull();
     expect(d.view()?.step.id).toBe('upcannon');
+  });
+
+  it('test_tutorial_repair_step_starts_with_damaged_door', () => {
+    // Шаг «Чини дверь!» не должен начинаться с целой двери: правильное нажатие отвечало «Дверь целая».
+    const m = new Match({ seed: SEED, difficulty: 'easy', flameUnlocked: false, tutorial: true });
+    const d = new TutorialDirector(m);
+    d.allowTap(0, 0);
+    let hpAtRepairStart = -1;
+    for (let i = 0; i < 20 * 300 && hpAtRepairStart < 0; i++) {
+      tick(m, d);
+      if (d.view()?.step.id === 'repair') hpAtRepairStart = m.playerRoom!.door.hp / m.playerRoom!.door.maxHp;
+      if (m.player.task || i % 20) continue;
+      const v = d.view()!;
+      const at = v.target.kind === 'cell' ? v.target.at : null;
+      if (v.step.id === 'pick') m.command(0, { type: 'pickRoom', roomId: m.rooms.indexOf(m.rooms.find((r) => d.allowTap(r.door.x, r.door.y))!) });
+      if (v.step.id === 'sofa') m.command(0, { type: 'upgradeSofa' });
+      if (v.step.id === 'cannon' && at) m.command(0, { type: 'build', kind: 'cannon', x: at.x, y: at.y });
+      if (v.step.id === 'door') m.command(0, { type: 'upgradeDoor' });
+    }
+    expect(hpAtRepairStart).toBeGreaterThan(0);
+    expect(hpAtRepairStart).toBeLessThan(0.6 + 1e-6);
+    expect(m.command(0, { type: 'repair' })).toBeNull();
   });
 
   it('test_tutorial_hides_finger_while_player_builds', () => {

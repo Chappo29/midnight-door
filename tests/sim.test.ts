@@ -54,6 +54,32 @@ describe('map', () => {
 });
 
 describe('match', () => {
+
+  it('test_match_repeated_repair_taps_do_not_restart_repair', () => {
+    // Arrange: две одинаковые ночи, дверь побита, ключ готов.
+    const run = (spam: boolean) => {
+      const m = inRoomMatch();
+      nightNow(m);
+      const d = m.playerRoom!.door;
+      d.hp = d.maxHp * 0.3;
+      d.repairCd = 0;
+      m.ghost.state = 'hidden';
+      m.ghost.x = m.ghost.y = -50;
+      // Act: «спокойный» нажал раз; «нетерпеливый» жмёт каждые 0,2 с, пока не починилось.
+      expect(m.command(0, { type: 'repair' })).toBeNull();
+      let t = 0;
+      for (; t < 20 * 15 && d.repairCd <= 0; t++) {
+        m.step();
+        if (spam && t % 4 === 0 && d.repairCd <= 0) m.command(0, { type: 'repair' });
+      }
+      return t * TICK;
+    };
+    // Assert: частые нажатия не перезапускают ремонт — готово за то же время.
+    const calm = run(false);
+    const impatient = run(true);
+    expect(calm).toBeLessThan(10);
+    expect(Math.abs(impatient - calm)).toBeLessThan(0.2);
+  });
   it('игрок выбирает комнату, строит пушку и улучшает дверь', () => {
     const m = new Match({ seed: 7, difficulty: 'easy', flameUnlocked: true });
     expect(m.command(0, { type: 'pickRoom', roomId: 2 })).toBeNull();

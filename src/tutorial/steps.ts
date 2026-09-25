@@ -38,6 +38,8 @@ export interface Step {
 }
 
 const room = (m: Match) => m.playerRoom!;
+/** Ниже этой доли HP двери обучение переходит к ключу. */
+const REPAIR_AT = 0.6;
 const has = (events: readonly SimEvent[], type: SimEvent['type']) => events.some((e) => e.type === type);
 const cellAt = (v: Vec): Target => ({ kind: 'cell', at: v });
 const same = (a: Vec, x: number, y: number) => a.x === x && a.y === y;
@@ -142,6 +144,18 @@ export const STEPS: Step[] = [
     done: (m) => m.ghost.state === 'attacking' && m.ghost.targetRoom === m.player.roomId,
   },
   {
+    // Сначала пусть побьёт: пока дверь цела, чинить нечего — ключ ответил бы «Дверь целая».
+    id: 'knock',
+    text: '👻 Призрак стучит в дверь!',
+    pose: 'oh',
+    target: () => ({ kind: 'ghost' }),
+    allowCell: () => false,
+    done: (m) => {
+      const d = room(m).door;
+      return d.hp < d.maxHp * REPAIR_AT;
+    },
+  },
+  {
     id: 'repair',
     text: '🔧 Чини дверь!',
     pose: 'point',
@@ -152,11 +166,10 @@ export const STEPS: Step[] = [
     menuOpt: 'repair',
     enter: (m) => {
       room(m).door.repairCd = 0;
+      // Дверь уже просела (шаг «knock»): призрак ждёт у двери, пока не нажмут ключ.
+      m.script!.ghostHitHold = true;
     },
     done: (m, _c, ev) => {
-      const d = room(m).door;
-      // Пусть сначала побьёт: показываем ключ, когда дверь просела; дальше ждём нажатия.
-      if (d.hp < d.maxHp * 0.6) m.script!.ghostHitHold = true;
       if (has(ev, 'repaired')) {
         m.script!.ghostHitHold = false;
         return true;
