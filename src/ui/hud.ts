@@ -744,7 +744,7 @@ export class Hud {
         <p>Теперь ты умеешь защищаться. Вперёд!</p>
         ${gift > 0 ? `
           <div class="tut-gift-pill">Подарок: +${gift}<span class="tut-gift-ico">${ICON.coin}</span></div>
-          <p class="tut-gift-hint">Загляни в магазин!</p>` : ''}
+` : ''}
         <button class="btn-big mint wide" id="play" type="button">${ICON.play}Играть</button>
       </div>`);
     this.el.screen.querySelector('#play')!.addEventListener('click', onPlay);

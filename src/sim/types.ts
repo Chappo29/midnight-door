@@ -241,4 +241,6 @@ export type SimEvent =
   | { type: 'spark'; roomId: number; x: number; y: number }
   /** Игрок вернулся в свою комнату (реклама за награду). */
   | { type: 'revived'; charId: number; roomId: number }
-  | { type: 'fail'; charId: number; msg: string };
+  | { type: 'fail'; charId: number; msg: string }
+  /** Начатое дело бросили ради другого (новый тап): что это было и сколько вернулось. */
+  | { type: 'taskCancelled'; charId: number; cmd: Cmd; refund: number };

@@ -511,11 +511,15 @@ export class Match {
    */
   cancelTask(c: Character): void {
     const t = c.task;
+    let refund = 0;
     if (t?.stage === 'work' && t.paid && c.roomId !== null) {
       const r = this.rooms[c.roomId];
       r.candy += t.paid.candy;
       r.flame += t.paid.flame;
+      refund = t.paid.candy;
     }
+    // Сцена покажет «✕» на месте брошенного дела: раньше стройка пропадала молча (CHILD_UX, проверка C1/C2/C4).
+    if (t && t.cmd.type !== 'move') this.events.push({ type: 'taskCancelled', charId: c.id, cmd: t.cmd, refund });
     c.task = null;
   }
 

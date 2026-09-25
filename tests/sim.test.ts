@@ -55,6 +55,25 @@ describe('map', () => {
 
 describe('match', () => {
 
+  it('test_match_abandoned_build_reports_cancel_with_refund', () => {
+    // Arrange: игрок уже строит пушку (оплачено, идёт работа).
+    const m = inRoomMatch();
+    const r = m.playerRoom!;
+    r.candy = 500;
+    const cell = m.placeableCells(r, 'cannon').find((c) => !(c.x === r.door.inside.x && c.y === r.door.inside.y))!;
+    expect(m.command(0, { type: 'build', kind: 'cannon', x: cell.x, y: cell.y })).toBeNull();
+    runUntil(m, (mm) => mm.player.task?.stage === 'work', 10);
+    const paid = m.player.task!.paid!.candy;
+    // Act: ребёнок ткнул в другое место.
+    const other = m.placeableCells(r, 'cannon').find((c) => c.x !== cell.x || c.y !== cell.y)!;
+    expect(m.command(0, { type: 'move', x: other.x, y: other.y })).toBeNull();
+    m.step();
+    // Assert: сцена узнаёт об отмене и о возврате — стройка не пропадает молча.
+    const e = m.events.find((q) => q.type === 'taskCancelled');
+    expect(e && e.type === 'taskCancelled' && e.refund).toBe(paid);
+    expect(e && e.type === 'taskCancelled' && e.cmd.type).toBe('build');
+  });
+
   it('test_match_repeated_repair_taps_do_not_restart_repair', () => {
     // Arrange: две одинаковые ночи, дверь побита, ключ готов.
     const run = (spam: boolean) => {

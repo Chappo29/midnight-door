@@ -415,6 +415,8 @@ export class GameScene extends Phaser.Scene {
       this.tutIndex = v.index;
     }
     this.tutCamera(v.target.kind === 'ghost');
+    // ⏭ стоит у правого края и перекрывала цену в открытом меню постройки — прячем, пока меню открыто.
+    ov.setSkipHidden(this.hud.menuOpen);
     ov.show(v.step.text, v.step.pose, this.targetRect(v.target, v.step.menuOpt), v.nudge, v.target.kind !== 'ghost');
   }
 
@@ -951,9 +953,11 @@ export class GameScene extends Phaser.Scene {
     const m = this.m;
     const g = m.ghost;
     const r = m.playerRoom;
-    const coming =
-      !!r && !this.tut && !m.player.caught && m.phase === 'night' && !m.result && g.targetRoom === r.id && (g.state === 'moving' || g.state === 'attacking' || g.state === 'entering');
-    if (!coming) return this.hud.setGhostArrow(null);
+    const night = m.phase === 'night' && !m.result && !this.tut;
+    const coming = !!r && !m.player.caught && g.targetRoom === r.id && (g.state === 'moving' || g.state === 'attacking' || g.state === 'entering');
+    // Духу стрелка нужна всегда: его дело — долететь до призрака, а тот уходит за экран.
+    const hunting = m.player.spirit && g.state !== 'hidden' && g.state !== 'dead';
+    if (!night || !(coming || hunting)) return this.hud.setGhostArrow(null);
     const cam = this.cameras.main;
     const sx = (this.ghostView.x - cam.worldView.x) * cam.zoom;
     const sy = (this.ghostView.y - TS * 0.6 - cam.worldView.y) * cam.zoom;
@@ -1574,6 +1578,16 @@ export class GameScene extends Phaser.Scene {
             this.floatText((d.x + 0.5) * TS, (d.y + (m.rooms[e.roomId].top ? 1.2 : -0.2)) * TS, `+${e.amount}`, '#7dff7a');
           }
           break;
+        case 'taskCancelled': {
+          // Своё начатое дело бросили новым тапом: «✕» на месте и вернувшиеся конфеты — иначе стройка пропадала молча.
+          if (e.charId !== m.playerId || !m.playerRoom) break;
+          const r = m.playerRoom;
+          const c = e.cmd;
+          const at = 'x' in c && c.x !== undefined ? { x: c.x, y: c.y! } : c.type === 'upgradeSofa' ? r.sofa : r.door;
+          this.floatText((at.x + 0.5) * TS, at.y * TS, '✕', '#c9c2dc');
+          if (e.refund > 0) this.floatText((at.x + 0.5) * TS, (at.y - 0.5) * TS, `+${Math.round(e.refund)}🍬`, '#ffe066');
+          break;
+        }
         case 'ghostTarget':
           // «Призрак идёт к тебе!» — один раз на выбор двери; в обучении говорит кот.
           if (e.roomId === mineId && !m.player.caught && m.phase === 'night' && !this.tut) {

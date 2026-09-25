@@ -3009,9 +3009,10 @@ img.ico-img,
   white-space: nowrap;
   z-index: 2;
 }
-/* Далеко: своя краска остаётся (кнопка «живая»), но прозрачнее и в пунктирном круге — «подлети ближе». */
+/* Далеко: своя краска, но блёклая, и пунктирный круг — «подлети ближе». Не прозрачная: сквозь неё
+   просвечивали предметы карты, и их цифры принимали за перезарядку (проверка C5). */
 .spirit-btn.off:not(.cd) {
-  opacity: 0.55;
+  filter: saturate(0.4) brightness(1.08);
   outline: 3px dashed #fff;
   outline-offset: 6px;
 }
@@ -3037,4 +3038,45 @@ img.ico-img,
   .spirit-btn.fired {
     animation: none;
   }
+}
+
+.tut-skip.off {
+  visibility: hidden;
+}
+
+/* Карточка поимки: главное — «Играть духом» (крупно, сверху), выход — второстепенный и тише. */
+.caught-card .diffs {
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.caught-card #spirit {
+  min-width: min(300px, 100%);
+}
+.caught-card #tomenu {
+  min-height: 46px;
+  font-size: 15px;
+  box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--cream-dark);
+}
+.caught-card #tomenu .exit-coins {
+  background: var(--cream-dark);
+}
+
+/* Кот с облачком не закрывает цель пальца: справа (кот справа, хвостик вправо) или сверху под счётчиками. */
+.tut-guide.at-right {
+  left: auto;
+  right: 12px;
+  flex-direction: row-reverse;
+}
+.tut-guide.at-right .tut-bubble::after {
+  left: auto;
+  right: -10px;
+  transform: rotate(-135deg);
+}
+.tut-guide.at-right .tut-cat {
+  transform: scaleX(-1);
+}
+.tut-guide.at-top {
+  bottom: auto;
+  top: min(150px, 30vh);
 }

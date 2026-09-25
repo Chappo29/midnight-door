@@ -23,6 +23,9 @@ export class TutorialOverlay {
   private skipTimer = 0;
   private lastText = '';
   private lastPose: Pose | '' = '';
+  /** Размер кота с облачком (меряем при смене текста, а не каждый кадр) и где он сейчас стоит. */
+  private guideSize = { w: 0, h: 0 };
+  private guidePos = '';
 
   /**
    * light — режим подсказок во время обычной игры: без затемнения, звёздочек и «пропустить».
@@ -77,6 +80,7 @@ export class TutorialOverlay {
       this.guide.classList.remove('pop');
       void this.guide.offsetWidth;
       this.guide.classList.add('pop');
+      this.guideSize = { w: this.guide.offsetWidth, h: this.guide.offsetHeight };
     }
     if (pose !== this.lastPose && this.cat instanceof HTMLImageElement) {
       this.cat.src = SPRITES[`mascot_${pose}`] ?? SPRITES.mascot_wave;
@@ -88,11 +92,44 @@ export class TutorialOverlay {
       this.spot.classList.add('off');
       this.hand.classList.add('off');
       this.shade(null);
+      this.placeGuide(null);
       return;
     }
+    this.placeGuide(rect);
     this.pointAt(rect, nudge);
     // Когда надо просто смотреть (призрак), пальцем не тыкаем — нажимать нечего.
     if (!hand) this.hand.classList.add('off');
+  }
+
+  /**
+   * Кот с облачком — туда, где он не закрывает цель: снизу слева (обычно), снизу справа или сверху
+   * под счётчиками. На телефоне облачко накрывало клетку под пушку и свою дверь (проверка C1/C3/C5/C6).
+   */
+  private placeGuide(target: DOMRect | null): void {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const { w, h } = this.guideSize;
+    const bottom = H - 110 - h;
+    const top = Math.min(150, H * 0.3);
+    const spots: [string, number, number][] = [
+      ['', 12, bottom],
+      ['right', W - 12 - w, bottom],
+      ['top', 12, top],
+    ];
+    const cover = (x: number, y: number) => {
+      if (!target) return 0;
+      const pad = 10;
+      const ox = Math.max(0, Math.min(x + w, target.right + pad) - Math.max(x, target.left - pad));
+      const oy = Math.max(0, Math.min(y + h, target.bottom + pad) - Math.max(y, target.top - pad));
+      return ox * oy;
+    };
+    let best = spots[0];
+    for (const s of spots) if (cover(s[1], s[2]) < cover(best[1], best[2])) best = s;
+    if (cover(best[1], best[2]) === cover(spots[0][1], spots[0][2])) best = spots[0];
+    if (best[0] === this.guidePos) return;
+    this.guidePos = best[0];
+    this.guide.classList.toggle('at-right', best[0] === 'right');
+    this.guide.classList.toggle('at-top', best[0] === 'top');
   }
 
   /** Прожектор и палец на цель; цель за краем экрана — стрелка у края в её сторону. */
@@ -140,6 +177,12 @@ export class TutorialOverlay {
       const [x, y, w, h] = boxes[i];
       p.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
     });
+  }
+
+  /** Спрятать «пропустить» (например, пока открыто меню постройки — кнопка перекрывала цену). */
+  setSkipHidden(hidden: boolean): void {
+    if (this.skipBtn.classList.contains('holding')) return;
+    this.skipBtn.classList.toggle('off', hidden);
   }
 
   /** Спрятать (подсказка кончилась). */

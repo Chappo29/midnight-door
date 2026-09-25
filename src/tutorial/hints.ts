@@ -36,6 +36,8 @@ interface Rule {
   firstMatchesOnly?: boolean;
   /** Для духа (игрока поймали): остальные правила пойманному не показываем. */
   spirit?: boolean;
+  /** Держать на экране, пока повод не пропал (ребёнок сделал, что просили), но не дольше sticky секунд. */
+  sticky?: number;
   /** Подходит ли момент (события этого кадра уже учтены в state). */
   when: (m: Match, s: HintState) => Target | null;
 }
@@ -85,12 +87,22 @@ const lateBuild = (kind: 'trap' | 'workbench' | 'fridge') => (m: Match, s: HintS
  */
 const RULES: Rule[] = [
   {
-    // После первой поимки — одно объяснение, что делает дух (кнопка «Бу!»).
+    // После первой поимки: призрак далеко — сначала «лети к нему» (палец на призрака, у края — стрелка).
     id: 'spirit',
-    text: '👻 Ты дух! Лети к призраку и жми «Бу!»',
+    text: '👻 Ты дух! Лети к призраку',
     pose: 'point',
     spirit: true,
-    when: (m) => (m.player.spirit && m.phase === 'night' && !m.result ? { kind: 'dom', sel: '#boo' } : null),
+    sticky: 10,
+    when: (m) => (m.player.spirit && m.phase === 'night' && !m.result && !m.booInRange(m.player) ? { kind: 'ghost' } : null),
+  },
+  {
+    // Долетел, «Бу!» готово — теперь жать (раньше палец звал жать серую кнопку, которая молчала).
+    id: 'spirit-boo',
+    text: '👻 Жми «Бу!»',
+    pose: 'point',
+    spirit: true,
+    sticky: 8,
+    when: (m) => (m.player.spirit && m.phase === 'night' && !m.result && m.player.booCd <= 0 && m.booInRange(m.player) ? { kind: 'dom', sel: '#boo' } : null),
   },
   {
     id: 'repair',
@@ -107,7 +119,9 @@ const RULES: Rule[] = [
     id: 'basic-cannon',
     text: '💥 Поставь пушку у двери',
     pose: 'point',
-    once: 'match',
+    // Держим, пока пушки нет (не 6 с), и напоминаем снова, если ребёнок так и не поставил.
+    once: 'repeat',
+    sticky: 25,
     firstMatchesOnly: true,
     when: (m, s) => {
       const r = mine(m);
@@ -123,6 +137,7 @@ const RULES: Rule[] = [
     text: '🚪 Сделай дверь крепче',
     pose: 'point',
     once: 'match',
+    sticky: 20,
     firstMatchesOnly: true,
     when: (m, s) => {
       const r = mine(m);
@@ -136,7 +151,8 @@ const RULES: Rule[] = [
     id: 'level',
     text: '👻⬆ Призрак вырос! Укрепи дверь',
     pose: 'oh',
-    when: (m, s) => (s.leveled && mine(m) ? { kind: 'cell', at: mine(m)!.door } : null),
+    // Пока нет ни одной пушки, «укрепи дверь» — не в том порядке: сначала «Поставь пушку».
+    when: (m, s) => (s.leveled && mine(m)?.buildings.some((b) => b.kind === 'cannon') ? { kind: 'cell', at: mine(m)!.door } : null),
   },
   {
     id: 'range',
@@ -215,7 +231,7 @@ const RULES: Rule[] = [
 export class HintDirector {
   private state: HintState;
   private sinceLast = GAP;
-  private current: { hint: Hint; left: number; spirit?: boolean } | null = null;
+  private current: { hint: Hint; left: number; spirit?: boolean; rule?: Rule; sticky?: number } | null = null;
   private nightTime = 0;
   /** Правила проверяем не каждый кадр: «нет места» перебирает клетки комнаты. */
   private checkIn = 0;
@@ -267,7 +283,14 @@ export class HintDirector {
     if (this.current && (m.phase === 'end' || m.player.caught !== !!this.current.spirit)) this.current = null;
     if (this.current) {
       this.current.left -= dt;
-      if (this.current.left <= 0) this.current = null;
+      const c = this.current;
+      if (c.rule?.sticky) {
+        // Держим, пока повод есть (ребёнок ещё не сделал), но не дольше sticky; сделал — сразу убираем.
+        c.sticky = (c.sticky ?? 0) + dt;
+        const still = c.rule.when(m, this.state);
+        if (!still || c.sticky > c.rule.sticky) this.current = null;
+        else if (c.left < 1) c.left = 1;
+      } else if (c.left <= 0) this.current = null;
       this.state.retreated = this.state.leveled = this.state.leftMe = false;
       return this.current?.hint ?? null;
     }
@@ -293,7 +316,7 @@ export class HintDirector {
           this.onSeen(r.id);
         } else this.shownThisMatch.add(r.id);
         this.sinceLast = 0;
-        this.current = { hint: { id: r.id, text: r.text, pose: r.pose, target }, left: HINT_SHOW, spirit: r.spirit };
+        this.current = { hint: { id: r.id, text: r.text, pose: r.pose, target }, left: HINT_SHOW, spirit: r.spirit, rule: r, sticky: 0 };
         break;
       }
     }
