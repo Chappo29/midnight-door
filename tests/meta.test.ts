@@ -11,9 +11,12 @@ import {
   claimDaily,
   dailyAvailable,
   emptyMeta,
+  exitReward,
   matchReward,
   normalizeMeta,
+  planBoosters,
   selectHero,
+  spendBoosters,
   takeBoosters,
 } from '../src/meta/economy';
 
@@ -85,6 +88,32 @@ describe('монеты и магазин', () => {
     expect(b.candy).toBe(100);
     expect(b.doorLevel).toBe(1);
     expect(m.boosters.candy).toBe(BOOSTER_MAX - 1);
+  });
+
+it('test_meta_boosters_planned_without_spending_until_night', () => {
+    // Arrange: по одному каждого усилителя.
+    const m = emptyMeta();
+    m.boosters = { candy: 1, door: 1, wrench: 1 };
+    // Act: матч начался, но ребёнок вышел до ночи — план есть, списания нет (GAME_AUDIT.md, Top-4).
+    const plan = planBoosters(m);
+    // Assert
+    expect(plan).toEqual({ candy: 100, doorLevel: 2, repairMul: 0.5 });
+    expect(m.boosters).toEqual({ candy: 1, door: 1, wrench: 1 });
+    spendBoosters(m, plan);
+    expect(m.boosters).toEqual({ candy: 0, door: 0, wrench: 0 });
+  });
+
+  it('test_meta_exit_after_caught_pays_like_loss', () => {
+    const r = exitReward(true, 'easy', 3 * 60 + 10, 4);
+    expect(r).toEqual(matchReward(false, 'easy', 3 * 60 + 10, 4));
+  });
+
+  it('test_meta_exit_alive_pays_only_survived_minutes', () => {
+    // Живым посреди ночи — только «продержался»: иначе быстрый выход выгоднее честного матча.
+    expect(exitReward(false, 'easy', 40, 5)).toBeNull();
+    const r = exitReward(false, 'easy', 2 * 60 + 5, 5)!;
+    expect(r.coins).toBe(6);
+    expect(r.parts.map((q) => q.label)).toEqual(['продержался']);
   });
 
   it('test_meta_corrupt_save_is_repaired', () => {

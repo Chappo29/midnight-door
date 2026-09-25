@@ -158,6 +158,11 @@ function costPill(c: Cost): string {
   return candy + flame;
 }
 
+/** Монеты, которые ребёнок заберёт, выйдя в меню, — прямо на кнопке: выход ничего не отнимает. */
+function exitCoinsPill(coins: number): string {
+  return coins > 0 ? `<span class="exit-coins">+${coins}${ICON.coin}</span>` : '';
+}
+
 /** Пункт заперт дверью: пилюля с замком, иконкой двери и нужным уровнем — вместо цены. */
 function lockPill(doorLevel: number): string {
   return `<span class="lock-pill">${ICON.lock}${img('door_l1', 'cost-ico')}${doorLevel}</span>`;
@@ -881,7 +886,7 @@ export class Hud {
   }
 
   /** Игрока поймали: игра стоит, пока не выберет — играть духом или выйти в меню (без монет, без рекламы). */
-  showCaught(onSpirit: () => void, onMenu: () => void): void {
+  showCaught(onSpirit: () => void, onMenu: () => void, coins = 0): void {
     this.clearMessages();
     this.showScreen(`
       <div class="card caught-card halftone">
@@ -889,20 +894,20 @@ export class Hud {
         <h1 class="stroke-title small">Тебя поймали!</h1>
         <div class="diffs">
           <button class="btn-big mint" id="spirit" type="button">${ICON.boo}Играть духом</button>
-          <button class="btn-big cream" id="tomenu" type="button">${ICON.menuList}Выйти в меню</button>
+          <button class="btn-big cream" id="tomenu" type="button">${ICON.menuList}Выйти в меню${exitCoinsPill(coins)}</button>
         </div>
       </div>`);
     this.el.screen.querySelector('#spirit')!.addEventListener('click', onSpirit);
     this.el.screen.querySelector('#tomenu')!.addEventListener('click', onMenu);
   }
 
-  showPause(onResume: () => void, onMenu: () => void, onSkipTutorial?: () => void): void {
+  showPause(onResume: () => void, onMenu: () => void, onSkipTutorial?: () => void, coins = 0): void {
     this.showScreen(`
       <div class="card pause-card">
         <h1 class="stroke-title small">Пауза</h1>
         <div class="diffs">
           <button class="btn-big mint" id="resume" type="button">${ICON.play}Играть</button>
-          <button class="btn-big cream" id="tomenu" type="button">${ICON.menuList}Выйти в меню</button>
+          <button class="btn-big cream" id="tomenu" type="button">${ICON.menuList}Выйти в меню${exitCoinsPill(coins)}</button>
         </div>
         ${onSkipTutorial ? `<button class="link-btn" id="skiptut" type="button">${ICON.skip}Пропустить обучение</button>` : ''}
       </div>`);

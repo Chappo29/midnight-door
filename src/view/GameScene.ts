@@ -21,7 +21,12 @@ export interface GameData {
   hud: Hud;
   sfx: Sfx;
   onEnd: () => void;
+  /** Игрок сам вышел в меню (пауза, карточка поимки). Награду за выход решает main.ts. */
   onMenu: () => void;
+  /** Началась ночь — усилители реально пошли в дело, пора их списать. */
+  onNightStart?: () => void;
+  /** Сколько монет даст выход в меню прямо сейчас (подпись на кнопке «В меню»). */
+  exitCoins?: () => number;
   /** Обучение: что делать при пропуске и куда слать шаги воронки. */
   tutorial?: { onSkip: () => void; track?: TutorialTrack };
   /** Подсказки по ходу игры: какие уже показаны и куда отметить новую. */
@@ -318,6 +323,7 @@ export class GameScene extends Phaser.Scene {
         this.hud.banner('Ты дух! Помогай соседям', 3500);
       },
       () => this.gd.onMenu(),
+      this.gd.exitCoins?.() ?? 0,
     );
   }
 
@@ -444,7 +450,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   togglePause(): void {
-    if (this.ended || this.caughtPaused) return;
+    // Исход уже решён (призрак побеждён, до итогов ~1,5 с) — пауза с «Выйти в меню» отняла бы победу.
+    if (this.ended || this.caughtPaused || (this.m.result && !this.userPaused)) return;
     this.userPaused = !this.userPaused;
     if (this.userPaused) {
       const tut = this.tut && !this.tut.done ? this.gd.tutorial : undefined;
@@ -456,6 +463,7 @@ export class GameScene extends Phaser.Scene {
             this.tut?.skip();
             tut.onSkip();
           }),
+        this.tut ? 0 : (this.gd.exitCoins?.() ?? 0),
       );
     } else this.hud.hideScreen();
   }
@@ -1384,6 +1392,7 @@ export class GameScene extends Phaser.Scene {
             if (!this.tut) this.hud.banner('Готовься! Скоро полночь 🕛');
             this.fitCamera();
           } else if (e.phase === 'night') {
+            this.gd.onNightStart?.();
             this.sfx.play('midnight', { pitch: 0 });
             this.hud.banner('Полночь! Призрак вышел! 👻');
             this.cameras.main.shake(400, 0.006);

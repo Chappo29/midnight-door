@@ -160,21 +160,29 @@ export function buyBooster(m: Meta, id: BoosterId): BuyError | null {
   return null;
 }
 
+/** Какие усилители поедут в матч (по одному каждого купленного). Ничего не списывает. */
+export function planBoosters(m: Meta): MatchBoosters {
+  return {
+    candy: m.boosters.candy > 0 ? 100 : 0,
+    doorLevel: m.boosters.door > 0 ? 2 : 1,
+    repairMul: m.boosters.wrench > 0 ? 0.5 : 1,
+  };
+}
+
+/**
+ * Списать усилители, которые реально сработали в матче (plan — из planBoosters).
+ * Зовётся, когда началась ночь: вышел раньше — покупки остаются у ребёнка (GAME_AUDIT.md, Top-4).
+ */
+export function spendBoosters(m: Meta, plan: MatchBoosters): void {
+  if (plan.candy > 0 && m.boosters.candy > 0) m.boosters.candy--;
+  if (plan.doorLevel > 1 && m.boosters.door > 0) m.boosters.door--;
+  if (plan.repairMul < 1 && m.boosters.wrench > 0) m.boosters.wrench--;
+}
+
 /** Забрать по одному каждого купленного усилителя на этот матч. */
 export function takeBoosters(m: Meta): MatchBoosters {
-  const b: MatchBoosters = { candy: 0, doorLevel: 1, repairMul: 1 };
-  if (m.boosters.candy > 0) {
-    m.boosters.candy--;
-    b.candy = 100;
-  }
-  if (m.boosters.door > 0) {
-    m.boosters.door--;
-    b.doorLevel = 2;
-  }
-  if (m.boosters.wrench > 0) {
-    m.boosters.wrench--;
-    b.repairMul = 0.5;
-  }
+  const b = planBoosters(m);
+  spendBoosters(m, b);
   return b;
 }
 
@@ -207,6 +215,18 @@ export function matchReward(win: boolean, difficulty: Difficulty, nightSeconds: 
     if (minutes > 0) parts.push({ label: 'продержался', coins: minutes * 3 });
   }
   return { coins: parts.reduce((s, p) => s + p.coins, 0), parts };
+}
+
+/**
+ * Монеты, если ребёнок сам вышел из матча в меню (null — ничего не положено: ночь ещё не началась).
+ * Поймали — как за поражение: игра не должна «отнимать заработанное».
+ * Вышел живым посреди ночи — только «продержался» (без «за старание»): иначе быстрый выход
+ * выгоднее честного матча.
+ */
+export function exitReward(caught: boolean, difficulty: Difficulty, nightSeconds: number, neighborsAlive: number): Reward | null {
+  if (caught) return matchReward(false, difficulty, nightSeconds, neighborsAlive);
+  const held = matchReward(false, difficulty, nightSeconds, neighborsAlive).parts.filter((p) => p.label === 'продержался');
+  return held.length ? { coins: held.reduce((s, p) => s + p.coins, 0), parts: held } : null;
 }
 
 /** Подарок за пройденное обучение: сразу хватает на первую покупку. */

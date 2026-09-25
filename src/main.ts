@@ -14,7 +14,9 @@ import {
   dayKey,
   matchReward,
   selectHero,
-  takeBoosters,
+  planBoosters,
+  spendBoosters,
+  exitReward,
   type BoosterId,
 } from './meta/economy';
 import { HERO_NAMES } from './sim/match';
@@ -218,9 +220,10 @@ async function start(difficulty: Difficulty): Promise<void> {
   await whenLoaded();
   // Музыка меню — только в меню; с начала матча играет игровой плейлист.
   sfx.playMusic(GAME_MUSIC);
-  // Купленные усилители срабатывают в этом матче (по одному каждого).
-  const boosters = takeBoosters(progress.meta);
-  saveProgress(progress);
+  // Купленные усилители срабатывают в этом матче (по одному каждого), а списываются, когда началась ночь:
+  // вышел раньше — покупки остаются (GAME_AUDIT.md, Top-4).
+  const boosters = planBoosters(progress.meta);
+  let boostersSpent = false;
   const match = new Match({
     seed: Math.floor(Math.random() * 2 ** 31),
     difficulty,
@@ -230,6 +233,8 @@ async function start(difficulty: Difficulty): Promise<void> {
     skin: { ...progress.meta.skin },
     boosters,
   });
+  const exitRewardNow = () =>
+    match.nightTime > 0 ? exitReward(match.player.caught, difficulty, match.nightTime, match.survivors - (match.player.caught ? 0 : 1)) : null;
   if (progress.matches === 0) track('first_match_start', { difficulty, tutorial: progress.tutorial ?? 'none' });
   const data: GameData = {
     match,
@@ -244,6 +249,13 @@ async function start(difficulty: Difficulty): Promise<void> {
         track('hint_shown', { id });
       },
     },
+    onNightStart: () => {
+      if (boostersSpent) return;
+      boostersSpent = true;
+      spendBoosters(progress.meta, boosters);
+      saveProgress(progress);
+    },
+    exitCoins: () => exitRewardNow()?.coins ?? 0,
     onEnd: () => {
       progress.matches++;
       // Командная победа (игрок был духом) — тоже победа: для ребёнка это общий успех.
@@ -257,7 +269,20 @@ async function start(difficulty: Difficulty): Promise<void> {
       sfx.play(match.result === 'win' ? 'win' : 'lose', { pitch: 0 });
       hud.showResult(match, false, () => start(difficulty), showMenu, reward);
     },
-    onMenu: showMenu,
+    onMenu: () => {
+      // Сам вышел в меню: поймали — как за поражение, живым посреди ночи — за продержанные минуты.
+      const reward = exitRewardNow();
+      if (match.player.caught) {
+        progress.matches++;
+        track('match_exit', { difficulty, caught: true, coins: reward?.coins ?? 0, night: Math.round(match.nightTime) });
+      }
+      if (reward) {
+        progress.meta.coins += reward.coins;
+        saveProgress(progress);
+      }
+      showMenu();
+      if (reward) hud.toastScreen(`+${reward.coins} монет за ночь`);
+    },
     onRevive: () => track('spirit_revive', { difficulty, night: Math.round(match.nightTime) }),
   };
   game.scene.stop('game');
