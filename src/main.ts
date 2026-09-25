@@ -242,6 +242,7 @@ async function start(difficulty: Difficulty): Promise<void> {
     sfx,
     hints: {
       seen: new Set(progress.hints),
+      firstMatches: progress.matches < 2,
       onSeen: (id) => {
         // Сохраняем сразу (правило Яндекса 1.9): перезагрузка не покажет подсказку повторно.
         progress.hints.push(id);

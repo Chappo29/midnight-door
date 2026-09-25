@@ -122,10 +122,36 @@ describe('подсказки «на будущее»', () => {
     return m;
   }
 
-  it('test_hints_flame_shows_in_prep_when_pumpkin_affordable', () => {
+  it('test_hints_flame_waits_until_player_lacks_flame', () => {
+    // Пламя объясняем, только когда ребёнок сам упёрся в «не хватает пламени», а не заранее
+    // (раньше тыква была первой подсказкой первого матча — CHILD_UX часть 2).
     const m = prepMatch();
     const h = new HintDirector(m, new Set(), () => {});
-    expect(run(m, h, 5)).toContain('flame');
+    expect(run(m, h, 25)).not.toContain('flame');
+    h.noteFlameShort();
+    expect(run(m, h, 1)).toContain('flame');
+  });
+
+  it('test_hints_flame_stops_after_first_pumpkin', () => {
+    const m = prepMatch();
+    const h = new HintDirector(m, new Set(), () => {});
+    const r = m.playerRoom!;
+    r.buildings.push({ kind: 'pumpkin', x: r.soil[0].x, y: r.soil[0].y, level: 1, cooldown: 0 });
+    h.noteFlameShort();
+    expect(run(m, h, 2)).not.toContain('flame');
+  });
+
+  it('test_hints_first_match_bridge_cannon_before_anything_else', () => {
+    // Первый матч после обучения: нет пушки, конфет хватает — «Поставь пушку у двери» первым делом.
+    const m = prepMatch();
+    m.playerRoom!.candy = 500;
+    const first = new HintDirector(m, new Set(), () => {}, false, true);
+    const shown = run(m, first, 8);
+    expect(shown[0]).toBe('basic-cannon');
+    // Не первые матчи — мостика нет.
+    const m2 = prepMatch();
+    const later = new HintDirector(m2, new Set(), () => {}, false, false);
+    expect(run(m2, later, 8)).not.toContain('basic-cannon');
   });
 
   it('test_hints_trap_shows_only_after_door_unlocks_it', () => {

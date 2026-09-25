@@ -31,7 +31,7 @@ export interface GameData {
   /** Обучение: что делать при пропуске и куда слать шаги воронки. */
   tutorial?: { onSkip: () => void; track?: TutorialTrack };
   /** Подсказки по ходу игры: какие уже показаны и куда отметить новую. */
-  hints?: { seen: Set<string>; onSeen: (id: string) => void };
+  hints?: { seen: Set<string>; onSeen: (id: string) => void; firstMatches?: boolean };
   /** Игрок вернулся в комнату за рекламу (для аналитики). Пока не вызывается: кнопку убрали из UI до Yandex SDK. */
   onRevive?: () => void;
 }
@@ -279,7 +279,7 @@ export class GameScene extends Phaser.Scene {
       this.hud.banner('Выбери комнату! 👆', 3500);
       const h = this.gd.hints;
       const touch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
-      if (h) this.hints = new HintDirector(this.m, h.seen, h.onSeen, touch);
+      if (h) this.hints = new HintDirector(this.m, h.seen, h.onSeen, touch, h.firstMatches);
     }
     this.sfx.play('start', { volume: 0.7, pitch: 0 });
 
@@ -1844,6 +1844,7 @@ export class GameScene extends Phaser.Scene {
 
   private cmd(c: Cmd): void {
     const err = this.m.command(this.m.playerId, c);
+    if (err === 'Не хватает пламени') this.hints?.noteFlameShort();
     if (err) {
       this.hud.toast(err);
       this.sfx.play('deny', { volume: 0.7 });
