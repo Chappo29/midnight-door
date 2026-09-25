@@ -484,6 +484,7 @@ export class GameScene extends Phaser.Scene {
     this.renderChars(a, time);
     this.followPlayerToRoom();
     this.renderGhost(a, time, deltaMs);
+    this.updateGhostArrow();
     this.syncBuildings();
     this.renderDynamic(time);
     this.hud.update(this.m);
@@ -905,6 +906,27 @@ export class GameScene extends Phaser.Scene {
     this.ghostBody = this.add.container(0, 0, [g]);
     this.ghostLabel = this.label(0, -44, 'ур. 1', 15);
     this.ghostView = this.add.container(0, 0, [this.add.ellipse(0, 26, 36, 10, 0x000000, 0.25), this.ghostBody, this.ghostLabel]).setDepth(20).setVisible(false);
+  }
+
+  /** Стрелка у края экрана к призраку, пока он идёт к моей двери или ломает её, а камера смотрит в другое место. */
+  private updateGhostArrow(): void {
+    const m = this.m;
+    const g = m.ghost;
+    const r = m.playerRoom;
+    const coming =
+      !!r && !this.tut && !m.player.caught && m.phase === 'night' && !m.result && g.targetRoom === r.id && (g.state === 'moving' || g.state === 'attacking' || g.state === 'entering');
+    if (!coming) return this.hud.setGhostArrow(null);
+    const cam = this.cameras.main;
+    const sx = (this.ghostView.x - cam.worldView.x) * cam.zoom;
+    const sy = (this.ghostView.y - TS * 0.6 - cam.worldView.y) * cam.zoom;
+    const w = this.scale.width;
+    const h = this.scale.height;
+    if (sx > 0 && sx < w && sy > 0 && sy < h) return this.hud.setGhostArrow(null);
+    // Не под фантиками сверху и не на круглых кнопках снизу.
+    const x = Phaser.Math.Clamp(sx, 40, w - 40);
+    const top = Math.min(110, h / 3);
+    const y = Phaser.Math.Clamp(sy, top, Math.max(top, h - 120));
+    this.hud.setGhostArrow({ x, y, angle: Math.atan2(sy - y, sx - x) });
   }
 
   private renderGhost(a: number, time: number, deltaMs: number): void {
@@ -1512,6 +1534,13 @@ export class GameScene extends Phaser.Scene {
             this.floatText((d.x + 0.5) * TS, (d.y + (m.rooms[e.roomId].top ? 1.2 : -0.2)) * TS, `+${e.amount}`, '#7dff7a');
           }
           break;
+        case 'ghostTarget':
+          // «Призрак идёт к тебе!» — один раз на выбор двери; в обучении говорит кот.
+          if (e.roomId === mineId && !m.player.caught && m.phase === 'night' && !this.tut) {
+            this.hud.banner('Призрак идёт к тебе!', 2600);
+            this.sfx.chime();
+          }
+          break;
         case 'ghostRetreat':
           this.sfx.play('ghost_retreat', { volume: 0.6 });
           this.floatText(this.ghostView.x, this.ghostView.y - 50, 'Убегает лечиться!', '#7dd3ff');
@@ -1778,8 +1807,15 @@ export class GameScene extends Phaser.Scene {
   /** WASD/стрелки — шаг на соседнюю клетку, пока клавиша зажата. */
   /** Ключ: в обучении — только на шаге «Чини дверь». */
   private tutRepair(): void {
-    if (this.m.player.spirit) return;
+    if (this.m.player.spirit || this.userPaused || this.caughtPaused || this.ended) return;
     if (this.tut && !this.tut.allowAction('repair')) return;
+    // Целую дверь чинить не нужно — это не ошибка ребёнка: спокойная плашка, без «deny» и красного.
+    const d = this.m.playerRoom?.door;
+    if (d && !d.broken && d.hp >= d.maxHp) {
+      this.hud.toastInfo('Дверь целая');
+      this.sfx.play('click', { volume: 0.6 });
+      return;
+    }
     this.cmd({ type: 'repair' });
   }
 
@@ -1943,7 +1979,8 @@ export class GameScene extends Phaser.Scene {
           id: 'repair',
           icon: '🔧',
           label: 'Чинить',
-          note: d.repairCd > 0 ? `через ${Math.ceil(d.repairCd)} с` : `+${Math.round(B.repair.amount * 100)}%`,
+          // Целая дверь — пункт просто серый, без красной плашки «+30%» (она читалась как ошибка).
+          note: d.hp >= d.maxHp ? undefined : d.repairCd > 0 ? `через ${Math.ceil(d.repairCd)} с` : `+${Math.round(B.repair.amount * 100)}%`,
           disabled: d.broken || d.hp >= d.maxHp || d.repairCd > 0,
           onPick: () => this.cmd({ type: 'repair' }),
         },

@@ -193,3 +193,35 @@ describe('лечение в гнезде', () => {
     expect(g.nestVisits).toBe(visits);
   });
 });
+
+describe('сигнал «Призрак идёт к тебе»', () => {
+  it('test_ghost_emits_target_event_matching_its_target_room', () => {
+    // Arrange: ночь только началась.
+    const m = inRoomMatch();
+    // Act
+    nightNow(m);
+    const events = stepUntilEvent(m, 'ghostTarget', 30);
+    const e = events.find((q) => q.type === 'ghostTarget');
+    // Assert: событие говорит, к какой двери он пошёл, — ровно та цель, что в симуляции.
+    expect(e && e.type === 'ghostTarget' && e.roomId).toBe(m.ghost.targetRoom);
+  });
+
+  it('test_ghost_target_event_once_per_choice', () => {
+    // Не спамить: одно событие на один выбор двери, а не каждый тик похода.
+    const m = inRoomMatch();
+    nightNow(m);
+    let count = 0;
+    let choices = 0;
+    let last = -2;
+    for (let i = 0; i < 20 * 60; i++) {
+      const before = m.ghost.targetRoom;
+      m.step();
+      count += m.events.filter((q) => q.type === 'ghostTarget').length;
+      if (m.ghost.targetRoom !== before && m.ghost.targetRoom >= 0 && m.ghost.state === 'moving') choices++;
+      last = m.ghost.targetRoom;
+    }
+    expect(last).not.toBe(-2);
+    expect(count).toBeGreaterThan(0);
+    expect(count).toBeLessThanOrEqual(choices + 1);
+  });
+});

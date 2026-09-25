@@ -253,6 +253,7 @@ function chooseTarget(m: Match, exclude = -1): void {
   g.targetRoom = pick.id;
   g.state = 'moving';
   g.waypoints = route(m, pick.door.front);
+  m.events.push({ type: 'ghostTarget', roomId: pick.id });
 }
 
 function hitDoor(m: Match, r: Room): void {

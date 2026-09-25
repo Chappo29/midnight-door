@@ -158,6 +158,10 @@ function costPill(c: Cost): string {
   return candy + flame;
 }
 
+/** Доля HP двери: ниже — «опасно» (красное, ключ мигает); ниже DOOR_HURT — «повреждена». */
+const DOOR_DANGER = 0.4;
+const DOOR_HURT = 0.7;
+
 /** Монеты, которые ребёнок заберёт, выйдя в меню, — прямо на кнопке: выход ничего не отнимает. */
 function exitCoinsPill(coins: number): string {
   return coins > 0 ? `<span class="exit-coins">+${coins}${ICON.coin}</span>` : '';
@@ -237,10 +241,18 @@ export class Hud {
         <span class="spirit-ico">${ICON.spark}</span>
         <span class="spirit-cd-num"></span>
       </button>
+      <div class="door-hud hidden" id="doorHud" aria-hidden="true">
+        <span class="door-hud-ico">${img('door_l1')}</span>
+        <span class="door-hud-bar"><i></i></span>
+      </div>
+      <div class="ghost-arrow hidden" id="ghostArrow" aria-hidden="true">
+        <span class="ghost-arrow-tip"></span>
+        <span class="ghost-arrow-ico">${img('ghost_down_idle')}</span>
+      </div>
       <div id="menu"></div>
       <div id="screen"></div>
       <div id="toastScreen" class="toast-top"></div>`;
-    for (const id of ['candy', 'flame', 'clock', 'pause', 'sound', 'banner', 'toast', 'home', 'repair', 'boo', 'spark', 'menu', 'screen', 'portraits', 'toastScreen']) {
+    for (const id of ['candy', 'flame', 'clock', 'pause', 'sound', 'banner', 'toast', 'home', 'repair', 'boo', 'spark', 'menu', 'screen', 'portraits', 'toastScreen', 'doorHud', 'ghostArrow']) {
       this.el[id] = root.querySelector<HTMLElement>(`#${id}`)!;
     }
     // Первым: пока окно/меню только появились, клик до кнопок не доходит (и не щёлкает звуком).
@@ -395,18 +407,42 @@ export class Hud {
     // На выборе комнаты «домой» = «весь этаж ↔ ко мне».
     this.toggle('home', 'hidden', !room && m.phase !== 'pick');
     const d = room?.door;
-    const danger = !!d && m.phase === 'night' && !d.broken && d.hp / d.maxHp < 0.4;
+    const doorFrac = d ? d.hp / d.maxHp : 1;
+    // Состояния ключа (Child UX): не нужен (дверь целая) → можно → срочно (<40 %) → перезарядка.
+    // «Срочно» остаётся видно и на перезарядке — красное кольцо не гаснет (GAME_AUDIT.md, Top-6).
+    const danger = !!d && m.phase === 'night' && !d.broken && doorFrac < DOOR_DANGER;
+    const busy = m.player.task?.kind === 'repair';
     this.toggle('repair', 'alert', danger);
-    this.toggle('repair', 'busy', m.player.task?.kind === 'repair');
+    this.toggle('repair', 'busy', busy);
+    this.toggle('repair', 'idle', !!d && !busy && doorFrac >= 0.999);
     // Перезарядка ключа: серая кнопка + кольцо, сколько секунд до готовности.
     const cd = d ? Math.ceil(d.repairCd) : 0;
     this.toggle('repair', 'cd', cd > 0);
     this.set('repair', cd > 0 ? String(cd) : '', '.repair-cd-num');
-    const frac = d && d.repairCd > 0 ? Math.min(1, d.repairCd / B.repair.cooldown) : 0;
+    // С «Быстрым ключом» перезарядка вдвое короче — кольцо считаем от неё, а не от обычной (B13).
+    const cdTotal = B.repair.cooldown * (m.opts.boosters?.repairMul ?? 1);
+    const frac = d && d.repairCd > 0 ? Math.min(1, d.repairCd / cdTotal) : 0;
     const cdKey = frac.toFixed(2);
     if (this.last.get('repair-ring') !== cdKey) {
       this.last.set('repair-ring', cdKey);
       this.el.repair.style.setProperty('--cd', cdKey);
+    }
+
+    // Крупная полоска своей двери у ключа: видна, пока дверь побита или её ломают. Без чисел — цвет и длина.
+    const g = m.ghost;
+    const sieged = !!room && g.targetRoom === room.id && (g.state === 'attacking' || g.state === 'entering');
+    const showDoor = active && m.phase === 'night' && !!d && !d.broken && (sieged || doorFrac < 0.999);
+    this.toggle('doorHud', 'hidden', !showDoor);
+    if (showDoor) {
+      const state = doorFrac < DOOR_DANGER ? 'danger' : doorFrac < DOOR_HURT ? 'hurt' : 'ok';
+      this.toggle('doorHud', 'hurt', state === 'hurt');
+      this.toggle('doorHud', 'danger', state === 'danger');
+      this.toggle('doorHud', 'sieged', sieged);
+      const w = `${Math.max(4, Math.round(doorFrac * 100))}%`;
+      if (this.last.get('door-w') !== w) {
+        this.last.set('door-w', w);
+        this.el.doorHud.style.setProperty('--hp', w);
+      }
     }
 
     // Дух: две кнопки умений вместо ключа — откат цифрой и кольцом, как у ключа.
@@ -446,9 +482,29 @@ export class Hud {
   toast(text: string): void {
     const t = this.el.toast;
     t.textContent = stripEmoji(text);
+    t.classList.remove('info');
     t.classList.add('show');
     window.clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => t.classList.remove('show'), 1600);
+  }
+
+  /** Спокойное сообщение (не ошибка): кремовое, без красного — например, «Дверь целая» на ключе. */
+  toastInfo(text: string): void {
+    this.toast(text);
+    this.el.toast.classList.add('info');
+    window.setTimeout(() => this.el.toast.classList.remove('info'), 1700);
+  }
+
+  /**
+   * Стрелка к призраку у края экрана, пока он идёт к моей двери за кадром.
+   * pos — точка у края (экранные px) и угол на призрака; null — спрятать.
+   */
+  setGhostArrow(pos: { x: number; y: number; angle: number } | null): void {
+    const el = this.el.ghostArrow;
+    this.toggle('ghostArrow', 'hidden', !pos);
+    if (!pos) return;
+    el.style.transform = `translate(${Math.round(pos.x)}px, ${Math.round(pos.y)}px)`;
+    el.style.setProperty('--ang', `${pos.angle.toFixed(2)}rad`);
   }
 
   /** То же самое, но живёт вне .hud-top — видно поверх магазина/подарка, где матча ещё/уже нет. */

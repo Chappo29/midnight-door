@@ -95,7 +95,9 @@ body {
 #ui:not(.in-game) #repair,
 #ui:not(.in-game) .spirit-btn,
 #ui:not(.in-game) #home,
-#ui:not(.in-game) .hud-side {
+#ui:not(.in-game) .hud-side,
+#ui:not(.in-game) .door-hud,
+#ui:not(.in-game) .ghost-arrow {
   display: none;
 }
 
@@ -104,7 +106,9 @@ body {
 #ui.screen-open #repair,
 #ui.screen-open .spirit-btn,
 #ui.screen-open #home,
-#ui.screen-open #banner {
+#ui.screen-open #banner,
+#ui.screen-open .door-hud,
+#ui.screen-open .ghost-arrow {
   visibility: hidden;
 }
 
@@ -2684,4 +2688,137 @@ img.ico-img,
 .exit-coins svg {
   width: 18px;
   height: 18px;
+}
+
+/* ---------------------------------------------------------
+   Опасность своей двери (Child UX): полоска у ключа, стрелка к призраку, состояния ключа
+   --------------------------------------------------------- */
+
+/* Крупная полоска своей двери внизу по центру (между «домой» и ключом): цвет и длина, без чисел. */
+.door-hud {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: fit-content;
+  bottom: calc(22px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 16px;
+  background: var(--cream);
+  box-shadow: 0 0 0 3px var(--ink), 0 4px 0 var(--ink);
+  z-index: 4;
+  pointer-events: none;
+  --bar: #3ecf8e;
+}
+.door-hud-ico img {
+  width: 26px;
+  height: 34px;
+  object-fit: contain;
+  display: block;
+}
+.door-hud-bar {
+  width: clamp(84px, 14vw, 128px);
+  height: 16px;
+  border-radius: 999px;
+  background: #3a3150;
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+.door-hud-bar i {
+  display: block;
+  height: 100%;
+  width: var(--hp, 100%);
+  border-radius: 999px;
+  background: var(--bar);
+  transition: width 0.2s, background-color 0.2s;
+}
+.door-hud.hurt {
+  --bar: #ffb13b;
+}
+.door-hud.danger {
+  --bar: #ff4d5e;
+  animation: door-hud-shake 0.45s infinite;
+}
+@keyframes door-hud-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px) rotate(-1deg); }
+  75% { transform: translateX(2px) rotate(1deg); }
+}
+
+/* Стрелка к призраку у края экрана, пока он идёт к моей двери за кадром. */
+.ghost-arrow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+.ghost-arrow-ico {
+  position: absolute;
+  left: -22px;
+  top: -22px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--cream);
+  box-shadow: 0 0 0 3px var(--ink), 0 0 0 7px rgba(255, 77, 94, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ghost-arrow-pulse 0.9s infinite alternate;
+}
+.ghost-arrow-ico img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+.ghost-arrow-tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-left: 14px solid #ff4d5e;
+  border-top: 10px solid transparent;
+  border-bottom: 10px solid transparent;
+  transform: rotate(var(--ang, 0rad)) translate(26px, -10px);
+  transform-origin: 0 0;
+}
+@keyframes ghost-arrow-pulse {
+  to { transform: scale(1.12); }
+}
+
+/* Ключ: «не нужен» — приглушён и не зовёт нажать (нажатие не ругает — см. toastInfo). */
+#repair.idle:not(.cd):not(.busy) {
+  filter: saturate(0.35) brightness(0.95);
+}
+/* «Срочно» — красное кольцо; на перезарядке оно остаётся, чтобы опасность не пропадала. */
+#repair.alert {
+  box-shadow: 0 0 0 4px #fff, 0 0 0 8px #ff4d5e, 0 6px 0 var(--ink), 0 0 22px 6px rgba(255, 77, 94, 0.55);
+}
+#repair.cd.alert {
+  animation: repair-alert-cd 0.9s infinite alternate;
+}
+@keyframes repair-alert-cd {
+  from { box-shadow: 0 0 0 4px #fff, 0 0 0 8px #ff4d5e, 0 6px 0 var(--ink); }
+  to { box-shadow: 0 0 0 4px #fff, 0 0 0 8px #ff4d5e, 0 6px 0 var(--ink), 0 0 24px 8px rgba(255, 77, 94, 0.6); }
+}
+
+/* Спокойное сообщение (не ошибка). */
+#toast.info {
+  background: var(--cream);
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .door-hud.danger,
+  .ghost-arrow-ico,
+  #repair.cd.alert {
+    animation: none;
+  }
 }

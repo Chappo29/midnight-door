@@ -226,6 +226,8 @@ export type SimEvent =
   | { type: 'ghostRetreat' }
   /** Призрак бросил эту дверь и пошёл к другой. */
   | { type: 'ghostLeft'; roomId: number }
+  /** Призрак выбрал дверь и пошёл к ней (для сигнала «Призрак идёт к тебе!»). */
+  | { type: 'ghostTarget'; roomId: number }
   | { type: 'ghostDead' }
   /** Капкан в клетке x,y схватил призрака. */
   | { type: 'trapped'; roomId: number; x: number; y: number }

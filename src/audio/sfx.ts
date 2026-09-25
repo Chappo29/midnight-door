@@ -154,6 +154,32 @@ export class Sfx {
     this.fades.set(sound, timer);
   }
 
+  /**
+   * «Динь-дон» — мягкий сигнал «призрак идёт к тебе». Синтез на лету, без файла: отдельный,
+   * не страшный и не похожий на стук в дверь. Громкость и выключение — как у остальных звуков.
+   */
+  chime(volume = 0.35): void {
+    if (this._muted || this.game.sound.locked) return;
+    const mgr = this.game.sound as Phaser.Sound.WebAudioSoundManager;
+    const ctx = mgr.context;
+    const out = mgr.destination as AudioNode | undefined;
+    if (!ctx || !out) return;
+    const t0 = ctx.currentTime + 0.01;
+    for (const [i, freq] of [880, 660].entries()) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const at = t0 + i * 0.16;
+      gain.gain.setValueAtTime(0, at);
+      gain.gain.linearRampToValueAtTime(volume, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, at + 0.45);
+      osc.connect(gain).connect(out);
+      osc.start(at);
+      osc.stop(at + 0.5);
+    }
+  }
+
   play(key: string, opts: PlayOpts = {}): void {
     // Пока вариант не выбран (npm run sfx -- pick …), играет первый кандидат.
     const variants = VARIANTS[key] ?? VARIANTS[`${key}_c1`];
