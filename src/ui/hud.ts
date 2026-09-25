@@ -268,10 +268,12 @@ export class Hud {
       <button class="btn-round spirit-btn boo-btn hidden" id="boo" aria-label="Бу! Напугать призрака" type="button">
         <span class="spirit-ico">${ICON.boo}</span>
         <span class="spirit-cd-num"></span>
+        <span class="spirit-lbl">Бу!</span>
       </button>
       <button class="btn-round spirit-btn spark-btn hidden" id="spark" aria-label="Искорка: пушка соседа бьёт сильнее" type="button">
         <span class="spirit-ico">${ICON.spark}</span>
         <span class="spirit-cd-num"></span>
+        <span class="spirit-lbl">Искра</span>
       </button>
       <div class="door-hud hidden" id="doorHud" aria-hidden="true">
         <span class="door-hud-ico">${img('door_l1')}</span>
@@ -423,10 +425,11 @@ export class Hud {
 
     const room = m.playerRoom;
     this.set('candy', String(room ? Math.floor(room.candy) : 0));
-    this.toggle('flame', 'hidden', !m.opts.flameUnlocked);
     this.set('flame', String(room ? Math.floor(room.flame) : 0));
-    // Пламя открывается со 2-го матча — до этого счётчик не показываем (всегда 0, только путает).
-    this.toggle('flame', 'hidden', !m.opts.flameUnlocked);
+    // Дух строить не может — конфеты и пламя ему не нужны, только отвлекают (CHILD_UX, часть 5).
+    const ghostly = m.player.caught;
+    this.toggle('candy', 'hidden', ghostly);
+    this.toggle('flame', 'hidden', !m.opts.flameUnlocked || ghostly);
     // Коротко, чтобы все три чипа были одной ширины: «до полуночи» и так объявляет баннер.
     const left = Math.ceil(Math.max(0, m.phaseLeft));
     if (m.phase === 'pick' && m.player.roomId !== null) this.set('clock', '…');
@@ -489,6 +492,14 @@ export class Hud {
       this.toggle('boo', 'off', !m.booInRange(p));
       this.toggle('spark', 'off', m.sparkCannons(p).length === 0);
     }
+  }
+
+  /** Умение духа сработало: кнопка «выстреливает» — ребёнок видит, что нажатие что-то сделало. */
+  flashAbility(id: 'boo' | 'spark'): void {
+    const el = this.el[id];
+    el.classList.remove('fired');
+    void el.offsetWidth;
+    el.classList.add('fired');
   }
 
   /** Откат умения духа на кнопке: класс cd, число секунд и кольцо --cd. */

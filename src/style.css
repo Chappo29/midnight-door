@@ -2988,3 +2988,53 @@ img.ico-img,
     font-size: 16px;
   }
 }
+
+/* ---------------------------------------------------------
+   Дух (Child UX): подписи, «далеко» ≠ «перезарядка», отклик на нажатие
+   --------------------------------------------------------- */
+
+.spirit-lbl {
+  position: absolute;
+  left: 50%;
+  top: -30px;
+  transform: translateX(-50%);
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink);
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: 14px;
+  white-space: nowrap;
+  z-index: 2;
+}
+/* Далеко: своя краска остаётся (кнопка «живая»), но прозрачнее и в пунктирном круге — «подлети ближе». */
+.spirit-btn.off:not(.cd) {
+  opacity: 0.55;
+  outline: 3px dashed #fff;
+  outline-offset: 6px;
+}
+.boo-btn.off:not(.cd) {
+  background: linear-gradient(180deg, #d9efff 0%, #8fc9f5 55%, #4f8fc2 100%);
+}
+.spark-btn.off:not(.cd) {
+  background: linear-gradient(180deg, var(--amber-light) 0%, var(--amber) 55%, var(--amber-dark) 100%);
+}
+.spirit-btn.off:not(.cd) .spirit-ico {
+  opacity: 1;
+}
+/* Сработало: кнопка подпрыгивает и светится. */
+.spirit-btn.fired {
+  animation: spirit-fired 0.5s ease-out;
+}
+@keyframes spirit-fired {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.25); box-shadow: 0 0 0 4px #fff, 0 0 0 8px var(--ink), 0 0 30px 12px rgba(255, 230, 102, 0.8); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spirit-btn.fired {
+    animation: none;
+  }
+}

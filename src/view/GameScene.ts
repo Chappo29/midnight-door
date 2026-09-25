@@ -1885,6 +1885,7 @@ export class GameScene extends Phaser.Scene {
   private cmd(c: Cmd): void {
     const err = this.m.command(this.m.playerId, c);
     if (err === 'Не хватает пламени') this.hints?.noteFlameShort();
+    if (!err && (c.type === 'boo' || c.type === 'spark')) this.hud.flashAbility(c.type);
     if (err) {
       this.hud.toast(err);
       this.sfx.play('deny', { volume: 0.7 });
