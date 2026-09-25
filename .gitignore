@@ -12,3 +12,6 @@ production/session-state/
 
 # Звуки-кандидаты для выбора (~90 МБ): в игру идут только выбранные из src/assets/audio
 docs/audio/**/*.mp3
+
+# Логи и снимки сессий Playwright-проверок
+.playwright-cli/
