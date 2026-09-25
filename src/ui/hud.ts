@@ -826,6 +826,22 @@ export class Hud {
     if (reward) this.animateCount(this.el.screen.querySelector<HTMLElement>('#rewardNum')!, reward.coins);
   }
 
+  /** Игрока поймали: игра стоит, пока не выберет — играть духом или выйти в меню (без монет, без рекламы). */
+  showCaught(onSpirit: () => void, onMenu: () => void): void {
+    this.clearMessages();
+    this.showScreen(`
+      <div class="card caught-card halftone">
+        ${img('mascot_oh', 'result-mascot')}
+        <h1 class="stroke-title small">Тебя поймали!</h1>
+        <div class="diffs">
+          <button class="btn-big mint" id="spirit" type="button">${ICON.boo}Играть духом</button>
+          <button class="btn-big cream" id="tomenu" type="button">${ICON.menuList}Выйти в меню</button>
+        </div>
+      </div>`);
+    this.el.screen.querySelector('#spirit')!.addEventListener('click', onSpirit);
+    this.el.screen.querySelector('#tomenu')!.addEventListener('click', onMenu);
+  }
+
   showPause(onResume: () => void, onMenu: () => void, onSkipTutorial?: () => void): void {
     this.showScreen(`
       <div class="card pause-card">

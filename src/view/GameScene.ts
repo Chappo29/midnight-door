@@ -142,6 +142,7 @@ export class GameScene extends Phaser.Scene {
   private userPaused = false;
   private hiddenPaused = false;
   /** Игрока поймали: карточка «Играть духом / вернуться» на экране, игра стоит. */
+  private caughtPaused = false;
   private ended = false;
   private low!: Phaser.GameObjects.Graphics;
   private high!: Phaser.GameObjects.Graphics;
@@ -279,16 +280,23 @@ export class GameScene extends Phaser.Scene {
   // ---------------- поймали: дух ----------------
 
   /**
-   * Игрока поймали, соседи ещё держатся: сразу дух, игра не останавливается.
-   * Карточку «дух или реклама» убрали по решению пользователя (2026-09-24) — выбор с рекламой казался жёстким
-   * для детей. Воскрешение в симуляции (Match.canRevive/revive) и заглушка рекламы остаются на будущее.
+   * Игрока поймали, соседи ещё держатся: игра встаёт, карточка «Играть духом / Выйти в меню».
+   * Возрождения нет (решение пользователя 2026-09-25); выход в меню — без монет за матч.
    */
   private onPlayerCaught(): void {
     if (this.m.result || this.ended) return;
     this.selected = null;
     this.hud.hideMenu();
-    this.fitCamera();
-    this.hud.banner('Ты дух! Помогай соседям', 3500);
+    this.caughtPaused = true;
+    this.hud.showCaught(
+      () => {
+        this.caughtPaused = false;
+        this.hud.hideScreen();
+        this.fitCamera();
+        this.hud.banner('Ты дух! Помогай соседям', 3500);
+      },
+      () => this.gd.onMenu(),
+    );
   }
 
   /** Дух: тап по пушке соседа — «Искорка» (если готова и дотягивается), иначе лететь в эту клетку. */
@@ -414,7 +422,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   togglePause(): void {
-    if (this.ended) return;
+    if (this.ended || this.caughtPaused) return;
     this.userPaused = !this.userPaused;
     if (this.userPaused) {
       const tut = this.tut && !this.tut.done ? this.gd.tutorial : undefined;
@@ -431,7 +439,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time: number, deltaMs: number): void {
-    const paused = this.userPaused || this.hiddenPaused;
+    const paused = this.userPaused || this.hiddenPaused || this.caughtPaused;
     if (!paused && !this.ended) {
       this.acc += Math.min(deltaMs / 1000, 0.25);
       while (this.acc >= TICK) {
