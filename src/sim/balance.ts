@@ -132,6 +132,11 @@ export const B = {
     xpGrowth: 0.05,
     /** Новый уровень лечит эту долю макс. HP. */
     levelHeal: 0.1,
+    /**
+     * Настоящая атака (её видно и её считает режиссёр атак): осада, в которой призрак успел ударить дверь
+     * столько раз (~3 с). Заход «дошёл, ударил раз и ушёл» ребёнок как нападение не воспринимает.
+     */
+    meaningfulHits: 3,
   },
   /** Пока пламя не открыто (первый матч), его цена переводится в конфеты. */
   flameToCandy: 10,
@@ -184,6 +189,46 @@ export const DIFF: Record<Difficulty, DiffParams> = {
   easy: { ghostMul: 0.7, ghostHpMul: 1.3, hitsPerLevel: 27, levelFallback: 200, retreatSpeedMul: 1, npcSkill: 0.3 },
   hard: { ghostMul: 1.0, ghostHpMul: 1, hitsPerLevel: 21, levelFallback: 110, retreatSpeedMul: 1.1, npcSkill: 0.6 },
   nightmare: { ghostMul: 1.2, ghostHpMul: 1, hitsPerLevel: 22, levelFallback: 125, retreatSpeedMul: 1.2, npcSkill: 0.9 },
+};
+
+/**
+ * Режиссёр атак (GHOST_ATTACK_DIRECTOR.md): призрак выбирает дверь случайно, но с весами — давно не атакованная
+ * комната вероятнее. Для реального игрока ещё передышка после атаки и защита от долгих затиший.
+ * Времена — секунды ночи; «атака» — настоящая осада (B.ghost.meaningfulHits ударов).
+ */
+export interface AttackDirector {
+  /** false — старый выбор: равновероятно из живых комнат (для замеров «до»). */
+  enabled: boolean;
+  /** Вес комнаты сразу после атаки (анти-повтор) … */
+  minWeight: number;
+  /** … растёт на 1 за growth с без атак … */
+  growth: number;
+  /** … но не выше maxWeight. */
+  maxWeight: number;
+  /** Множитель веса комнаты реального игрока (1 — как у соседей). */
+  playerMul: number;
+  /**
+   * true — вес по времени без атак у всех комнат (атаки размазываются и по соседям); false — соседи между собой
+   * равновероятны с весом neighborWeight, как в старом выборе (игра соседей не меняется), веса по времени — только у игрока.
+   */
+  spreadNeighbors: boolean;
+  /** Вес соседа при spreadNeighbors: false. */
+  neighborWeight: number;
+  /** Передышка игрока после атаки: столько секунд его не выбирают, если есть другие цели. */
+  respite: number;
+  /** Первая атака: игрока ещё не атаковали, а ночи уже столько секунд — следующий выбор цели его. */
+  firstBy: number;
+  /** Затишье: игрока не атаковали столько секунд после прошлой атаки — следующий выбор цели его. */
+  forceAfter: number;
+}
+
+// Кандидат D (scripts/attack-director-sim.ts, 500 сидов × сложность, 2026-09-26; A/B/C/D — GHOST_ATTACK_DIRECTOR.md):
+// числа B, но соседи между собой равновероятны, как раньше. Атак у игрока за 6 мин 3 → 5 / 5 / 6, затишье > 2 мин
+// 83–87% → 0–1% матчей. Победы: лёгкая 100%, сложная 59 → 60%, кошмар 21 → 32% (соседей атакуют реже — см. док).
+export const ATTACK_DIRECTOR: Record<Difficulty, AttackDirector> = {
+  easy: { enabled: true, minWeight: 0.2, growth: 40, maxWeight: 3, playerMul: 1.3, spreadNeighbors: false, neighborWeight: 1, respite: 28, firstBy: 20, forceAfter: 55 },
+  hard: { enabled: true, minWeight: 0.2, growth: 35, maxWeight: 3, playerMul: 1.3, spreadNeighbors: false, neighborWeight: 1, respite: 22, firstBy: 15, forceAfter: 45 },
+  nightmare: { enabled: true, minWeight: 0.2, growth: 30, maxWeight: 3, playerMul: 1.3, spreadNeighbors: false, neighborWeight: 1, respite: 17, firstBy: 10, forceAfter: 35 },
 };
 
 export const sofaIncome = (level: number) => B.sofa.income * B.sofa.incomeMul ** (level - 1);

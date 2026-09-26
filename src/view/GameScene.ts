@@ -1647,6 +1647,14 @@ export class GameScene extends Phaser.Scene {
           if (e.refund > 0) this.floatText((at.x + 0.5) * TS, (at.y - 0.5) * TS, `+${Math.round(e.refund)}🍬`, '#ffe066');
           break;
         }
+        case 'siegeEnd':
+          // Настоящая атака на мою дверь кончилась, призрак ушёл сам или его прогнали — коротко «Отбился!» над дверью.
+          // Без награды и окон (GHOST_ATTACK_DIRECTOR.md, п. 15).
+          if (e.roomId === mineId && e.meaningful && !m.player.caught && !m.result && !this.tut && e.reason !== 'broke' && e.reason !== 'eliminated') {
+            const d = m.rooms[e.roomId].door;
+            this.floatText((d.x + 0.5) * TS, d.y * TS - 6, 'Отбился!', '#7dffb8');
+          }
+          break;
         case 'ghostTarget':
           // «Призрак идёт к тебе!» — один раз на выбор двери; в обучении говорит кот.
           if (e.roomId === mineId && !m.player.caught && m.phase === 'night' && !this.tut) {

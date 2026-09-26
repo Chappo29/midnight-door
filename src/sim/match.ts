@@ -23,7 +23,7 @@ import {
   unlockDoor,
   type DiffParams,
 } from './balance';
-import { createGhost, ghostLeaveRoom, ghostTargetable, spawnGhost, updateGhost } from './ghost';
+import { createGhost, endSiege, ghostLeaveRoom, ghostTargetable, spawnGhost, updateGhost } from './ghost';
 import { Tile, generateMap, type TileT } from './map';
 import { BALANCED, PROFILES, npcThink } from './npc';
 import { bfs } from './path';
@@ -980,6 +980,7 @@ export class Match {
         this.events.push({ type: 'shot', roomId: r.id, fromX: bx, fromY: by, toX: g.x, toY: g.y });
         if (g.hp <= 0) {
           g.hp = 0;
+          endSiege(this, 'dead');
           g.state = 'dead';
           this.events.push({ type: 'ghostDead' });
           this.teamWin = this.player.spirit;

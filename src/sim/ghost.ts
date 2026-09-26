@@ -1,9 +1,9 @@
-import { B, fridgeSlow } from './balance';
+import { ATTACK_DIRECTOR, B, fridgeSlow, type AttackDirector } from './balance';
 import { Tile } from './map';
 import type { Match } from './match';
 import { bfs } from './path';
 import { inRoom } from './roomgrid';
-import type { Ghost, Room, Vec } from './types';
+import type { Ghost, Room, SiegeEndReason, Vec } from './types';
 
 export function createGhost(nest: Vec): Ghost {
   return {
@@ -31,6 +31,12 @@ export function createGhost(nest: Vec): Ghost {
     holdImmune: 0,
     avoidRoom: -1,
     avoidTimer: 0,
+    siegeRoom: -1,
+    siegeStart: 0,
+    siegeHits: 0,
+    siegeDmg: 0,
+    calmSince: [],
+    attacked: [],
   };
 }
 
@@ -75,6 +81,10 @@ export function spawnGhost(m: Match): void {
   g.desperate = false;
   g.held = 0;
   g.holdImmune = 0;
+  g.siegeRoom = -1;
+  // Режиссёр атак: ни одну комнату ещё не атаковали, «спокойно» с начала ночи.
+  g.calmSince = m.rooms.map(() => m.nightTime);
+  g.attacked = m.rooms.map(() => false);
   chooseTarget(m);
 }
 
@@ -120,6 +130,7 @@ export function updateGhost(m: Match, dt: number): void {
 
   const fleeing = g.state === 'moving' || g.state === 'attacking' || g.state === 'entering';
   if (!m.script && !g.desperate && fleeing && g.hp <= g.maxHp * B.ghost.retreatAt) {
+    endSiege(m, 'retreat');
     g.state = 'retreating';
     g.waypoints = route(m, m.nest);
     m.events.push({ type: 'ghostRetreat', left: ghostHealsLeft(g) });
@@ -136,6 +147,10 @@ export function updateGhost(m: Match, dt: number): void {
         if (r.door.broken) startEnter(m, r);
         else {
           g.state = 'attacking';
+          g.siegeRoom = r.id;
+          g.siegeStart = m.nightTime;
+          g.siegeHits = 0;
+          g.siegeDmg = 0;
           g.hitTimer = 0.6;
           // Сколько ломиться в эту дверь, прежде чем передумать, — каждый раз по-разному.
           g.switchTimer = m.rng.range(B.ghost.switchMin, B.ghost.switchMax);
@@ -149,6 +164,7 @@ export function updateGhost(m: Match, dt: number): void {
     case 'attacking': {
       const r = m.rooms[g.targetRoom];
       if (r.eliminated) {
+        endSiege(m, 'eliminated');
         chooseTarget(m);
         break;
       }
@@ -166,6 +182,7 @@ export function updateGhost(m: Match, dt: number): void {
       const beaten = g.siegeHp - g.hp > g.maxHp * B.ghost.giveUpDamage && doorFrac > 0.5;
       const stalled = g.siegeTime > 12 && r.door.hp >= g.siegeDoorHp;
       if (!m.script && (g.switchTimer <= 0 || beaten || stalled)) {
+        endSiege(m, g.switchTimer <= 0 ? 'patience' : beaten ? 'beaten' : 'stalled');
         m.events.push({ type: 'ghostLeft', roomId: r.id });
         chooseTarget(m, r.id);
       }
@@ -241,8 +258,77 @@ function levelUp(m: Match): void {
 }
 
 /**
- * Выбор двери — случайный: любая из живых комнат, кроме той, от которой только что ушёл.
- * Раньше призрак тянулся к самой слабой двери и выглядел заскриптованным.
+ * Осада кончилась (по любой причине): событие siegeEnd для замеров и отклика «Отбился!»; настоящая атака
+ * (B.ghost.meaningfulHits ударов) запоминается режиссёром — с этого момента у комнаты передышка.
+ */
+export function endSiege(m: Match, reason: SiegeEndReason): void {
+  const g = m.ghost;
+  const roomId = g.siegeRoom;
+  if (roomId < 0) return;
+  g.siegeRoom = -1;
+  const meaningful = g.siegeHits >= B.ghost.meaningfulHits;
+  if (meaningful) {
+    g.calmSince[roomId] = m.nightTime;
+    g.attacked[roomId] = true;
+  }
+  m.events.push({
+    type: 'siegeEnd',
+    roomId,
+    start: g.siegeStart,
+    duration: m.nightTime - g.siegeStart,
+    hits: g.siegeHits,
+    dmg: Math.round(g.siegeDmg),
+    reason,
+    meaningful,
+  });
+}
+
+/**
+ * Вес комнаты при выборе цели (режиссёр атак): сразу после настоящей атаки — minWeight (не бьёт одну и ту же
+ * дверь подряд), потом растёт на 1 за growth с спокойствия, до maxWeight. Комната реального игрока во время
+ * передышки — 0, остальное время — × playerMul.
+ */
+export function roomWeight(m: Match, r: Room, d: AttackDirector = ATTACK_DIRECTOR[m.opts.difficulty]): number {
+  const g = m.ghost;
+  const since = m.nightTime - (g.calmSince[r.id] ?? 0);
+  const w = Math.min(d.maxWeight, d.minWeight + since / d.growth);
+  if (r.ownerId !== m.playerId) return d.spreadNeighbors ? w : d.neighborWeight;
+  if (g.attacked[r.id] && since < d.respite) return 0;
+  return w * d.playerMul;
+}
+
+/**
+ * Режиссёр атак (GHOST_ATTACK_DIRECTOR.md): случайный выбор с весами (roomWeight), но у реального игрока
+ * не бывает долгих затиший — не атакованного с начала ночи к firstBy с или после прошлой атаки к forceAfter с
+ * выбирают при ближайшем выборе цели (если передышка кончилась). Цель не меняет посреди бегства, лечения и осады:
+ * зовётся только там, где призрак и так выбирает дверь. Выключен — старый равновероятный выбор.
+ */
+export function directorPick(m: Match, list: Room[]): Room {
+  const d = ATTACK_DIRECTOR[m.opts.difficulty];
+  if (!d.enabled) return m.rng.pick(list);
+  const g = m.ghost;
+  const me = list.find((r) => r.ownerId === m.playerId);
+  if (me) {
+    const since = m.nightTime - (g.calmSince[me.id] ?? 0);
+    const rested = !g.attacked[me.id] || since >= d.respite;
+    const due = g.attacked[me.id] ? since >= d.forceAfter : m.nightTime >= d.firstBy;
+    if (rested && due) return me;
+  }
+  const weights = list.map((r) => roomWeight(m, r, d));
+  const total = weights.reduce((s, w) => s + w, 0);
+  // Все веса 0 — живой остался только игрок, и у него передышка: передышка не делает призрака бездельником.
+  if (total <= 0) return m.rng.pick(list);
+  let x = m.rng.next() * total;
+  for (let i = 0; i < list.length; i++) {
+    x -= weights[i];
+    if (x < 0) return list[i];
+  }
+  return list[list.length - 1];
+}
+
+/**
+ * Выбор двери: любая из живых комнат, кроме той, от которой только что ушёл; какая именно — режиссёр атак
+ * (directorPick). В обучении — как велит сценарий.
  */
 function chooseTarget(m: Match, exclude = -1): void {
   const g = m.ghost;
@@ -260,7 +346,7 @@ function chooseTarget(m: Match, exclude = -1): void {
     return;
   }
   const forced = m.script?.ghostTarget;
-  const pick = (forced != null && list.find((r) => r.id === forced)) || m.rng.pick(list);
+  const pick = (forced != null && list.find((r) => r.id === forced)) || (m.script ? m.rng.pick(list) : directorPick(m, list));
   g.targetRoom = pick.id;
   g.state = 'moving';
   g.waypoints = route(m, pick.door.front);
@@ -274,6 +360,10 @@ function hitDoor(m: Match, r: Room): void {
   const floor = m.script ? door.maxHp * m.script.doorFloor : 0;
   const dealt = Math.max(0, Math.min(dmg, door.hp - floor));
   door.hp -= dealt;
+  if (m.ghost.siegeRoom === r.id) {
+    m.ghost.siegeHits++;
+    m.ghost.siegeDmg += dealt;
+  }
   if (r.items.some((i) => i.kind === 'lavender')) r.candy += dealt * B.items.lavender;
   m.events.push({ type: 'doorHit', roomId: r.id, dmg: Math.round(dealt) });
   // Злость — от нанесённого урона в долях полного удара (добивающий слабый удар — часть удара).
@@ -284,6 +374,7 @@ function hitDoor(m: Match, r: Room): void {
     m.events.push({ type: 'doorBroken', roomId: r.id });
     const owner = m.chars[r.ownerId!];
     if (owner.task && (owner.task.kind === 'repair' || owner.task.kind === 'door')) m.cancelTask(owner);
+    endSiege(m, 'broke');
     startEnter(m, r);
   }
 }

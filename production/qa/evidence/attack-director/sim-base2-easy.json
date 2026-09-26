@@ -1,0 +1,89 @@
+{
+  "diff": "easy",
+  "N": 500,
+  "skill": 0.5,
+  "director": {
+    "enabled": false,
+    "minWeight": 0.2,
+    "growth": 40,
+    "maxWeight": 3,
+    "playerMul": 1.3,
+    "respite": 28,
+    "firstBy": 20,
+    "forceAfter": 55
+  },
+  "first": {
+    "median": 54.14999999999906,
+    "p90": 166.65000000000364,
+    "never": 1.4
+  },
+  "visits3": {
+    "median": 2
+  },
+  "visits6": {
+    "matches": 411,
+    "median": 3,
+    "p10": 1,
+    "p90": 5,
+    "zero": 2.18978102189781,
+    "le1": 14.598540145985401,
+    "le2": 40.632603406326034
+  },
+  "attacksPerMin": 0.4707760123695693,
+  "totalMedian": 3,
+  "interval": {
+    "median": 78.00000000000387,
+    "p10": 35.50000000000094,
+    "p90": 188.85000000001327
+  },
+  "maxGap": {
+    "median": 181.10000000002725,
+    "p90": 308.6000000000391,
+    "over60": 100,
+    "over90": 97.2,
+    "over120": 87.4,
+    "over180": 50.6
+  },
+  "door": {
+    "minMedian": 0.6220584347166671,
+    "below70": 67,
+    "below50": 24.8,
+    "below40": 14,
+    "below30": 6,
+    "below20": 3.2
+  },
+  "outcome": {
+    "caught": 0.8,
+    "win": 99.6,
+    "neighborsAlive": 4.95,
+    "nightMin": 7.134916666667604
+  },
+  "siege": {
+    "count": 1760,
+    "meaningfulShare": 95,
+    "duration": {
+      "median": 10.450000000002376,
+      "p10": 6.550000000001489,
+      "p90": 12.950000000002944
+    },
+    "hits": {
+      "median": 9,
+      "p10": 5,
+      "p90": 11
+    },
+    "doorDmgPct": {
+      "median": 25.75,
+      "p90": 46
+    },
+    "reasons": {
+      "patience": 83,
+      "dead": 3,
+      "retreat": 12,
+      "broke": 0,
+      "beaten": 2
+    }
+  },
+  "neighbors": {
+    "attacksPerMin": 0.46049074019879505
+  }
+}

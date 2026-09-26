@@ -208,7 +208,21 @@ export interface Ghost {
   /** Комната, которую призрак не выбирает целью ещё avoidTimer с (защита после воскрешения). */
   avoidRoom: number;
   avoidTimer: number;
+  /** Идущая осада: какую дверь бьёт (-1 — не бьёт), с какого момента ночи, сколько ударов и урона. */
+  siegeRoom: number;
+  siegeStart: number;
+  siegeHits: number;
+  siegeDmg: number;
+  /**
+   * Режиссёр атак (GHOST_ATTACK_DIRECTOR.md), по комнатам: момент ночи, когда кончилась последняя настоящая осада
+   * (0 — начало ночи), и была ли она вообще.
+   */
+  calmSince: number[];
+  attacked: boolean[];
 }
+
+/** Почему кончилась осада двери: терпение, побили при крепкой двери, дверь чинят быстрее, убежал лечиться, сломал дверь, комната выбыла, призрак убит. */
+export type SiegeEndReason = 'patience' | 'beaten' | 'stalled' | 'retreat' | 'broke' | 'eliminated' | 'dead';
 
 export type SimEvent =
   | { type: 'phase'; phase: Phase }
@@ -231,6 +245,11 @@ export type SimEvent =
   | { type: 'ghostLeft'; roomId: number }
   /** Призрак выбрал дверь и пошёл к ней (для сигнала «Призрак идёт к тебе!»). */
   | { type: 'ghostTarget'; roomId: number }
+  /**
+   * Осада двери кончилась. meaningful — настоящая атака (не меньше B.ghost.meaningfulHits ударов): её видно,
+   * и её считает режиссёр атак. start/duration — секунды ночи, dmg — урон двери за осаду.
+   */
+  | { type: 'siegeEnd'; roomId: number; start: number; duration: number; hits: number; dmg: number; reason: SiegeEndReason; meaningful: boolean }
   | { type: 'ghostDead' }
   /** Капкан в клетке x,y схватил призрака. */
   | { type: 'trapped'; roomId: number; x: number; y: number }
