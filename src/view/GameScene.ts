@@ -266,7 +266,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    preloadSprites(this);
+    // На заставке скинов нет — догрузить выбранный (обычно уже в кэше браузера, см. prefetchSkin в main.ts).
+    preloadSprites(this, this.m.opts.skin);
   }
 
   create(): void {

@@ -21,9 +21,41 @@ const ANCHORS: Record<string, number> = Object.values(anchorFiles)[0] ?? {};
 
 export const anchorY = (key: string): number => ANCHORS[key] ?? 1;
 
-export function preloadSprites(scene: Phaser.Scene): void {
+/** Выбранные скины игрока (как в meta.skin): 'classic' — обычные спрайты. */
+export interface SkinChoice {
+  door: string;
+  cannon: string;
+}
+
+/** Спрайт скина: door_<скин>_lN, cannon_base_<скин>_lN, cannon_barrel_<скин>_lN. Обычные (door_l1, cannon_base_l2) — null. */
+export function skinOf(key: string): { slot: 'door' | 'cannon'; id: string } | null {
+  const m = /^(door|cannon_base|cannon_barrel)_([a-z]+)_l\d+$/.exec(key);
+  return m ? { slot: m[1] === 'door' ? 'door' : 'cannon', id: m[2] } : null;
+}
+
+/** Нужен ли спрайт при таком выборе скинов: обычные — всегда, скины — только выбранные. */
+const wanted = (key: string, skin?: SkinChoice): boolean => {
+  const s = skinOf(key);
+  return !s || skin?.[s.slot] === s.id;
+};
+
+/**
+ * Ставит в загрузку спрайты, которых ещё нет. Скины дверей и пушек (~1,7 МБ) — только выбранные игроком:
+ * скин виден лишь в его комнате, остальные на заставке не нужны (витрина магазина берёт картинки по ссылке сама).
+ */
+export function preloadSprites(scene: Phaser.Scene, skin?: SkinChoice): void {
   for (const [key, url] of Object.entries(SPRITES)) {
-    if (!scene.textures.exists(key)) scene.load.image(key, url);
+    if (wanted(key, skin) && !scene.textures.exists(key)) scene.load.image(key, url);
+  }
+}
+
+/**
+ * Подтянуть картинки выбранного скина в кэш браузера заранее (пока игрок в меню): тогда GameScene.preload
+ * берёт их из кэша и матч начинается без ожидания. Ничего не ломает, если не успело.
+ */
+export function prefetchSkin(skin: SkinChoice): void {
+  for (const [key, url] of Object.entries(SPRITES)) {
+    if (skinOf(key) && wanted(key, skin)) new Image().src = url;
   }
 }
 

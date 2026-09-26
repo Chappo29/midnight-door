@@ -39,7 +39,7 @@ import { Match } from './sim/match';
 import type { Difficulty } from './sim/types';
 import { Hud } from './ui/hud';
 import { GameScene, type GameData } from './view/GameScene';
-import { preloadSprites } from './view/sprites';
+import { prefetchSkin, preloadSprites } from './view/sprites';
 import { SFX_GROUPS, Sfx, loadMusic, preloadSfx } from './audio/sfx';
 
 document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -446,6 +446,9 @@ async function boot(): Promise<void> {
   store = saved.store;
   progress = store.progress;
   booted = true;
+  // Скины на заставке не грузим — выбранный подтягиваем в кэш после основных спрайтов, пока игрок в меню
+  // (не отнимая канал у заставки).
+  void spritesReady.then(() => prefetchSkin(progress.meta.skin));
   if (mutedBeforeBoot !== null && mutedBeforeBoot !== progress.settings.muted) store.update((p) => (p.settings.muted = mutedBeforeBoot!));
   sfx.setMuted(progress.settings.muted);
   hud.setMuteIcon(progress.settings.muted);
