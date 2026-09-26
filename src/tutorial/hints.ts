@@ -75,7 +75,7 @@ const calm = (m: Match, s: HintState) => {
  */
 const lateBuild = (kind: 'trap' | 'workbench' | 'fridge') => (m: Match, s: HintState) => {
   const r = mine(m);
-  if (!r || r.door.level < B.unlock[kind] || r.buildings.some((b) => b.kind === (kind as BuildKind))) return null;
+  if (!r || !m.kindOpen(r, kind) || r.door.level < B.unlock[kind] || r.buildings.some((b) => b.kind === (kind as BuildKind))) return null;
   if (!calm(m, s)) return null;
   const at = m.placeableCells(r, kind)[0];
   return at ? { kind: 'cell' as const, at } : null;
@@ -127,7 +127,10 @@ const RULES: Rule[] = [
     firstMatchesOnly: true,
     when: (m, s) => {
       const r = mine(m);
-      if (!r || r.buildings.some((b) => b.kind === 'cannon') || !m.canAfford(r, m.buildCost('cannon'))) return null;
+      if (!r || r.buildings.some((b) => b.kind === 'cannon') || !m.canAfford(r, m.buildCost('cannon', r))) return null;
+      // Уже нажал «Пушка» — герой идёт строить: подсказка сделала своё, не держим её до конца стройки.
+      const cmd = m.player.task?.cmd;
+      if (cmd?.type === 'build' && cmd.kind === 'cannon') return null;
       if (m.phase === 'prep' ? s.prepTime < 4 : m.phase !== 'night') return null;
       const at = pickCannonCell(m, r);
       return at ? { kind: 'cell', at } : null;
@@ -139,11 +142,14 @@ const RULES: Rule[] = [
     text: '🚪 Сделай дверь крепче',
     pose: 'point',
     once: 'match',
-    sticky: 20,
+    // Не дольше 10 с (20 было слишком долго): не сделал — палец не висит над дверью весь бой.
+    sticky: 10,
     firstMatchesOnly: true,
     when: (m, s) => {
       const r = mine(m);
       if (!r || m.phase !== 'night' || s.nightTime < 15 || r.door.broken || r.door.level > 1) return null;
+      // Уже нажал «Улучшить» — герой идёт к двери и стучит молотком: подсказка уходит сразу, а не после стройки.
+      if (m.player.task?.cmd.type === 'upgradeDoor') return null;
       if (!r.buildings.some((b) => b.kind === 'cannon')) return null;
       const cost = m.doorUpgradeCost(r);
       return cost && m.canAfford(r, cost) ? { kind: 'cell', at: r.door } : null;
@@ -186,7 +192,7 @@ const RULES: Rule[] = [
       // hasBuildCell не трогает rng симуляции (buildCells тасует клетки) — подсказка спрашивает каждый кадр.
       if (!r || m.phase === 'pick' || m.hasBuildCell(r, 'cannon')) return null;
       const weakest = [...r.buildings].sort((a, b) => a.level - b.level)[0];
-      return weakest && m.canAfford(r, m.buildCost('cannon')) ? { kind: 'cell', at: weakest } : null;
+      return weakest && m.canAfford(r, m.buildCost('cannon', r)) ? { kind: 'cell', at: weakest } : null;
     },
   },
   {
@@ -197,8 +203,8 @@ const RULES: Rule[] = [
     once: 'repeat',
     when: (m, s) => {
       const r = mine(m);
-      if (!s.flameShort || !r || !m.opts.flameUnlocked || r.buildings.some((b) => b.kind === 'pumpkin')) return null;
-      if (!m.canAfford(r, m.buildCost('pumpkin'))) return null;
+      if (!s.flameShort || !r || !m.flameOpen(r) || r.buildings.some((b) => b.kind === 'pumpkin')) return null;
+      if (!m.canAfford(r, m.buildCost('pumpkin', r))) return null;
       const soil = r.soil.find((c) => !r.buildings.some((b) => b.x === c.x && b.y === c.y));
       return soil ? { kind: 'cell', at: soil } : null;
     },

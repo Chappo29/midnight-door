@@ -1,4 +1,5 @@
 import { SPRITES } from '../view/sprites';
+import { uiIcon } from '../ui/uiIcons';
 import type { Pose } from './steps';
 
 /** Держать «пропустить», мс: случайный тап ребёнка не сработает, взрослому читать не надо. */
@@ -50,9 +51,9 @@ export class TutorialOverlay {
     this.bubble = el('div', 'tut-bubble');
     this.guide.append(this.cat, this.bubble);
     this.skipBtn = document.createElement('button');
-    this.skipBtn.className = 'tut-skip';
+    this.skipBtn.className = 'tut-skip bare';
     this.skipBtn.setAttribute('aria-label', 'Пропустить обучение (держать)');
-    this.skipBtn.innerHTML = '<span class="ring"></span>⏭';
+    this.skipBtn.innerHTML = `<span class="ring"></span>${uiIcon('skip')}`;
     this.top.append(this.hand, this.guide, this.skipBtn);
     document.body.appendChild(this.top);
 

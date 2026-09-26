@@ -155,15 +155,15 @@ describe('поздние постройки: замок дверью и лими
 
   it('test_buildings_upgrade_cost_table', () => {
     const m = inRoomMatch();
-    expect(m.upgradeCost({ kind: 'fridge', level: 1 })).toEqual(B.fridge.up[0]);
-    expect(m.upgradeCost({ kind: 'fridge', level: 3 })).toBeNull();
-    expect(m.upgradeCost({ kind: 'trap', level: 1 })).toEqual(B.trap.up[0]);
-    expect(m.upgradeCost({ kind: 'workbench', level: 2 })).toEqual(B.workbench.up[1]);
+    expect(m.upgradeCost({ kind: 'fridge', level: 1 }, null)).toEqual(B.fridge.up[0]);
+    expect(m.upgradeCost({ kind: 'fridge', level: 3 }, null)).toBeNull();
+    expect(m.upgradeCost({ kind: 'trap', level: 1 }, null)).toEqual(B.trap.up[0]);
+    expect(m.upgradeCost({ kind: 'workbench', level: 2 }, null)).toEqual(B.workbench.up[1]);
     // Первый матч: пламя переводится в конфеты.
     const first = inRoomMatch({ flameUnlocked: false });
     const up = B.fridge.up[0];
-    expect(first.upgradeCost({ kind: 'fridge', level: 1 })).toEqual({ candy: up.candy + up.flame * B.flameToCandy, flame: 0 });
-    expect(first.buildCost('fridge')).toEqual({ candy: B.fridge.cost.candy + B.fridge.cost.flame * B.flameToCandy, flame: 0 });
+    expect(first.upgradeCost({ kind: 'fridge', level: 1 }, null)).toEqual({ candy: up.candy + up.flame * B.flameToCandy, flame: 0 });
+    expect(first.buildCost('fridge', null)).toEqual({ candy: B.fridge.cost.candy + B.fridge.cost.flame * B.flameToCandy, flame: 0 });
   });
 
   it('test_buildings_hasBuildCell_does_not_touch_rng', () => {

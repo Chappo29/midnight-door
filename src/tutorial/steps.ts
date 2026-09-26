@@ -98,9 +98,9 @@ export const STEPS: Step[] = [
       m.script!.incomeMul = 6;
     },
     done: (m, c) => {
-      const need = m.buildCost('cannon').candy;
+      const need = m.buildCost('cannon', room(m)).candy;
       if (c.t > 5) m.grant(room(m), need);
-      if (m.canAfford(room(m), m.buildCost('cannon'))) {
+      if (m.canAfford(room(m), m.buildCost('cannon', room(m)))) {
         m.script!.incomeMul = 1;
         return true;
       }
@@ -115,7 +115,7 @@ export const STEPS: Step[] = [
     allowCell: (_m, c, x, y) => !!c.cannonCell && same(c.cannonCell, x, y),
     menu: ['build:cannon'],
     menuOpt: 'build:cannon',
-    enter: (m) => m.grant(room(m), m.buildCost('cannon').candy),
+    enter: (m) => m.grant(room(m), m.buildCost('cannon', room(m)).candy),
     done: (_m, _c, ev) => ev.some((e) => e.type === 'built' && e.kind === 'cannon'),
   },
   {
@@ -187,7 +187,7 @@ export const STEPS: Step[] = [
     menuOpt: 'upgrade',
     enter: (m) => {
       const b = room(m).buildings.find((q) => q.kind === 'cannon');
-      const up = b && m.upgradeCost(b);
+      const up = b && m.upgradeCost(b, room(m));
       if (up) m.grant(room(m), up.candy);
     },
     done: (m, _c, ev) => {

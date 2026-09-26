@@ -33,6 +33,11 @@ export interface GameData {
   tutorial?: { onSkip: () => void; track?: TutorialTrack };
   /** Подсказки по ходу игры: какие уже показаны и куда отметить новую. */
   hints?: { seen: Set<string>; onSeen: (id: string) => void; firstMatches?: boolean };
+  /**
+   * Открытия между матчами (meta/unlocks.ts): у каких построек в меню метка «Новое!» и куда сообщить,
+   * что пункт увидели (метка больше не нужна). Что игроку вообще закрыто — в match.opts.lockedKinds.
+   */
+  unlocks?: { badges: readonly BuildKind[]; onBadgeSeen: (kind: BuildKind) => void };
   /** Игрок вернулся в комнату за рекламу (для аналитики). Пока не вызывается: кнопку убрали из UI до Yandex SDK. */
   onRevive?: () => void;
 }
@@ -153,6 +158,8 @@ export class GameScene extends Phaser.Scene {
   private ended = false;
   private low!: Phaser.GameObjects.Graphics;
   private high!: Phaser.GameObjects.Graphics;
+  /** Сердечки над призраком: сколько раз он ещё сбежит лечиться (спрайты ghost_heart / ghost_heart_empty). */
+  private ghostHearts: Phaser.GameObjects.Image[] = [];
   private buildingViews = new Map<string, Phaser.GameObjects.Container>();
   private popKeys = new Set<string>();
   private charViews: CharView[] = [];
@@ -195,8 +202,10 @@ export class GameScene extends Phaser.Scene {
   private seenUnlock = new Set<LateKind>();
   /** Первая проверка уже была: всё, что открыто к этому моменту (усилитель двери), — без баннера. */
   private unlockPrimed = false;
-  /** Открылись в этом матче и ещё не построены — в меню с меткой «Новое!». */
-  private newKinds = new Set<LateKind>();
+  /** Только что открытые между матчами постройки: метка «Новое!» в меню, пока пункт не увидели. */
+  private badgeKinds = new Set<BuildKind>();
+  /** Метки, которые видны в открытом сейчас меню: гаснут, когда меню закроется (а не сразу под пальцем). */
+  private badgeShown = new Set<BuildKind>();
   /** Сколько секунд подряд дверь мигает, а готовый ключ не жмут; и было ли так в этой осаде (совет на карточке поимки). */
   private missedRepairT = 0;
   private missedRepair = false;
@@ -220,6 +229,7 @@ export class GameScene extends Phaser.Scene {
     this.hiddenPaused = document.hidden;
     this.caughtPaused = false;
     this.ended = false;
+    this.ghostHearts = [];
     this.buildingViews = new Map();
     this.popKeys = new Set();
     this.charViews = [];
@@ -249,7 +259,8 @@ export class GameScene extends Phaser.Scene {
     this.hintOverlay = null;
     this.seenUnlock = new Set();
     this.unlockPrimed = false;
-    this.newKinds = new Set();
+    this.badgeKinds = new Set(data.unlocks?.badges ?? []);
+    this.badgeShown = new Set();
     this.missedRepairT = 0;
     this.missedRepair = false;
   }
@@ -576,26 +587,36 @@ export class GameScene extends Phaser.Scene {
       return (ch((c >> 16) & 255) << 16) | (ch((c >> 8) & 255) << 8) | ch(c & 255);
     };
 
+    // Тёплый дощатый пол: 3 доски на клетку, стыки вразбежку.
+    const floor = (x: number, y: number, px: number, py: number) => {
+      const ph = TS / 3;
+      for (let i = 0; i < 3; i++) {
+        const base = shade(PAL.plank, 0.94 + hash(x, y, i) * 0.12);
+        g.fillStyle(base).fillRect(px, py + i * ph, TS, ph);
+        g.fillStyle(shade(base, 1.08)).fillRect(px, py + i * ph, TS, 2);
+        g.fillStyle(PAL.plankSeam).fillRect(px, py + (i + 1) * ph - 1, TS, 1.5);
+        const joint = px + ((((x + (y * 3 + i) * 7) % 3) + 1) * TS) / 4;
+        if ((x + i + y) % 2 === 0) g.fillRect(joint, py + i * ph, 1.5, ph);
+      }
+    };
+    // Тыква игроку ещё не открыта (первый матч, обучение) — грядок для него нет: рисуем их полом.
+    // Клетка остаётся грядкой в симуляции (геометрия и пути те же), соседи сажают на ней тыквы как раньше.
+    const soilAsFloor = !m.playerFlameOpen;
+
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const t = m.tiles[y][x];
         const px = x * TS;
         const py = y * TS;
         switch (t) {
-          case Tile.Floor: {
-            // Тёплый дощатый пол: 3 доски на клетку, стыки вразбежку.
-            const ph = TS / 3;
-            for (let i = 0; i < 3; i++) {
-              const base = shade(PAL.plank, 0.94 + hash(x, y, i) * 0.12);
-              g.fillStyle(base).fillRect(px, py + i * ph, TS, ph);
-              g.fillStyle(shade(base, 1.08)).fillRect(px, py + i * ph, TS, 2);
-              g.fillStyle(PAL.plankSeam).fillRect(px, py + (i + 1) * ph - 1, TS, 1.5);
-              const joint = px + ((((x + (y * 3 + i) * 7) % 3) + 1) * TS) / 4;
-              if ((x + i + y) % 2 === 0) g.fillRect(joint, py + i * ph, 1.5, ph);
-            }
+          case Tile.Floor:
+            floor(x, y, px, py);
             break;
-          }
           case Tile.Soil: {
+            if (soilAsFloor) {
+              floor(x, y, px, py);
+              break;
+            }
             // Грядка: рыхлая земля бороздками и пара ростков, чтобы не путать с ящиком.
             g.fillStyle(PAL.soilRim).fillRoundedRect(px + 2, py + 2, TS - 4, TS - 4, 10);
             g.fillStyle(PAL.soil).fillRoundedRect(px + 5, py + 5, TS - 10, TS - 10, 8);
@@ -1292,15 +1313,28 @@ export class GameScene extends Phaser.Scene {
       for (const r of m.rooms) {
         // Только своя комната: крестики у всех соседей рябили и выглядели как сетка редактора.
         if (r.ownerId !== m.playerId || r.eliminated) continue;
+        // Грядка без открытой тыквы выглядит как пол, но строить на ней нечего — крестик не обещаем.
+        const soilClosed = !m.flameOpen(r);
         for (const { x, y } of roomCells(r)) {
           {
             if (x === r.door.inside.x && y === r.door.inside.y) continue;
             if (!walkable(r, x, y)) continue;
+            if (soilClosed && isSoil(r, x, y)) continue;
             const cx = x * TS + TS / 2;
             const cy = y * TS + TS / 2;
             const s = 5;
             lo.lineBetween(cx - s, cy, cx + s, cy).lineBetween(cx, cy - s, cx, cy + s);
           }
+        }
+      }
+      // Тыква только что открылась (метка «Новое!» ещё ждёт): свои пустые грядки мягко светятся — грядка
+      // появляется вместе с тыквой. Гаснет, когда тыкву увидели в меню.
+      if (mine && !mine.eliminated && this.badgeKinds.has('pumpkin')) {
+        const a = 0.6 + 0.35 * Math.sin(now / 260);
+        for (const s of mine.soil) {
+          if (mine.buildings.some((b) => b.x === s.x && b.y === s.y)) continue;
+          hi.lineStyle(7, 0xffd166, a * 0.35).strokeRoundedRect(s.x * TS - 1, s.y * TS - 1, TS + 2, TS + 2, 12);
+          hi.lineStyle(3.5, 0xffd166, a).strokeRoundedRect(s.x * TS + 1, s.y * TS + 1, TS - 2, TS - 2, 11);
         }
       }
     }
@@ -1407,6 +1441,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     const g = m.ghost;
+    for (const h of this.ghostHearts) h.setVisible(false);
     if (g.state !== 'hidden' && g.state !== 'dead') {
       const gx = this.ghostView.x;
       const gy = this.ghostView.y - (this.ghostImg ? 54 : 36);
@@ -1415,9 +1450,17 @@ export class GameScene extends Phaser.Scene {
       // Лечится — голубая, больше не убежит — красная, иначе фиолетовая.
       const hpColor = g.state === 'healing' ? 0x7dd3ff : g.desperate && !m.script ? 0xff4d6d : 0xc58aff;
       hi.fillStyle(hpColor).fillRoundedRect(gx - 27, gy + 1, 54 * frac, 6, 3);
-      // Справа от полоски — сколько раз ещё сможет убежать лечиться: горящие домики гаснут по одному
-      // (сверху подпись уровня, поэтому сбоку). В обучении он не убегает, после последнего лечения — полоска красная, домиков нет.
-      if (!m.script && !g.desperate) {
+      // Справа от полоски — сколько раз ещё сможет убежать лечиться: красные сердечки пустеют по одному
+      // (сверху подпись уровня, поэтому сбоку). В обучении он не убегает, после последнего лечения — полоска красная, сердец нет.
+      if (!m.script && !g.desperate && hasSprite(this, 'ghost_heart') && hasSprite(this, 'ghost_heart_empty')) {
+        const left = ghostHealsLeft(g);
+        for (let i = 0; i < B.ghost.healTargets.length; i++) {
+          const h = (this.ghostHearts[i] ??= this.add.image(0, 0, 'ghost_heart').setDisplaySize(12, 12).setDepth(31));
+          h.setTexture(i < left ? 'ghost_heart' : 'ghost_heart_empty').setDisplaySize(12, 12);
+          h.setPosition(gx + 37 + i * 12, gy + 4).setVisible(true);
+        }
+      } else if (!m.script && !g.desperate) {
+        // Спрайтов нет — прежние домики.
         const left = ghostHealsLeft(g);
         for (let i = 0; i < B.ghost.healTargets.length; i++) {
           const hx = gx + 31 + i * 11;
@@ -1480,7 +1523,6 @@ export class GameScene extends Phaser.Scene {
           }
           break;
         case 'built':
-          if (e.roomId === mineId && isLateKind(e.kind)) this.newKinds.delete(e.kind);
           this.roomSound('build', e.roomId, { volume: 0.8 });
           this.popKeys.add(key(e.x, e.y));
           this.puff((e.x + 0.5) * TS, (e.y + 0.5) * TS, 0xfff1c9, 10, 30, 5);
@@ -1608,7 +1650,7 @@ export class GameScene extends Phaser.Scene {
           // «Призрак идёт к тебе!» — один раз на выбор двери; в обучении говорит кот.
           if (e.roomId === mineId && !m.player.caught && m.phase === 'night' && !this.tut) {
             this.hud.banner('Призрак идёт к тебе!', 2600);
-            this.sfx.chime();
+            this.sfx.heartbeat();
           }
           break;
         case 'ghostRetreat': {
@@ -1976,29 +2018,28 @@ export class GameScene extends Phaser.Scene {
     // Пустая клетка: идём туда и предлагаем построить.
     this.cmd({ type: 'move', x: tx, y: ty });
     if (tx === room.door.inside.x && ty === room.door.inside.y) return;
+    // Тыква ещё не открыта (первый матч) — грядка просто пол под ногами: без меню с замком.
+    const soil = isSoil(room, tx, ty);
+    if (soil && !m.flameOpen(room)) return;
     this.selected = { x: tx, y: ty };
     this.openMenu(p, () => {
-      if (!isSoil(room, tx, ty)) {
-        // Пол: пушка и поздние постройки (капкан, верстак, холодильник). В обучении поздних нет вовсе — иначе вечный замок.
-        // Запертые (дверь ещё низкая) не показываем вовсе: яркий пункт с замком ребёнок жмёт и не понимает,
-        // почему «не работает». Откроется — баннер «Новое!» и метка в меню.
-        const kinds: BuildKind[] = m.script ? ['cannon'] : ['cannon', ...LATE_KINDS.filter((k) => !m.buildLocked(room, k))];
-        return { title: 'Пол', options: kinds.map((kind) => this.buildOption(room, kind, tx, ty)) };
+      if (!soil) {
+        // Пол: пушка и открытые игроку поздние постройки. Ещё не открытых (между матчами) нет вовсе;
+        // открытые, но запертые дверью в этом матче, — с замком «🚪N» (Match.floorMenuKinds).
+        return { title: 'Пол', options: m.floorMenuKinds(room).map(({ kind }) => this.buildOption(room, kind, tx, ty)) };
       }
-      const cost = m.buildCost('pumpkin');
-      const locked = !m.opts.flameUnlocked;
+      const cost = m.buildCost('pumpkin', room);
       const opt: MenuOption = {
         id: 'build:pumpkin',
         icon: '🎃',
         label: 'Тыква',
         cost,
-        note: locked ? 'во 2-м матче' : undefined,
-        disabled: locked,
+        isNew: this.badgeKinds.has('pumpkin'),
         ...this.affordance(room, cost),
         onPick: () => this.cmd({ type: 'build', kind: 'pumpkin', x: tx, y: ty }),
       };
       const err = m.canPlace(room, tx, ty, 'pumpkin');
-      if (err && !locked) {
+      if (err) {
         opt.disabled = true;
         opt.note = err;
       }
@@ -2021,16 +2062,32 @@ export class GameScene extends Phaser.Scene {
         return b && { ...b, options: tut.filterMenu(b.options) };
       };
     }
+    this.retireBadges();
     const first = build();
     if (!first || !first.options.length) return;
     this.menuBuild = build;
     this.hud.showMenu(p.x, p.y, first.title, first.options);
+    // Пункт с меткой «Новое!» увидели: запоминаем сразу (перезагрузка не покажет метку снова),
+    // а гасим, когда меню закроется.
+    for (const o of first.options) {
+      const kind = o.id?.startsWith('build:') ? (o.id.slice(6) as BuildKind) : null;
+      if (!kind || !this.badgeKinds.has(kind) || this.badgeShown.has(kind)) continue;
+      this.badgeShown.add(kind);
+      this.gd.unlocks?.onBadgeSeen(kind);
+    }
+  }
+
+  /** Меню с метками «Новое!» закрылось — метки больше не показываем. */
+  private retireBadges(): void {
+    for (const k of this.badgeShown) this.badgeKinds.delete(k);
+    this.badgeShown.clear();
   }
 
   private refreshMenu(): void {
     if (!this.menuBuild) return;
     if (!this.hud.menuOpen) {
       this.menuBuild = null;
+      this.retireBadges();
       return;
     }
     const next = this.menuBuild();
@@ -2098,7 +2155,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * «Новое!»: поздняя постройка открылась дверью — баннер один раз за матч на каждую.
+   * Дверь доросла до уровня, нужного поздней постройке, — баннер один раз за матч на каждую.
+   * Это матчевый замок (в меню пункт был с «🚪N»), поэтому без «Новое!»: метка «Новое!» — только
+   * у построек, впервые открытых между матчами (badgeKinds), иначе она горела бы в каждом матче.
    * Открытое уже к получению комнаты (усилитель двери) — молча. В обучении их нет вовсе.
    */
   private checkUnlocks(): void {
@@ -2106,26 +2165,25 @@ export class GameScene extends Phaser.Scene {
     const r = m.playerRoom;
     if (m.script || !r || r.eliminated) return;
     for (const kind of LATE_KINDS) {
-      if (this.seenUnlock.has(kind) || m.buildLocked(r, kind)) continue;
+      // Не открытую между матчами постройку не объявляем: для игрока её ещё нет.
+      if (this.seenUnlock.has(kind) || !m.kindOpen(r, kind) || m.buildLocked(r, kind)) continue;
       this.seenUnlock.add(kind);
       if (!this.unlockPrimed) continue;
-      this.newKinds.add(kind);
-      this.hud.banner(`Новое! ${BUILD_INFO[kind].label} в меню постройки`, 3500);
+      this.hud.banner(`${BUILD_INFO[kind].label} — можно ставить!`, 3500);
       this.sfx.play('popup', { volume: 0.8 });
     }
     this.unlockPrimed = true;
   }
 
   /**
-   * Хватает ли на покупку: poor + «сколько есть» для банки у кнопки; нажали, а не хватает пламени —
+   * Хватает ли на покупку (не хватает — кнопка серая, цена та же); нажали, а не хватает пламени —
    * повод для подсказки про тыкву (CHILD_UX, части 2–3).
    */
-  private affordance(room: Room, cost: Cost | null | undefined): Pick<MenuOption, 'poor' | 'have' | 'onPoor'> {
+  private affordance(room: Room, cost: Cost | null | undefined): Pick<MenuOption, 'poor' | 'onPoor'> {
     if (!cost) return { poor: false };
     const poor = !this.m.canAfford(room, cost);
     return {
       poor,
-      have: { candy: room.candy, flame: room.flame },
       onPoor: () => {
         if (room.candy + 1e-6 >= cost.candy) this.hints?.noteFlameShort();
       },
@@ -2139,9 +2197,10 @@ export class GameScene extends Phaser.Scene {
     const id = `build:${kind}`;
     const icon = kind === 'cannon' ? '💥' : '';
     const need = m.buildLocked(room, kind);
-    if (need) return { id, icon, label, desc, lockDoor: need, onPick: () => this.pulseDoor(room, need) };
-    const cost = m.buildCost(kind);
-    const isNew = isLateKind(kind) && this.newKinds.has(kind);
+    // Только что открыта между матчами — «Новое!» и на пункте с замком двери: ребёнок видит, что появилось.
+    if (need) return { id, icon, label, desc, lockDoor: need, isNew: this.badgeKinds.has(kind), onPick: () => this.pulseDoor(room, need) };
+    const cost = m.buildCost(kind, room);
+    const isNew = this.badgeKinds.has(kind);
     const opt: MenuOption = { id, icon, label, desc, cost, isNew, ...this.affordance(room, cost), onPick: () => this.cmd({ type: 'build', kind, x, y }) };
     const err = m.canPlace(room, x, y, kind);
     if (err) {
@@ -2167,7 +2226,7 @@ export class GameScene extends Phaser.Scene {
     this.openMenu(p, () => {
       // Постройку могли продать — тогда меню закрываем.
       if (!room.buildings.includes(b)) return null;
-      const up = m.upgradeCost(b);
+      const up = m.upgradeCost(b, room);
       const pct = (v: number) => +(v * 100).toFixed(1);
       const title =
         b.kind === 'cannon'

@@ -77,12 +77,12 @@ export function npcThink(m: Match, c: Character, dt: number, skill: number): voi
   if (cannonCell) {
     opts.push({
       score: p.gun * (cannons.length < 2 ? 1.4 : 0.9),
-      cost: m.buildCost('cannon'),
+      cost: m.buildCost('cannon', room),
       cmd: { type: 'build', kind: 'cannon', ...cannonCell },
     });
   }
   const weakest = [...cannons].sort((a, b) => a.level - b.level)[0];
-  const weakestCost = weakest ? m.upgradeCost(weakest) : null;
+  const weakestCost = weakest ? m.upgradeCost(weakest, room) : null;
   if (weakest && weakestCost) opts.push({ score: p.gun * 0.8, cost: weakestCost, cmd: { type: 'upgrade', x: weakest.x, y: weakest.y } });
 
   // Поздние постройки (открываются дверью). Выбор клетки тасует rng — зовём его только после проверок замка, лимита и характера.
@@ -90,31 +90,31 @@ export function npcThink(m: Match, c: Character, dt: number, skill: number): voi
   const trapWant = (p.trap ?? 1) * (B.npc.trapBase + B.npc.trapPerSkill * skill);
   if (trapWant > 0 && open('trap')) {
     const cell = pickNearDoorCell(m, room, 'trap', skill, B.trap.radius - B.npc.trapReachMargin);
-    if (cell) opts.push({ score: trapWant, cost: m.buildCost('trap'), cmd: { type: 'build', kind: 'trap', ...cell } });
+    if (cell) opts.push({ score: trapWant, cost: m.buildCost('trap', room), cmd: { type: 'build', kind: 'trap', ...cell } });
   }
   const trap = room.buildings.find((b) => b.kind === 'trap');
-  const trapUp = trap ? m.upgradeCost(trap) : null;
+  const trapUp = trap ? m.upgradeCost(trap, room) : null;
   if (trap && trapUp) opts.push({ score: trapWant * B.npc.trapUpMul, cost: trapUp, cmd: { type: 'upgrade', x: trap.x, y: trap.y } });
   if (p.bench && open('workbench')) {
     const cell = m.findBuildCell(room, 'workbench');
-    if (cell) opts.push({ score: p.bench, cost: m.buildCost('workbench'), cmd: { type: 'build', kind: 'workbench', ...cell } });
+    if (cell) opts.push({ score: p.bench, cost: m.buildCost('workbench', room), cmd: { type: 'build', kind: 'workbench', ...cell } });
   }
   if (p.fridge && cannons.length >= B.npc.fridgeAfterCannons && open('fridge')) {
     const cell = m.findBuildCell(room, 'fridge');
-    if (cell) opts.push({ score: p.fridge, cost: m.buildCost('fridge'), cmd: { type: 'build', kind: 'fridge', ...cell } });
+    if (cell) opts.push({ score: p.fridge, cost: m.buildCost('fridge', room), cmd: { type: 'build', kind: 'fridge', ...cell } });
   }
 
-  if (m.opts.flameUnlocked) {
+  if (m.flameOpen(room)) {
     // Тыквы нужны ровно настолько, чтобы хватало пламени на следующую покупку.
     const pumpkins = room.buildings.filter((b) => b.kind === 'pumpkin');
     const flameNeed = Math.max(doorCost?.flame ?? 0, weakestCost?.flame ?? 0);
     const short = room.flame < flameNeed;
     const soilCell = pumpkins.length < 2 ? m.findBuildCell(room, 'pumpkin') : null;
     if (soilCell && (pumpkins.length === 0 || short)) {
-      opts.push({ score: p.eco * (short ? 1.4 : 0.7), cost: m.buildCost('pumpkin'), cmd: { type: 'build', kind: 'pumpkin', ...soilCell } });
+      opts.push({ score: p.eco * (short ? 1.4 : 0.7), cost: m.buildCost('pumpkin', room), cmd: { type: 'build', kind: 'pumpkin', ...soilCell } });
     }
     const pumpkin = [...pumpkins].sort((a, b) => a.level - b.level)[0];
-    const pumpkinCost = pumpkin ? m.upgradeCost(pumpkin) : null;
+    const pumpkinCost = pumpkin ? m.upgradeCost(pumpkin, room) : null;
     if (pumpkin && pumpkinCost && short) opts.push({ score: p.eco * 0.8, cost: pumpkinCost, cmd: { type: 'upgrade', x: pumpkin.x, y: pumpkin.y } });
   }
   if (!opts.length) return;

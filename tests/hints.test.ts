@@ -3,7 +3,7 @@ import { B, TICK } from '../src/sim/balance';
 import { Match } from '../src/sim/match';
 import { TutorialDirector } from '../src/tutorial/director';
 import { HintDirector } from '../src/tutorial/hints';
-import { inRoomMatch, nightNow, pinGhostAtDoor } from './helpers';
+import { inRoomMatch, nightNow, pinGhostAtDoor, stepSec } from './helpers';
 
 /** Матч, где игрок уже в комнате и наступила ночь. */
 function nightMatch(): Match {
@@ -183,5 +183,33 @@ describe('подсказки духа', () => {
     // Assert: подсказка есть, но в профиль не записана — в следующем матче ребёнок увидит её снова (проверка v1).
     expect(hint?.id).toBe('spirit-boo');
     expect(saved).not.toContain('spirit-boo');
+  });
+});
+
+describe('подсказки первых матчей уходят, как только ребёнок сделал', () => {
+  it('test_hints_door_hint_disappears_right_after_upgrade_tap', () => {
+    // Arrange: первый матч, пушка стоит, ночь, «Сделай дверь крепче» на экране.
+    const m = inRoomMatch();
+    const r = m.playerRoom!;
+    r.candy = 9999;
+    const c = m.placeableCells(r, 'cannon')[0];
+    m.command(0, { type: 'build', kind: 'cannon', x: c.x, y: c.y });
+    stepSec(m, 5);
+    nightNow(m);
+    const h = new HintDirector(m, new Set(['flame', 'trap', 'workbench', 'fridge', 'pan', 'sell', 'level', 'range']), () => {}, true, true);
+    let shown = false;
+    for (let i = 0; i < 30 / TICK && !shown; i++) {
+      m.step();
+      h.onEvents(m.events);
+      shown = h.update(TICK)?.id === 'basic-door';
+    }
+    expect(shown).toBe(true);
+    // Act: нажал «Улучшить» — герой ещё идёт к двери, уровень пока 1.
+    m.command(0, { type: 'upgradeDoor' });
+    m.step();
+    const hint = h.update(TICK);
+    // Assert: подсказка ушла сразу, а не после того, как дверь достроится.
+    expect(r.door.level).toBe(1);
+    expect(hint).toBeNull();
   });
 });

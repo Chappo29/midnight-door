@@ -13,6 +13,8 @@
     "sfx": "node scripts/import-sfx.mjs"
   },
   "dependencies": {
+    "@fontsource/nunito": "^5.3.0",
+    "@fontsource/rubik": "^5.3.0",
     "phaser": "^3.90.0"
   },
   "devDependencies": {

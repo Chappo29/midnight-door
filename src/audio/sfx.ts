@@ -29,11 +29,22 @@ const BGM: Record<string, string> = Object.fromEntries(
 
 export function preloadSfx(scene: Phaser.Scene): void {
   for (const [key, url] of Object.entries(FILES)) scene.load.audio(key, url);
+}
+
+/**
+ * Музыка — ~40% веса игры, поэтому её не ждут на заставке: догружается в фоне после старта.
+ * `done` — когда пришли все треки (Sfx.musicLoaded включит то, что просили раньше).
+ */
+export function loadMusic(scene: Phaser.Scene, done: () => void): void {
   for (const [key, url] of Object.entries(BGM)) scene.load.audio(key, url);
+  scene.load.once(Phaser.Loader.Events.COMPLETE, done);
+  scene.load.start();
 }
 
 /** Громкость музыки относительно эффектов — фон, а не главное. */
 const MUSIC_VOLUME = 0.35;
+/** ВРЕМЕННО: музыка выключена по просьбе пользователя (2026-09-26). Вернуть — false. */
+const MUSIC_OFF = true;
 
 export interface PlayOpts {
   /** 0..1, итоговая громкость = volume × общая громкость. */
@@ -44,23 +55,15 @@ export interface PlayOpts {
   throttle?: number;
 }
 
-const MUTE_KEY = 'midnight-door-muted';
-
-/** Звуковые эффекты игры. Один на всю игру: создаётся в main.ts. */
+/**
+ * Звуковые эффекты игры. Один на всю игру: создаётся в main.ts.
+ * Выбор «звук выключен» хранит прогресс (settings.muted, platform/save.ts), не этот класс.
+ */
 export class Sfx {
   private last = new Map<string, number>();
-  private _muted: boolean;
+  private _muted = false;
 
-  constructor(private readonly game: Phaser.Game) {
-    let m = false;
-    try {
-      m = localStorage.getItem(MUTE_KEY) === '1';
-    } catch {
-      // нет хранилища — звук включён
-    }
-    this._muted = m;
-    game.sound.mute = m;
-  }
+  constructor(private readonly game: Phaser.Game) {}
 
   get muted(): boolean {
     return this._muted;
@@ -69,11 +72,6 @@ export class Sfx {
   setMuted(v: boolean): void {
     this._muted = v;
     this.game.sound.mute = v;
-    try {
-      localStorage.setItem(MUTE_KEY, v ? '1' : '0');
-    } catch {
-      // не сохранили — не страшно
-    }
   }
 
   /**
@@ -88,6 +86,8 @@ export class Sfx {
 
   private music: Phaser.Sound.BaseSound | null = null;
   private musicKey: string | null = null;
+  /** Что просили сыграть, пока музыка ещё грузилась. */
+  private wantedMusic: string[] | null = null;
   /** Идущие затухания: у звука одно, новое отменяет старое (иначе нарастание спорит с затуханием). */
   private fades = new Map<Phaser.Sound.BaseSound, number>();
 
@@ -97,17 +97,22 @@ export class Sfx {
    * null — затихнуть. До первого касания браузер звук не пускает — тогда включится сразу после него.
    */
   playMusic(name: string | string[] | null, fadeMs = 800): void {
-    const list = name === null ? [] : Array.isArray(name) ? name : [name];
+    // ВРЕМЕННО (2026-09-26, просьба пользователя): музыка выключена совсем, пока не скажет вернуть.
+    if (MUSIC_OFF) name = null;
+    const list =name === null ? [] : Array.isArray(name) ? name : [name];
     const id = list.join(',') || null;
     if (id === this.musicKey) return;
     this.musicKey = id;
     const old = this.music;
     this.music = null;
     if (old) this.fade(old, MUSIC_VOLUME, 0, fadeMs, () => old.destroy());
-    const keys = list.map((n) => `bgm_${n}`).filter((k) => this.game.cache.audio.exists(k));
-    if (!keys.length) {
+    const keys = list.map((n) => `bgm_${n}`);
+    this.wantedMusic = null;
+    if (!keys.every((k) => this.game.cache.audio.exists(k))) {
       // Музыка ещё не загружена — не запоминаем, иначе повторный вызов решит, что она уже играет.
+      // Включит musicLoaded, когда треки придут.
       this.musicKey = null;
+      if (list.length) this.wantedMusic = list;
       return;
     }
     const playAt = (i: number, fade: number) => {
@@ -124,6 +129,11 @@ export class Sfx {
     const start = () => playAt(0, fadeMs);
     if (this.game.sound.locked) this.game.sound.once(Phaser.Sound.Events.UNLOCKED, start);
     else start();
+  }
+
+  /** Музыка догрузилась (loadMusic) — играем то, что просили, пока её не было. */
+  musicLoaded(): void {
+    if (this.wantedMusic) this.playMusic(this.wantedMusic);
   }
 
   /**
@@ -155,28 +165,34 @@ export class Sfx {
   }
 
   /**
-   * «Динь-дон» — мягкий сигнал «призрак идёт к тебе». Синтез на лету, без файла: отдельный,
-   * не страшный и не похожий на стук в дверь. Громкость и выключение — как у остальных звуков.
+   * «Тук-тук» — сигнал «призрак идёт к тебе»: два глухих низких удара, как сердцебиение (вариант D со страницы
+   * public/sounds.html, выбран 2026-09-26 вместо «динь-дон»). Синтез на лету, без файла: не страшный и не похожий
+   * на стук в дверь. Громкость и выключение — как у остальных звуков.
    */
-  chime(volume = 0.35): void {
+  heartbeat(volume = 0.55): void {
     if (this._muted || this.game.sound.locked) return;
     const mgr = this.game.sound as Phaser.Sound.WebAudioSoundManager;
     const ctx = mgr.context;
     const out = mgr.destination as AudioNode | undefined;
     if (!ctx || !out) return;
-    const t0 = ctx.currentTime + 0.01;
-    for (const [i, freq] of [880, 660].entries()) {
+    const t0 = ctx.currentTime + 0.02;
+    // Удар: тон скользит вниз 90 → 55 Гц и быстро гаснет; второй чуть тише и длиннее («тук-ТУК»).
+    for (const [at, dur, vol] of [
+      [0, 0.22, volume],
+      [0.22, 0.26, volume * 0.83],
+    ]) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+      const t = t0 + at;
       osc.type = 'sine';
-      osc.frequency.value = freq;
-      const at = t0 + i * 0.16;
-      gain.gain.setValueAtTime(0, at);
-      gain.gain.linearRampToValueAtTime(volume, at + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, at + 0.45);
+      osc.frequency.setValueAtTime(90, t);
+      osc.frequency.exponentialRampToValueAtTime(55, t + dur);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol, t + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
       osc.connect(gain).connect(out);
-      osc.start(at);
-      osc.stop(at + 0.5);
+      osc.start(t);
+      osc.stop(t + dur + 0.05);
     }
   }
 

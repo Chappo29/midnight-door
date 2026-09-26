@@ -1,6 +1,7 @@
 import {
   B,
   DIFF,
+  LATE_KINDS,
   TICK,
   adjustCost,
   benchHeal,
@@ -34,6 +35,11 @@ export interface MatchOptions {
   seed: number;
   difficulty: Difficulty;
   flameUnlocked: boolean;
+  /**
+   * Постройки, которых у игрока ещё нет (не открыты между матчами, meta/unlocks.ts): ставить их нельзя,
+   * в меню их нет. Только для игрока — соседи играют как раньше. Не задано — открыто всё.
+   */
+  lockedKinds?: readonly BuildKind[];
   /** Какого героя выбрал игрок (0–5); соседи — остальные пятеро. */
   hero?: number;
   /** Скины двери и пушек комнаты игрока (только внешний вид, симуляция их не читает). */
@@ -176,28 +182,48 @@ export class Match {
   }
 
   flameIncomeOf(r: Room): number {
-    if (!this.opts.flameUnlocked) return 0;
+    if (!this.flameOpen(r)) return 0;
     return r.buildings.reduce((s, b) => s + (b.kind === 'pumpkin' ? pumpkinRate(b.level) : 0), 0);
   }
 
-  buildCost(kind: BuildKind): Cost {
-    return adjustCost(buildBaseCost(kind), this.opts.flameUnlocked);
+  /**
+   * Есть ли пламя у хозяина комнаты. Пламя даёт только тыква: пока игроку она не открыта (первый матч,
+   * meta/unlocks.ts), его цены в пламени переводятся в конфеты — тупика «нужно пламя, а взять негде» нет.
+   * Соседей это не касается: их экономика та же, что и была (сложность не меняется).
+   * null — правило всего матча (обучение, таблицы цен); для комнаты игрока всегда передавай комнату.
+   */
+  flameOpen(r: Room | null): boolean {
+    if (!this.opts.flameUnlocked) return false;
+    return !r || r.ownerId !== this.playerId || this.playerFlameOpen;
   }
 
-  upgradeCost(b: Pick<Building, 'kind' | 'level'>): Cost | null {
+  /** Пламя у игрока: в матче оно есть и тыква игроку уже открыта (для HUD и меню, в том числе до выбора комнаты). */
+  get playerFlameOpen(): boolean {
+    return this.opts.flameUnlocked && !this.opts.lockedKinds?.includes('pumpkin');
+  }
+
+  /**
+   * Цена постройки для хозяина комнаты r (пламя — см. flameOpen). Комната обязательна: забытая комната игрока
+   * показала бы в первом матче цену в пламени, которого у него нет.
+   */
+  buildCost(kind: BuildKind, r: Room | null): Cost {
+    return adjustCost(buildBaseCost(kind), this.flameOpen(r));
+  }
+
+  upgradeCost(b: Pick<Building, 'kind' | 'level'>, r: Room | null): Cost | null {
     const k = b.kind;
     const c = k === 'cannon' ? cannonUpCost(b.level) : k === 'pumpkin' ? pumpkinUpCost(b.level) : extraUpCost(k, b.level);
-    return c && adjustCost(c, this.opts.flameUnlocked);
+    return c && adjustCost(c, this.flameOpen(r));
   }
 
   doorUpgradeCost(r: Room): Cost | null {
     const c = doorUpCost(r.door.level);
-    return c && adjustCost(c, this.opts.flameUnlocked);
+    return c && adjustCost(c, this.flameOpen(r));
   }
 
   sofaUpgradeCost(r: Room): Cost | null {
     const c = sofaUpCost(r.sofa.level);
-    return c && adjustCost(c, this.opts.flameUnlocked);
+    return c && adjustCost(c, this.flameOpen(r));
   }
 
   /** Диван апается только вслед за дверью: если дверь ещё слабая — вернёт нужный её уровень, иначе null. */
@@ -215,6 +241,20 @@ export class Match {
     if (!need) return null;
     if (this.script) return need;
     return r.door.level < need ? need : null;
+  }
+
+  /** Постройка открыта хозяину комнаты (глобальный замок — только у игрока; матчевый — buildLocked). */
+  kindOpen(r: Room, kind: BuildKind): boolean {
+    return r.ownerId !== this.playerId || !this.opts.lockedKinds?.includes(kind);
+  }
+
+  /**
+   * Что показать в меню пустого пола: пушка и открытые игроку поздние постройки. Ещё не открытых нет вовсе;
+   * открытые, но запертые дверью в этом матче, — с нужным уровнем двери (lockDoor). В обучении — только пушка.
+   */
+  floorMenuKinds(r: Room): { kind: BuildKind; lockDoor: number | null }[] {
+    const kinds: BuildKind[] = this.script ? ['cannon'] : ['cannon', ...LATE_KINDS.filter((k) => this.kindOpen(r, k))];
+    return kinds.map((kind) => ({ kind, lockDoor: this.buildLocked(r, kind) }));
   }
 
   sellValue(b: Building): number {
@@ -242,12 +282,13 @@ export class Match {
 
   canPlace(r: Room, x: number, y: number, kind: BuildKind): string | null {
     if (!inRoom(r, x, y)) return 'Это не твоя комната';
+    if (!this.kindOpen(r, kind)) return 'Ещё не открыто';
     if (occupantAt(r, x, y) !== null) return 'Место занято';
     if (x === r.door.inside.x && y === r.door.inside.y) return 'Здесь проход к двери';
     const need = this.buildLocked(r, kind);
     if (need) return `Сначала дверь до ур. ${need}`;
     const soil = isSoil(r, x, y);
-    if (kind === 'pumpkin' && !this.opts.flameUnlocked) return 'Тыквы откроются во втором матче';
+    if (kind === 'pumpkin' && !this.flameOpen(r)) return 'Ещё не открыто';
     if (kind === 'pumpkin' && !soil) return 'Тыкву сажают на грядку';
     if (kind !== 'pumpkin' && soil) return 'Грядка — для тыкв';
     if (this.atCap(r, kind)) return 'Больше нельзя';
@@ -335,7 +376,7 @@ export class Match {
       case 'build': {
         const err = this.canPlace(room, cmd.x, cmd.y, cmd.kind);
         if (err) return err;
-        const cost = this.buildCost(cmd.kind);
+        const cost = this.buildCost(cmd.kind, room);
         if (!this.canAfford(room, cost)) return this.missing(room, cost);
         stands = this.standCells(room, cmd);
         break;
@@ -343,7 +384,7 @@ export class Match {
       case 'upgrade': {
         const b = buildingAt(room, cmd.x, cmd.y);
         if (!b) return 'Тут ничего нет';
-        const cost = this.upgradeCost(b);
+        const cost = this.upgradeCost(b, room);
         if (!cost) return 'Максимальный уровень';
         if (!this.canAfford(room, cost)) return this.missing(room, cost);
         stands = this.standCells(room, cmd);
@@ -811,7 +852,7 @@ export class Match {
         return;
       case 'build': {
         const err = this.canPlace(r, cmd.x, cmd.y, cmd.kind);
-        const cost = this.buildCost(cmd.kind);
+        const cost = this.buildCost(cmd.kind, r);
         if (err) return this.fail(c, err);
         if (!this.canAfford(r, cost)) return this.fail(c, this.missing(r, cost));
         this.pay(r, cost);
@@ -821,7 +862,7 @@ export class Match {
       }
       case 'upgrade': {
         const b = buildingAt(r, cmd.x, cmd.y);
-        const cost = b && this.upgradeCost(b);
+        const cost = b && this.upgradeCost(b, r);
         if (!b || !cost) return this.fail(c, 'Нельзя улучшить');
         if (!this.canAfford(r, cost)) return this.fail(c, this.missing(r, cost));
         this.pay(r, cost);

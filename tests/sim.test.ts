@@ -166,7 +166,7 @@ describe('match', () => {
   it('в первом матче тыквы закрыты, а цена пламени переходит в конфеты', () => {
     const m = new Match({ seed: 3, difficulty: 'easy', flameUnlocked: false });
     const r = m.rooms[0];
-    expect(m.canPlace(r, r.soil[0].x, r.soil[0].y, 'pumpkin')).toMatch(/втором матче/);
+    expect(m.canPlace(r, r.soil[0].x, r.soil[0].y, 'pumpkin')).toMatch(/не открыто/);
     r.door.level = 3;
     expect(m.doorUpgradeCost(r)).toEqual({ candy: B.door[3].candy + B.door[3].flame * B.flameToCandy, flame: 0 });
   });

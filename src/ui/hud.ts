@@ -2,10 +2,14 @@ import type { Progress } from '../platform/storage';
 import type { Match } from '../sim/match';
 import type { Cost, Difficulty } from '../sim/types';
 import { SPRITES } from '../view/sprites';
+import { uiIcon } from './uiIcons';
 import { B } from '../sim/balance';
 import { BOOSTER_MAX } from '../meta/economy';
 import type { BoosterId, Reward, SkinSlot } from '../meta/economy';
 import type { CaughtTip, CaughtTipKind } from './caughtTip';
+import type { UnlockKind } from '../meta/unlocks';
+import { UNLOCK_INFO, unlockFrames } from './unlockPreview';
+import { doorHudState } from './doorHud';
 import { HOLDOVER_MS, INPUT_GUARD_MS, isEchoAfterScreenChange, isHoldover, menuTopAwayFromFinger } from './inputGuard';
 
 export interface MenuOption {
@@ -22,8 +26,6 @@ export interface MenuOption {
   /** Пункт упёрся в уровень двери (диван, поздние постройки): кликабелен, но выглядит запертым —
    *  вместо цены пилюля с замком и номером нужного уровня; onPick решает сам, что делать (например, подсветить дверь). */
   lockDoor?: number;
-  /** Сколько у игрока сейчас: для «банки», которая наполняется до цены (не хватает — видно без чисел). */
-  have?: Cost;
   /** Нажали, а денег не хватает: меню не закрываем, кнопка вздрагивает; тут — доп. реакция (подсказка про тыкву). */
   onPoor?: () => void;
   /** Опасное действие (продать): первый тап спрашивает этот текст и показывает «Да» в стороне от пальца. */
@@ -101,11 +103,6 @@ const ICON_DEFS = `<svg width="0" height="0" style="position:absolute" aria-hidd
 const ICON = {
   flame: `<svg viewBox="0 0 24 24"><path d="M12 1.8c.6 2.9 3.4 4.6 4.9 7.4 1.9 3.4 1 7.7-2.1 9.6-1.6 1-3.5 1.4-5.3.9-3.3-.9-5.4-4.1-4.8-7.5.3-1.9 1.4-3.3 2.4-4.6.3 1.3 1 2.3 2 2.8-.4-3 .9-6 2.9-8.6z" fill="#ff7a2e" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><path d="M12.2 10.6c.4 1.6 2.3 2.5 2.4 4.6.1 1.9-1.3 3.4-3 3.4-1.8 0-3.1-1.6-2.8-3.4.1-.9.6-1.6 1.1-2.2.2.7.6 1.1 1.1 1.3-.2-1.5.4-2.7 1.2-3.7z" fill="#ffd166" stroke="var(--ink)" stroke-width="1" stroke-linejoin="round"/></svg>`,
   clock: `<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8" fill="url(#hg-silver)" stroke="var(--ink)" stroke-width="1.4"/><path d="M12 8v5l3.5 2" stroke="var(--ink)" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M9.5 2h5" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round"/></svg>`,
-  pause: `<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.6" fill="#fff" stroke="var(--ink)" stroke-width="1.3"/><rect x="14" y="5" width="4" height="14" rx="1.6" fill="#fff" stroke="var(--ink)" stroke-width="1.3"/></svg>`,
-  soundOn: `<svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4H4z" fill="#fff" stroke="var(--ink)" stroke-width="1.3" stroke-linejoin="round"/><path d="M16.5 9a4.5 4.5 0 0 1 0 6" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>`,
-  soundOff: `<svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4H4z" fill="#fff" stroke="var(--ink)" stroke-width="1.3" stroke-linejoin="round"/><path d="M16 9l5 6M21 9l-5 6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-  home: `<svg viewBox="0 0 24 24"><path d="M4 11.5 12 4l8 7.5" stroke="var(--ink)" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M6 10.5V20h12v-9.5" fill="#fff" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><rect x="10" y="14" width="4" height="6" fill="url(#hg-grape)" stroke="var(--ink)" stroke-width="1.2"/></svg>`,
-  wrench: `<svg viewBox="0 0 24 24"><path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4l-6 6 2 2 6-6a3.5 3.5 0 0 0 4-4.6l-2.1 2.1-1.6-1.6 2.1-2.1z" fill="url(#hg-silver)" stroke="var(--ink)" stroke-width="1.3" stroke-linejoin="round"/></svg>`,
   close: `<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>`,
   up: `<svg viewBox="0 0 24 24"><path d="M12 19V6M6 11l6-6 6 6" stroke="var(--ink)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   trash: `<svg viewBox="0 0 24 24"><path d="M5 7h14l-1.2 12.4a2 2 0 0 1-2 1.6H8.2a2 2 0 0 1-2-1.6z" fill="#d9d3e6" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><path d="M3.5 7h17M9.5 7V4.5h5V7" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="var(--ink)" stroke-width="1.4" stroke-linecap="round"/></svg>`,
@@ -122,7 +119,6 @@ const ICON = {
   star: `<svg viewBox="0 0 24 24"><path d="M12 2l2.6 6.2 6.7.6-5.1 4.4 1.6 6.6L12 16.4 6.2 19.8l1.6-6.6L2.7 8.8l6.7-.6z" fill="url(#hg-amber)" stroke="var(--ink)" stroke-width="1.2" stroke-linejoin="round"/></svg>`,
   trophy: `<svg viewBox="0 0 24 24"><path d="M6 3h12v5a6 6 0 0 1-12 0z" fill="url(#hg-amber)" stroke="var(--ink)" stroke-width="1.3"/><path d="M6 5H3a4 4 0 0 0 4 5" stroke="var(--ink)" stroke-width="1.3" fill="none"/><path d="M18 5h3a4 4 0 0 1-4 5" stroke="var(--ink)" stroke-width="1.3" fill="none"/><rect x="10" y="14" width="4" height="4" fill="url(#hg-amber)" stroke="var(--ink)" stroke-width="1.1"/><rect x="7" y="18" width="10" height="3" rx="1.4" fill="#fff" stroke="var(--ink)" stroke-width="1.1"/></svg>`,
   play: `<svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="#fff" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
-  skip: `<svg viewBox="0 0 24 24"><path d="M5 6v12l9-6z" fill="var(--ink)"/><path d="M14 6v12l9-6z" fill="var(--ink)"/></svg>`,
   check: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="url(#hg-mint)" stroke="var(--ink)" stroke-width="1.3"/><path d="M8 12.5l2.5 2.5L16 9" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   /** Крестик в том же стиле, что галочка: для «выжило», когда тебя поймали. */
   cross: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="url(#hg-straw)" stroke="var(--ink)" stroke-width="1.3"/><path d="M9 9l6 6M15 9l-6 6" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>`,
@@ -153,7 +149,7 @@ const OPTION_ICON: Record<string, () => string> = {
   'build:workbench': () => img('workbench') || ICON.bench,
   'build:fridge': () => img('fridge') || ICON.fridge,
   upgradeDoor: () => img('door_l1'),
-  repair: () => ICON.wrench,
+  repair: () => uiIcon('repair'),
   upgradeSofa: () => img('sofa'),
   upgrade: () => ICON.up,
   sell: () => ICON.trash,
@@ -170,14 +166,13 @@ function costPill(c: Cost): string {
   return candy + flame;
 }
 
-/** Доля HP двери: ниже — «опасно» (красное, ключ мигает); ниже DOOR_HURT — «повреждена». */
+/** Доля HP двери: ниже — ключ ремонта «срочно» (красное кольцо, мигает). Индикатор двери — ui/doorHud.ts. */
 const DOOR_DANGER = 0.4;
-const DOOR_HURT = 0.7;
 
 /** Картинка к совету на карточке поимки: понятна и тому, кто не читает. */
 const TIP_ICON: Record<CaughtTipKind, () => string> = {
   cannon: () => img('cannon_base'),
-  repair: () => ICON.wrench,
+  repair: () => uiIcon('repair'),
   door: () => img('door_l2'),
   strong: () => img('ghost_down_idle'),
 };
@@ -187,17 +182,6 @@ function exitCoinsPill(coins: number): string {
   return coins > 0 ? `<span class="exit-coins">+${coins}${ICON.coin}</span>` : '';
 }
 
-/**
- * «Банка» вместо цены, когда не хватает: наполняется тем, чего не хватает (конфеты или пламя).
- * Ребёнку не надо сравнивать «69 < 320» — видно, сколько ещё копить.
- */
-function jarPill(c: Cost, have: Cost): string {
-  const shortCandy = have.candy + 1e-6 < c.candy;
-  const frac = shortCandy ? have.candy / c.candy : c.flame ? have.flame / c.flame : 1;
-  const pct = Math.round(Math.max(0.06, Math.min(1, frac)) * 100);
-  const ico = shortCandy ? img('candy_shot', 'cost-ico') : `<span class="cost-ico">${ICON.flame}</span>`;
-  return `<span class="jar${shortCandy ? '' : ' flame'}">${ico}<span class="jar-bar"><i style="width:${pct}%"></i></span></span>`;
-}
 
 /** Пункт заперт дверью: пилюля с замком, иконкой двери и нужным уровнем — вместо цены. */
 function lockPill(doorLevel: number): string {
@@ -240,6 +224,8 @@ export class Hud {
   private screenChangedAt = -Infinity;
   /** Звук интерфейса (клик, открытие меню); подключает main.ts. */
   onSound: (key: string) => void = () => {};
+  /** До какого времени (с) индикатор двери ещё виден после последней опасности (ui/doorHud.ts). */
+  private doorHudUntil = 0;
   /** Переключатель звука; возвращает новое состояние «выключен». */
   onToggleMute: () => boolean = () => false;
 
@@ -256,13 +242,13 @@ export class Hud {
         <div id="toast"></div>
       </div>
       <div class="hud-side">
-        <button class="btn-round-sm" id="pause" aria-label="Пауза" type="button">${ICON.pause}</button>
-        <button class="btn-round-sm blue" id="sound" aria-label="Звук" type="button">${ICON.soundOn}</button>
+        <button class="btn-round-sm bare" id="pause" aria-label="Пауза" type="button">${uiIcon('pause')}</button>
+        <button class="btn-round-sm bare" id="sound" aria-label="Звук" type="button">${uiIcon('sound_on')}</button>
       </div>
       <div id="banner"></div>
-      <button class="btn-round home-btn" id="home" aria-label="К своей комнате" type="button">${ICON.home}</button>
-      <button class="btn-round repair-btn" id="repair" aria-label="Чинить дверь" type="button">
-        <span class="repair-ico">${ICON.wrench}</span>
+      <button class="btn-round home-btn bare" id="home" aria-label="К своей комнате" type="button">${uiIcon('home')}</button>
+      <button class="btn-round repair-btn bare" id="repair" aria-label="Чинить дверь" type="button">
+        <span class="repair-ico">${uiIcon('repair')}</span>
         <span class="repair-cd-num"></span>
       </button>
       <button class="btn-round spirit-btn boo-btn hidden" id="boo" aria-label="Бу! Напугать призрака" type="button">
@@ -275,7 +261,7 @@ export class Hud {
         <span class="spirit-cd-num"></span>
         <span class="spirit-lbl">Искра</span>
       </button>
-      <div class="door-hud hidden" id="doorHud" aria-hidden="true">
+      <div class="door-hud off" id="doorHud" aria-hidden="true">
         <span class="door-hud-ico">${img('door_l1')}</span>
         <span class="door-hud-bar"><i></i></span>
       </div>
@@ -335,7 +321,7 @@ export class Hud {
   }
 
   setMuteIcon(muted: boolean): void {
-    this.el.sound.innerHTML = muted ? ICON.soundOff : ICON.soundOn;
+    this.el.sound.innerHTML = uiIcon(muted ? 'sound_off' : 'sound_on');
   }
 
   bind(h: HudHandlers): void {
@@ -429,7 +415,7 @@ export class Hud {
     // Дух строить не может — конфеты и пламя ему не нужны, только отвлекают (CHILD_UX, часть 5).
     const ghostly = m.player.caught;
     this.toggle('candy', 'hidden', ghostly);
-    this.toggle('flame', 'hidden', !m.opts.flameUnlocked || ghostly);
+    this.toggle('flame', 'hidden', !m.playerFlameOpen || ghostly);
     // Коротко, чтобы все три чипа были одной ширины: «до полуночи» и так объявляет баннер.
     const left = Math.ceil(Math.max(0, m.phaseLeft));
     if (m.phase === 'pick' && m.player.roomId !== null) this.set('clock', '…');
@@ -463,15 +449,25 @@ export class Hud {
       this.el.repair.style.setProperty('--cd', cdKey);
     }
 
-    // Крупная полоска своей двери у ключа: видна, пока дверь побита или её ломают. Без чисел — цвет и длина.
+    // Крупная полоска своей двери: появляется, когда призрак идёт к игроку или дверь в опасности, и плавно
+    // уходит через пару секунд после того, как стало спокойно (ui/doorHud.ts). Без чисел — цвет и длина.
     const g = m.ghost;
-    const sieged = !!room && g.targetRoom === room.id && (g.state === 'attacking' || g.state === 'entering');
-    const showDoor = active && m.phase === 'night' && !!d && !d.broken && (sieged || doorFrac < 0.999);
-    this.toggle('doorHud', 'hidden', !showDoor);
+    const targeted = !!room && g.targetRoom === room.id;
+    const sieged = targeted && (g.state === 'attacking' || g.state === 'entering');
+    const threat = targeted && (sieged || g.state === 'moving');
+    const doorHud = doorHudState({
+      active: active && m.phase === 'night' && !!d && !d.broken,
+      threat,
+      frac: doorFrac,
+      now: performance.now() / 1000,
+      until: this.doorHudUntil,
+    });
+    this.doorHudUntil = doorHud.until;
+    const showDoor = doorHud.visible;
+    this.toggle('doorHud', 'off', !showDoor);
     if (showDoor) {
-      const state = doorFrac < DOOR_DANGER ? 'danger' : doorFrac < DOOR_HURT ? 'hurt' : 'ok';
-      this.toggle('doorHud', 'hurt', state === 'hurt');
-      this.toggle('doorHud', 'danger', state === 'danger');
+      this.toggle('doorHud', 'hurt', doorHud.level === 'hurt');
+      this.toggle('doorHud', 'danger', doorHud.level === 'danger');
       this.toggle('doorHud', 'sieged', sieged);
       const w = `${Math.max(4, Math.round(doorFrac * 100))}%`;
       if (this.last.get('door-w') !== w) {
@@ -705,15 +701,14 @@ export class Hud {
       setText('.opt-desc', o.desc ?? '');
 
       const showReason = !!o.disabled && !!o.note;
+      // Не хватает — та же цена, только вся кнопка серая (.opt.poor): полоска-«банка» вместо цены была непонятна.
       const costHtml = o.lockDoor
         ? lockPill(o.lockDoor)
-        : o.cost && o.poor && o.have
-          ? jarPill(o.cost, o.have)
-          : o.cost
-            ? costPill(o.cost)
-            : !showReason && o.note
-              ? noteVisual(o.note)
-              : '';
+        : o.cost
+          ? costPill(o.cost)
+          : !showReason && o.note
+            ? noteVisual(o.note)
+            : '';
       setHtml('.cost', costHtml);
 
       const reasonText = showReason ? stripEmoji(o.note!) : '';
@@ -904,7 +899,7 @@ export class Hud {
   }
 
   private boostersGrid(view: ShopView): string {
-    const icons: Record<BoosterId, string> = { candy: img('candy_shot'), door: img('door_l2'), wrench: ICON.wrench };
+    const icons: Record<BoosterId, string> = { candy: img('candy_shot'), door: img('door_l2'), wrench: uiIcon('repair') };
     const cards = view.boosters
       .map((b) => {
         const maxed = b.count >= BOOSTER_MAX;
@@ -931,9 +926,14 @@ export class Hud {
       .map((amount, i) => {
         const claimed = i < view.step;
         const today = i === view.step && view.available;
-        const cls = ['daily-tile', i === 6 && 'big', claimed && 'claimed', today && 'today', !claimed && !today && 'future'].filter(Boolean).join(' ');
-        const inner = claimed ? `<span class="daily-check">${ICON.check}</span>` : `<span class="daily-coin">${ICON.coin}</span><span class="daily-amt">${amount}</span>`;
-        return `<div class="${cls}" data-day="${i}"><span class="daily-day">${i + 1}</span>${inner}</div>`;
+        const chest = i === view.days.length - 1;
+        const cls = ['daily-tile', chest && 'big', claimed && 'claimed', today && 'today', !claimed && !today && 'future'].filter(Boolean).join(' ');
+        // Забранный день — мятная «печать» с галочкой; последний день — кубок вместо монеты.
+        const inner = claimed
+          ? `<span class="daily-check">${ICON.check}</span>`
+          : `<span class="daily-coin">${chest ? ICON.trophy : ICON.coin}</span><span class="daily-amt">${amount}</span>`;
+        const ribbon = today ? '<span class="daily-ribbon">Сегодня</span>' : '';
+        return `<div class="${cls}" data-day="${i}">${ribbon}<span class="daily-day">${i + 1}</span>${inner}</div>`;
       })
       .join('');
     this.showScreen(`
@@ -943,7 +943,7 @@ export class Hud {
         <div class="daily-grid">${tiles}</div>
         ${
           view.available
-            ? `<button class="btn-big mint wide" id="dailyClaim" type="button">${ICON.gift}Забрать</button>`
+            ? `<button class="btn-big amber wide" id="dailyClaim" type="button">${ICON.gift}Забрать ${view.days[view.step]}</button>`
             : `<p>Приходи завтра!</p><button class="btn-big cream wide" id="dailyClaim" type="button">${ICON.check}Ок</button>`
         }
       </div>`);
@@ -954,6 +954,10 @@ export class Hud {
         () => {
           const coins = onClaim();
           const tile = this.el.screen.querySelector<HTMLElement>(`.daily-tile[data-day="${view.step}"]`);
+          if (tile) {
+            tile.classList.replace('today', 'claimed');
+            tile.innerHTML = `<span class="daily-day">${view.step + 1}</span><span class="daily-check">${ICON.check}</span>`;
+          }
           this.popCoins(tile ?? btn, coins);
           // Та же кнопка станет «Отлично!» → меню: быстрые тапы не должны проскочить в меню и дальше.
           this.armInput(HOLDOVER_MS);
@@ -995,7 +999,11 @@ export class Hud {
     requestAnimationFrame(tick);
   }
 
-  showResult(m: Match, flameJustUnlocked: boolean, onAgain: () => void, onMenu: () => void, reward?: Reward): void {
+  /**
+   * Итоги матча. newUnlock — за этот матч открылась постройка: на карточке метка «Новое!» с картинкой,
+   * а сам экран «Новое!» main.ts покажет по любой кнопке итогов.
+   */
+  showResult(m: Match, newUnlock: UnlockKind | null, onAgain: () => void, onMenu: () => void, reward?: Reward): void {
     this.setInGame(false);
     this.clearMessages();
     const win = m.result === 'win';
@@ -1010,7 +1018,7 @@ export class Hud {
       <div class="card result-card halftone">
         ${img(mascotKey, 'result-mascot')}
         <h1 class="stroke-title">${title}</h1>
-        ${flameJustUnlocked ? `<div class="unlock-pill">${img('pumpkin', 'unlock-ico')}Открыты тыквы и пламя ${ICON.flame}</div>` : ''}
+        ${newUnlock ? `<div class="unlock-pill">${img(UNLOCK_INFO[newUnlock].sprite, 'unlock-ico')}Новое!</div>` : ''}
         <div class="stat-row">
           <div class="stat"><span class="stat-ico">${ICON.clock}</span><span class="stat-n">${m.clock}</span><span class="stat-k">время</span></div>
           <div class="stat"><span class="stat-ico">${m.player.caught ? ICON.cross : ICON.check}</span><span class="stat-n">${survived}/${total}</span><span class="stat-k">выжило</span></div>
@@ -1033,6 +1041,49 @@ export class Hud {
     this.el.screen.querySelector('#again')!.addEventListener('click', onAgain);
     this.el.screen.querySelector('#tomenu')!.addEventListener('click', onMenu);
     if (reward) this.animateCount(this.el.screen.querySelector<HTMLElement>('#rewardNum')!, reward.coins);
+  }
+
+  /**
+   * «Новое!»: открылась постройка. Крупная картинка, название, одна строка и сценка по кругу (unlockPreview.ts).
+   * Ждать конца сценки не нужно — кнопка работает сразу (после обычной защиты от второго тапа).
+   * onMenu — маленькая ссылка «В меню» (после итогов); без неё одна кнопка.
+   */
+  showUnlock(kind: UnlockKind, onTry: () => void, onMenu?: () => void): void {
+    const info = UNLOCK_INFO[kind];
+    // Кадры: (сначала дверь) → как поставить → что делает. Идут сами по кругу; точка или тап по сценке — сразу к кадру.
+    const frames = unlockFrames(kind, { flame: ICON.flame, lock: ICON.lock });
+    this.clearMessages();
+    this.showScreen(`
+      <div class="card unlock-card">
+        <div class="unlock-kicker">${ICON.star}НОВОЕ!${ICON.star}</div>
+        <div class="unlock-head">${img(info.sprite, 'unlock-head-img')}<h1 class="stroke-title small unlock-name">${info.name}</h1></div>
+        <div class="unlock-demo" aria-hidden="true">${frames.map((f, i) => `<div class="unlock-frame" data-i="${i}">${f.html}</div>`).join('')}</div>
+        <div class="unlock-cap" aria-live="polite"></div>
+        <div class="unlock-dots">${frames.map((_, i) => `<button class="unlock-dot" data-i="${i}" type="button" aria-label="Кадр ${i + 1}"></button>`).join('')}</div>
+        <button class="btn-big mint wide" id="try" type="button">${ICON.play}Попробовать!</button>
+        ${onMenu ? `<button class="link-btn" id="tomenu" type="button">${ICON.menuList}В меню</button>` : ''}
+      </div>`);
+    const card = this.el.screen.querySelector<HTMLElement>('.unlock-card')!;
+    const cap = card.querySelector<HTMLElement>('.unlock-cap')!;
+    let at = -1;
+    let timer = 0;
+    const show = (i: number) => {
+      window.clearTimeout(timer);
+      // Экран закрыли — кадры больше не крутим.
+      if (!card.isConnected) return;
+      at = (i + frames.length) % frames.length;
+      // display:none у прочих кадров — анимация кадра начинается сначала, когда он показан.
+      card.querySelectorAll<HTMLElement>('.unlock-frame').forEach((f) => f.classList.toggle('on', Number(f.dataset.i) === at));
+      card.querySelectorAll<HTMLElement>('.unlock-dot').forEach((d) => d.classList.toggle('on', Number(d.dataset.i) === at));
+      cap.innerHTML = frames[at].caption;
+      timer = window.setTimeout(() => show(at + 1), frames[at].ms);
+    };
+    show(0);
+    card.querySelectorAll<HTMLElement>('.unlock-dot').forEach((d) => d.addEventListener('click', () => show(Number(d.dataset.i))));
+    card.querySelector('.unlock-demo')!.addEventListener('click', () => show(at + 1));
+    this.onSound('upgrade');
+    card.querySelector('#try')!.addEventListener('click', onTry);
+    if (onMenu) card.querySelector('#tomenu')!.addEventListener('click', onMenu);
   }
 
   /** Игрока поймали: игра стоит, пока не выберет — играть духом или выйти в меню (без монет, без рекламы). */
@@ -1060,7 +1111,7 @@ export class Hud {
           <button class="btn-big mint" id="resume" type="button">${ICON.play}Играть</button>
           <button class="btn-big cream" id="tomenu" type="button">${ICON.menuList}Выйти в меню${exitCoinsPill(coins)}</button>
         </div>
-        ${onSkipTutorial ? `<button class="link-btn" id="skiptut" type="button">${ICON.skip}Пропустить обучение</button>` : ''}
+        ${onSkipTutorial ? `<button class="link-btn" id="skiptut" type="button">${uiIcon('skip')}Пропустить обучение</button>` : ''}
       </div>`);
     this.el.screen.querySelector('#resume')!.addEventListener('click', onResume);
     this.el.screen.querySelector('#tomenu')!.addEventListener('click', onMenu);
