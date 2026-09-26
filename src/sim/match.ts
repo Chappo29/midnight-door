@@ -28,7 +28,7 @@ import { Tile, generateMap, type TileT } from './map';
 import { BALANCED, PROFILES, npcThink } from './npc';
 import { bfs } from './path';
 import { Rng } from './rng';
-import { DIRS, allConnected, buildingAt, inRoom, isSoil, occupantAt, roomCells, walkable } from './roomgrid';
+import { DIRS, buildingAt, heroPassable, inRoom, isSoil, occupantAt, roomCells, walkable } from './roomgrid';
 import type { BuildKind, Building, Character, Cmd, Cost, Difficulty, Ghost, Phase, Room, SimEvent, Task, TutorialScript, Vec, WorkKind } from './types';
 
 export interface MatchOptions {
@@ -292,7 +292,6 @@ export class Match {
     if (kind === 'pumpkin' && !soil) return 'Тыкву сажают на грядку';
     if (kind !== 'pumpkin' && soil) return 'Грядка — для тыкв';
     if (this.atCap(r, kind)) return 'Больше нельзя';
-    if (!allConnected(r, { x, y })) return 'Загородит проход';
     return null;
   }
 
@@ -370,7 +369,7 @@ export class Match {
     let stands: Vec[];
     switch (cmd.type) {
       case 'move':
-        if (!walkable(room, cmd.x, cmd.y)) return 'Туда не пройти';
+        if (!heroPassable(room, cmd.x, cmd.y)) return 'Туда не пройти';
         stands = [{ x: cmd.x, y: cmd.y }];
         break;
       case 'build': {
@@ -423,7 +422,7 @@ export class Match {
     // перезапуск отменял работу, и частые нажатия чинили дольше редких.
     if (c.task && sameCmd(c.task.cmd, cmd)) return null;
     if (!stands.length) return 'Не подойти';
-    const path = bfs(cur, stands, (x, y) => walkable(room, x, y));
+    const path = bfs(cur, stands, (x, y) => heroPassable(room, x, y));
     if (!path) return 'Не подойти';
     c.path = path;
     this.cancelTask(c);
@@ -568,14 +567,18 @@ export class Match {
     return r.candy + 1e-6 < c.candy ? 'Не хватает конфет' : 'Не хватает пламени';
   }
 
-  /** Клетки, стоя на которых персонаж может выполнить команду. */
+  /**
+   * Клетки, стоя на которых персонаж может выполнить команду. Сначала свободные соседние; если вокруг
+   * всё застроено — любая соседняя клетка комнаты (герой проходит сквозь мебель и постройки).
+   */
   private standCells(r: Room, cmd: Cmd): Vec[] {
     let target: Vec;
     if (cmd.type === 'upgradeSofa') target = r.sofa;
     else if (cmd.type === 'build' || cmd.type === 'upgrade' || cmd.type === 'sell') target = cmd;
     else return [];
-    const blocked = cmd.type === 'build' ? target : undefined;
-    return DIRS.map((d) => ({ x: target.x + d.x, y: target.y + d.y })).filter((v) => walkable(r, v.x, v.y, blocked));
+    const near = DIRS.map((d) => ({ x: target.x + d.x, y: target.y + d.y })).filter((v) => heroPassable(r, v.x, v.y));
+    const free = near.filter((v) => walkable(r, v.x, v.y));
+    return free.length ? free : near;
   }
 
   private assignRoom(c: Character, r: Room): void {

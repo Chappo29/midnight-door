@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { B, LATE_KINDS, TICK, benchHeal, fridgeSlow, isLateKind, trapHold, type LateKind } from '../sim/balance';
 import { H, Tile, W } from '../sim/map';
 import type { Match } from '../sim/match';
-import { inRoom, isSoil, key, occupantAt, roomAtCell, roomByDoor, roomCells, roomCenter, walkable } from '../sim/roomgrid';
+import { heroPassable, inRoom, isSoil, key, occupantAt, roomAtCell, roomByDoor, roomCells, roomCenter, walkable } from '../sim/roomgrid';
 import type { BuildKind, Building, Character, Cmd, Cost, Room, SimEvent } from '../sim/types';
 import type { Hud, MenuOption } from '../ui/hud';
 import { anchorY, doorKeys, firstSprite, fitImage, hasSprite, preloadSprites } from './sprites';
@@ -1961,7 +1961,7 @@ export class GameScene extends Phaser.Scene {
     const cy = Math.floor(c.y);
     // Без диагоналей: сначала пробуем по горизонтали, потом по вертикали.
     const options = [dx ? { x: cx + dx, y: cy } : null, dy ? { x: cx, y: cy + dy } : null];
-    const target = options.find((v) => v && walkable(room, v.x, v.y));
+    const target = options.find((v) => v && heroPassable(room, v.x, v.y));
     if (target) this.m.command(c.id, { type: 'move', ...target });
   }
 
