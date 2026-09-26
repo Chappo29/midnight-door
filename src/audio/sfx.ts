@@ -43,8 +43,6 @@ export function loadMusic(scene: Phaser.Scene, done: () => void): void {
 
 /** Громкость музыки относительно эффектов — фон, а не главное. */
 const MUSIC_VOLUME = 0.35;
-/** ВРЕМЕННО: музыка выключена по просьбе пользователя (2026-09-26). Вернуть — false. */
-const MUSIC_OFF = true;
 
 export interface PlayOpts {
   /** 0..1, итоговая громкость = volume × общая громкость. */
@@ -97,17 +95,18 @@ export class Sfx {
    * null — затихнуть. До первого касания браузер звук не пускает — тогда включится сразу после него.
    */
   playMusic(name: string | string[] | null, fadeMs = 800): void {
-    // ВРЕМЕННО (2026-09-26, просьба пользователя): музыка выключена совсем, пока не скажет вернуть.
-    if (MUSIC_OFF) name = null;
-    const list =name === null ? [] : Array.isArray(name) ? name : [name];
+    const list = name === null ? [] : Array.isArray(name) ? name : [name];
     const id = list.join(',') || null;
     if (id === this.musicKey) return;
     this.musicKey = id;
     const old = this.music;
     this.music = null;
     if (old) this.fade(old, MUSIC_VOLUME, 0, fadeMs, () => old.destroy());
-    const keys = list.map((n) => `bgm_${n}`);
     this.wantedMusic = null;
+    // Тишина (null): старый трек уже затихает, нового нет. Без этой проверки пустой список «загружен» (every по []),
+    // и playAt брал keys[0] = undefined — Phaser падал, и экран итогов не появлялся.
+    if (!list.length) return;
+    const keys = list.map((n) => `bgm_${n}`);
     if (!keys.every((k) => this.game.cache.audio.exists(k))) {
       // Музыка ещё не загружена — не запоминаем, иначе повторный вызов решит, что она уже играет.
       // Включит musicLoaded, когда треки придут.
