@@ -4,10 +4,11 @@
  *   npx tsx scripts/attack-director-sim.ts easy 500                 — как сейчас в balance.ts
  *   npx tsx scripts/attack-director-sim.ts easy 500 '{"enabled":false}'   — со своими числами режиссёра
  *   npx tsx scripts/attack-director-sim.ts easy 500 '{}' 0.3 out.json — умение ИИ-игрока и файл для сравнения
+ *   npx tsx scripts/attack-director-sim.ts nightmare 500 '{}' 0.5 '' '{"hitsPerLevel":19.8}' — и параметры сложности (DIFF)
  * «Атака» — настоящая осада (siegeEnd.meaningful, B.ghost.meaningfulHits ударов); время — секунды ночи.
  */
 import fs from 'fs';
-import { ATTACK_DIRECTOR } from '../src/sim/balance';
+import { ATTACK_DIRECTOR, DIFF } from '../src/sim/balance';
 import { Match } from '../src/sim/match';
 import type { Difficulty, SiegeEndReason } from '../src/sim/types';
 
@@ -16,6 +17,8 @@ const N = Number(process.argv[3] ?? 500);
 Object.assign(ATTACK_DIRECTOR[diff], JSON.parse(process.argv[4] ?? '{}'));
 const skill = Number(process.argv[5] ?? 0.5);
 const outFile = process.argv[6];
+// Параметры сложности (DIFF), например '{"hitsPerLevel":19.8}' — для подбора баланса.
+Object.assign(DIFF[diff], JSON.parse(process.argv[7] || '{}'));
 const MAX_SEC = 2400;
 
 const pct = (xs: number[], p: number) => {
@@ -115,6 +118,7 @@ const result = {
   N,
   skill,
   director: ATTACK_DIRECTOR[diff],
+  diffParams: DIFF[diff],
   first: { median: pct(firsts, 0.5), p90: pct(firsts, 0.9), never: share(stats.map((s) => s.first === null)) },
   visits3: { median: pct(stats.map((s) => s.visits3), 0.5) },
   visits6: {
@@ -164,7 +168,7 @@ const result = {
 
 const f = (x: number, d = 0) => (Number.isNaN(x) ? '—' : x.toFixed(d));
 console.log(
-  `${diff} [${ATTACK_DIRECTOR[diff].enabled ? 'режиссёр' : 'старый выбор'}] N=${N}, умение ${skill}\n` +
+  `${diff} [${ATTACK_DIRECTOR[diff].enabled ? 'режиссёр' : 'старый выбор'}] N=${N}, умение ${skill}, уровень призрака: ${DIFF[diff].hitsPerLevel} ударов, страховка ${DIFF[diff].levelFallback} с\n` +
     `  первая атака: медиана ${f(result.first.median)} с, P90 ${f(result.first.p90)} с, не было ${f(result.first.never, 1)}%\n` +
     `  атак за 3 мин: ${f(result.visits3.median)} | за 6 мин (из ${v6.length} матчей): медиана ${f(result.visits6.median)} (P10 ${f(result.visits6.p10)}, P90 ${f(result.visits6.p90)}), 0 — ${f(result.visits6.zero, 1)}%, ≤1 — ${f(result.visits6.le1, 1)}%, ≤2 — ${f(result.visits6.le2, 1)}%\n` +
     `  атак в минуту ${f(result.attacksPerMin, 2)}, интервал между атаками: медиана ${f(result.interval.median)} с (P10 ${f(result.interval.p10)}, P90 ${f(result.interval.p90)})\n` +

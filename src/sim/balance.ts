@@ -185,10 +185,13 @@ export interface DiffParams {
 // и 0.95→1.2 (easy не трогали; сверено на 240 матчах: 100 / 56 / 18%).
 // 2026-09-26: гнездо лечит не больше 3 раз (B.ghost.healTargets). Лёгкая стала короче (8:17 → 6:10), поэтому ей
 // ghostHpMul 1.3 (медиана ~7:07); сложной и кошмару HP не прибавляли — там это только снижало победы (GHOST_HEAL_BALANCE.md).
+// 2026-09-26: режиссёр атак (ATTACK_DIRECTOR) водит призрака к игроку вдвое чаще и реже к соседям — на кошмаре соседей
+// стали реже ловить, призрак медленнее рос, победы 21 → 32%. Рост уровня на кошмаре на 5% быстрее (22 → 20.9 ударов,
+// страховка 125 → 119 с): 500 сидов — 22,8% побед при тех же ~6 атаках на игрока за 6 мин (−10% давало уже 15,6%).
 export const DIFF: Record<Difficulty, DiffParams> = {
   easy: { ghostMul: 0.7, ghostHpMul: 1.3, hitsPerLevel: 27, levelFallback: 200, retreatSpeedMul: 1, npcSkill: 0.3 },
   hard: { ghostMul: 1.0, ghostHpMul: 1, hitsPerLevel: 21, levelFallback: 110, retreatSpeedMul: 1.1, npcSkill: 0.6 },
-  nightmare: { ghostMul: 1.2, ghostHpMul: 1, hitsPerLevel: 22, levelFallback: 125, retreatSpeedMul: 1.2, npcSkill: 0.9 },
+  nightmare: { ghostMul: 1.2, ghostHpMul: 1, hitsPerLevel: 20.9, levelFallback: 119, retreatSpeedMul: 1.2, npcSkill: 0.9 },
 };
 
 /**
