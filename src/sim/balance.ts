@@ -114,14 +114,14 @@ export const B = {
     speed: 2.5,
     enterSpeed: 3.2,
     retreatAt: 0.25,
-    healTime: 10,
-    /** Какую долю макс. HP восстанавливает в гнезде (не до конца — урон копится). */
-    healFrac: 0.4,
+    /** Сколько секунд длится одно лечение в гнезде (HP растёт равномерно). */
+    healTime: 5,
     /**
-     * Каждый следующий заход в гнездо лечит в столько раз слабее (healFrac × healDecay^заходов). Без этого призрак
-     * бегал лечиться бесконечно, а к 35-й минуте перерастал пушки — матчи тянулись по 48–54 минуты.
+     * До какой доли макс. HP лечит каждый заход в гнездо; длина списка — сколько раз за спавн он может убежать.
+     * После последнего — «отчаявшийся», дерётся до конца. Раньше лечил 40% × 0.85^заходов без лимита — убегал
+     * ~10 раз за матч, и половина ночи была циклом «почти убили → убежал» (GHOST_HEAL_BALANCE.md, вариант B).
      */
-    healDecay: 0.85,
+    healTargets: [0.75, 0.65, 0.55],
     /** Терпение у двери, с: случайное (было 20–60 — «бьёт очень долго»; выбрано 4–12, с 2026-09-25 — 8–12). Кроме него уходит, если осада не идёт (см. ghost.ts).
      *  Короче осада — меньше ударов, а уровень теперь растёт от ударов (hitsPerLevel в DIFF). */
     switchMin: 8,
@@ -160,7 +160,10 @@ export const B = {
 } as const;
 
 export interface DiffParams {
+  /** Множитель силы призрака: HP и урон. */
   ghostMul: number;
+  /** Отдельный множитель только HP призрака (урон не трогает). */
+  ghostHpMul: number;
   /** Полных ударов по дверям на первый новый уровень (дальше растёт на xpGrowth за уровень). */
   hitsPerLevel: number;
   /** Страховка: столько секунд без нового уровня — и уровень +1 сам (любой новый уровень сбрасывает счёт). */
@@ -172,13 +175,15 @@ export interface DiffParams {
 
 // Подобрано scripts/tune.ts (2026-09-25, 160 матчей): подготовка 30 с (таймер ждёт игрока), бегство лечиться
 // ускорено по сложности (1 / 1.1 / 1.2). Итог: лёгкая 99%, сложная ~74%, кошмар ~33%, призрака убивают за 8–14 мин.
-// Потом (2026-09-25) гнездо стало лечить слабее с каждым заходом (B.ghost.healDecay) — это сильно помогло игрокам,
+// Потом (2026-09-25) гнездо стало лечить слабее с каждым заходом (тогда healDecay 0.85) — это сильно помогло игрокам,
 // и призрака на hard/nightmare усилили под цели «сложнее» (лёгкая ~100%, сложная ~55%, кошмар ~20%): ghostMul 0.85→1.0
 // и 0.95→1.2 (easy не трогали; сверено на 240 матчах: 100 / 56 / 18%).
+// 2026-09-26: гнездо лечит не больше 3 раз (B.ghost.healTargets). Лёгкая стала короче (8:17 → 6:10), поэтому ей
+// ghostHpMul 1.3 (медиана ~7:07); сложной и кошмару HP не прибавляли — там это только снижало победы (GHOST_HEAL_BALANCE.md).
 export const DIFF: Record<Difficulty, DiffParams> = {
-  easy: { ghostMul: 0.7, hitsPerLevel: 27, levelFallback: 200, retreatSpeedMul: 1, npcSkill: 0.3 },
-  hard: { ghostMul: 1.0, hitsPerLevel: 21, levelFallback: 110, retreatSpeedMul: 1.1, npcSkill: 0.6 },
-  nightmare: { ghostMul: 1.2, hitsPerLevel: 22, levelFallback: 125, retreatSpeedMul: 1.2, npcSkill: 0.9 },
+  easy: { ghostMul: 0.7, ghostHpMul: 1.3, hitsPerLevel: 27, levelFallback: 200, retreatSpeedMul: 1, npcSkill: 0.3 },
+  hard: { ghostMul: 1.0, ghostHpMul: 1, hitsPerLevel: 21, levelFallback: 110, retreatSpeedMul: 1.1, npcSkill: 0.6 },
+  nightmare: { ghostMul: 1.2, ghostHpMul: 1, hitsPerLevel: 22, levelFallback: 125, retreatSpeedMul: 1.2, npcSkill: 0.9 },
 };
 
 export const sofaIncome = (level: number) => B.sofa.income * B.sofa.incomeMul ** (level - 1);

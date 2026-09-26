@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { B, TICK } from '../src/sim/balance';
-import { ghostDamage, ghostXpNeed } from '../src/sim/ghost';
+import { B, DIFF, TICK } from '../src/sim/balance';
+import { ghostDamage, ghostHealsLeft, ghostMaxHp, ghostXpNeed, spawnGhost } from '../src/sim/ghost';
 import { Match } from '../src/sim/match';
 import type { SimEvent } from '../src/sim/types';
 import { TutorialDirector } from '../src/tutorial/director';
-import { inRoomMatch, nightNow, pinGhostAtDoor, quietFloor, runUntil, stepSec } from './helpers';
+import { inRoomMatch, mkBuilding, nightNow, pinGhostAtDoor, quietFloor, runUntil, stepSec } from './helpers';
 
 /** Ночь, призрак бьёт дверь игрока; дверь почти вечная, пушек на этаже нет — ничто не мешает считать. */
 function siege(): Match {
@@ -118,22 +118,31 @@ describe('уровень призрака от ударов', () => {
 });
 
 /**
- * Призрак прилетает в гнездо с 10% HP и лечится до конца отдыха; возвращает, сколько вылечил (доля макс. HP).
- * Соседи спят, пушки убраны — ничто не мешает лечению.
+ * Один полный заход в гнездо «по-честному»: призрак идёт по этажу, HP падает до 10% — он сам убегает,
+ * долетает до гнезда и отлечивается. Возвращает событие бегства и долю HP после лечения.
+ * Уровень не растёт (таймер-страховка обнулён, по дверям он не бьёт) — ничто не мешает считать.
  */
-function nestVisit(m: Match): number {
+function retreatCycle(m: Match): { retreat: SimEvent | undefined; hpFrac: number; events: SimEvent[] } {
   const g = m.ghost;
-  g.x = g.prevX = m.nest.x;
-  g.y = g.prevY = m.nest.y;
+  // Подальше от гнезда (ночь начинается с призраком прямо в нём): у двери игрока.
+  const f = m.playerRoom!.door.front;
+  g.x = g.prevX = f.x;
+  g.y = g.prevY = f.y;
   g.waypoints = [];
-  g.state = 'retreating';
   g.levelTimer = 0;
   g.hp = g.maxHp * 0.1;
-  const before = g.hp;
-  m.step();
+  const events: SimEvent[] = [];
+  const tick = () => {
+    m.step();
+    events.push(...m.events);
+  };
+  tick();
+  expect(g.state).toBe('retreating');
+  for (let i = 0; i < 20 * 120 && g.state === 'retreating'; i++) tick();
   expect(g.state).toBe('healing');
-  runUntil(m, (mm) => mm.ghost.state !== 'healing', B.ghost.healTime + 1);
-  return (g.hp - before) / g.maxHp;
+  for (let i = 0; i < 20 * (B.ghost.healTime + 1) && g.state === 'healing'; i++) tick();
+  expect(g.state).toBe('moving');
+  return { retreat: events.find((e) => e.type === 'ghostRetreat'), hpFrac: g.hp / g.maxHp, events };
 }
 
 describe('лечение в гнезде', () => {
@@ -145,52 +154,172 @@ describe('лечение в гнезде', () => {
     return m;
   }
 
-  it('test_ghost_nest_first_visit_heals_full_frac', () => {
-    const m = nestMatch();
-    expect(nestVisit(m)).toBeCloseTo(B.ghost.healFrac, 2);
-  });
-
-  // Регрессия: раньше каждый заход лечил одинаково (+40%), призрак бегал лечиться бесконечно,
-  // а к 35-й минуте перерастал пушки — матчи тянулись по 48–54 минуты (сиды 4, 40, 195 × 7919, лёгкая, пламя закрыто).
-  it('test_ghost_nest_heal_weakens_each_visit', () => {
-    const m = nestMatch();
-    const first = nestVisit(m);
-    const second = nestVisit(m);
-    const third = nestVisit(m);
-    expect(second).toBeCloseTo(first * B.ghost.healDecay, 2);
-    expect(third).toBeCloseTo(first * B.ghost.healDecay ** 2, 2);
-  });
-
-  it('test_ghost_nest_heal_above_retreat_still_retreats_later', () => {
+  // Регрессия: раньше призрак убегал ~10 раз за матч (лечил 40% × 0.85^заходов без лимита), и половина ночи была
+  // циклом «почти убили → убежал» (GHOST_HEAL_BALANCE.md). Теперь 3 захода: до 75 / 65 / 55%, потом дерётся до конца.
+  it('test_ghost_nest_three_heals_to_targets_then_desperate', () => {
     const m = nestMatch();
     const g = m.ghost;
-    nestVisit(m);
+    const [t1, t2, t3] = B.ghost.healTargets;
+    expect(B.ghost.healTargets).toEqual([0.75, 0.65, 0.55]);
+
+    const first = retreatCycle(m);
+    expect(first.retreat).toEqual({ type: 'ghostRetreat', left: 2 });
+    expect(first.hpFrac).toBeCloseTo(t1, 3);
+    expect(g.nestVisits).toBe(1);
     expect(g.desperate).toBe(false);
-    g.hp = g.maxHp * B.ghost.retreatAt * 0.5;
-    let retreats = 0;
-    for (let i = 0; i < 20 && !retreats; i++) {
-      m.step();
-      retreats += m.events.filter((e) => e.type === 'ghostRetreat').length;
-    }
-    expect(retreats).toBe(1);
-  });
 
-  // Гнездо больше не поднимает выше порога бегства — раньше призрак тут же убегал снова и крутился у гнезда сотни раз.
-  it('test_ghost_nest_cant_heal_above_retreat_fights_to_end', () => {
-    const m = nestMatch();
-    const g = m.ghost;
-    g.nestVisits = 100;
-    nestVisit(m);
-    expect(g.hp / g.maxHp).toBeLessThan(B.ghost.retreatAt);
-    expect(g.state).toBe('moving');
-    const visits = g.nestVisits;
+    const second = retreatCycle(m);
+    expect(second.retreat).toEqual({ type: 'ghostRetreat', left: 1 });
+    expect(second.hpFrac).toBeCloseTo(t2, 3);
+    expect(g.nestVisits).toBe(2);
+    expect(g.desperate).toBe(false);
+
+    const third = retreatCycle(m);
+    expect(third.retreat).toEqual({ type: 'ghostRetreat', left: 0 });
+    expect(third.hpFrac).toBeCloseTo(t3, 3);
+    expect(g.nestVisits).toBe(3);
+    expect(g.desperate).toBe(true);
+    expect(third.events.filter((e) => e.type === 'ghostDesperate')).toHaveLength(1);
+    expect(first.events.concat(second.events).some((e) => e.type === 'ghostDesperate')).toBe(false);
+
+    // Четвёртого бегства нет: с 10% HP полминуты — ни одного события бегства, в гнездо не летит.
+    g.hp = g.maxHp * 0.1;
     let retreats = 0;
     for (let i = 0; i < 20 * 30; i++) {
       m.step();
       retreats += m.events.filter((e) => e.type === 'ghostRetreat').length;
+      expect(g.state === 'retreating' || g.state === 'healing').toBe(false);
     }
     expect(retreats).toBe(0);
-    expect(g.nestVisits).toBe(visits);
+    expect(g.nestVisits).toBe(3);
+  });
+
+  it('test_ghost_nest_heal_is_gradual_over_heal_time', () => {
+    const m = nestMatch();
+    const g = m.ghost;
+    g.levelTimer = 0;
+    g.hp = g.maxHp * 0.1;
+    runUntil(m, (mm) => mm.ghost.state === 'healing', 120);
+    const start = g.hp / g.maxHp;
+    stepSec(m, B.ghost.healTime / 2);
+    expect(g.state).toBe('healing');
+    // Равномерно: к середине отдыха — половина пути до цели (не рывок в начале и не в конце).
+    expect(g.hp / g.maxHp).toBeCloseTo(start + (B.ghost.healTargets[0] - start) / 2, 1);
+  });
+
+  it('test_ghost_new_spawn_resets_heals', () => {
+    const m = nestMatch();
+    const g = m.ghost;
+    for (let i = 0; i < B.ghost.healTargets.length; i++) retreatCycle(m);
+    expect(g.desperate).toBe(true);
+    expect(ghostHealsLeft(g)).toBe(0);
+
+    spawnGhost(m);
+    expect(g.nestVisits).toBe(0);
+    expect(g.desperate).toBe(false);
+    expect(ghostHealsLeft(g)).toBe(3);
+    expect(retreatCycle(m).retreat).toEqual({ type: 'ghostRetreat', left: 2 });
+  });
+
+  // Страховка от петли: если лечение почему-то не подняло выше порога бегства — больше не убегает, даже если заходы остались.
+  it('test_ghost_nest_heal_below_threshold_still_desperate', () => {
+    const ghostCfg = B.ghost as unknown as { healTargets: number[] };
+    const targets = ghostCfg.healTargets;
+    ghostCfg.healTargets = [B.ghost.retreatAt * 0.8, 0.65, 0.55];
+    try {
+      const m = nestMatch();
+      retreatCycle(m);
+      expect(m.ghost.nestVisits).toBe(1);
+      expect(m.ghost.desperate).toBe(true);
+    } finally {
+      ghostCfg.healTargets = targets;
+    }
+  });
+
+  // По бегущему призраку можно стрелять: убили по дороге — он мёртв, в гнездо не долетает и не лечится.
+  it('test_ghost_killed_while_retreating_stays_dead', () => {
+    const m = nestMatch();
+    const g = m.ghost;
+    const room = m.playerRoom!;
+    const f = room.door.front;
+    const cell = m.buildCells(room, 'cannon').sort((a, b) => Math.hypot(a.x - f.x, a.y - f.y) - Math.hypot(b.x - f.x, b.y - f.y))[0];
+    room.buildings = [mkBuilding('cannon', cell.x, cell.y)];
+    g.x = g.prevX = f.x;
+    g.y = g.prevY = f.y;
+    g.waypoints = [];
+    g.state = 'moving';
+    g.hp = 1;
+    m.step();
+    expect(m.events.some((e) => e.type === 'ghostRetreat')).toBe(true);
+    expect(m.events.some((e) => e.type === 'ghostDead')).toBe(true);
+    expect(g.state).toBe('dead');
+    expect(m.result).toBe('win');
+    let healing = false;
+    let retreats = 0;
+    for (let i = 0; i < 20 * 10; i++) {
+      m.step();
+      healing ||= m.ghost.state === 'healing';
+      retreats += m.events.filter((e) => e.type === 'ghostRetreat').length;
+    }
+    expect(healing).toBe(false);
+    expect(retreats).toBe(0);
+    expect(g.hp).toBe(0);
+    expect(g.nestVisits).toBe(0);
+  });
+
+  it('test_ghost_tutorial_never_retreats', () => {
+    const m = new Match({ seed: 20260924, difficulty: 'easy', flameUnlocked: false, tutorial: true });
+    const d = new TutorialDirector(m);
+    d.allowTap(0, 0);
+    m.command(0, { type: 'pickRoom', roomId: 0 });
+    const tick = () => {
+      m.step();
+      d.onEvents(m.events);
+      d.update(TICK);
+    };
+    for (let i = 0; i < 20 * 20; i++) tick();
+    m.script!.holdPhase = false;
+    for (let i = 0; i < 20 * 120 && !(m.phase === 'night' && m.ghost.state === 'moving'); i++) tick();
+    expect(m.ghost.state).toBe('moving');
+    let retreats = 0;
+    let ticks = 0;
+    for (; ticks < 20 * 20 && m.phase !== 'end'; ticks++) {
+      m.ghost.hp = m.ghost.maxHp * 0.1;
+      tick();
+      retreats += m.events.filter((e) => e.type === 'ghostRetreat').length;
+    }
+    // Все 20 с прошли с живым призраком — иначе «ни одного бегства» ничего бы не доказывало.
+    expect(ticks).toBe(20 * 20);
+    expect(m.ghost.state).not.toBe('dead');
+    expect(retreats).toBe(0);
+    expect(m.ghost.nestVisits).toBe(0);
+  });
+});
+
+describe('HP призрака по сложности', () => {
+  it('test_ghost_hp_mul_scales_hp_only', () => {
+    expect(DIFF.easy.ghostHpMul).toBe(1.3);
+    expect(DIFF.hard.ghostHpMul).toBe(1);
+    expect(DIFF.nightmare.ghostHpMul).toBe(1);
+    for (const difficulty of ['easy', 'hard', 'nightmare'] as const) {
+      const m = new Match({ seed: 7, difficulty, flameUnlocked: true });
+      const k = DIFF[difficulty];
+      expect(ghostMaxHp(m, 1)).toBeCloseTo(B.ghost.hp * k.ghostMul * k.ghostHpMul, 6);
+      expect(ghostMaxHp(m, 3)).toBeCloseTo(B.ghost.hp * B.ghost.hpMul ** 2 * k.ghostMul * k.ghostHpMul, 6);
+      // Урон от ghostHpMul не зависит.
+      expect(ghostDamage(m, 1)).toBeCloseTo(B.ghost.dmg * k.ghostMul, 6);
+      expect(ghostDamage(m, 3)).toBeCloseTo(B.ghost.dmg * B.ghost.dmgMul ** 2 * k.ghostMul, 6);
+    }
+  });
+
+  it('test_ghost_spawn_uses_difficulty_hp', () => {
+    const easy = inRoomMatch({ difficulty: 'easy' });
+    nightNow(easy);
+    expect(easy.ghost.maxHp).toBeCloseTo(B.ghost.hp * DIFF.easy.ghostMul * 1.3, 6);
+    expect(easy.ghost.hp).toBe(easy.ghost.maxHp);
+    const hard = inRoomMatch({ difficulty: 'hard' });
+    nightNow(hard);
+    expect(hard.ghost.maxHp).toBeCloseTo(B.ghost.hp * DIFF.hard.ghostMul, 6);
   });
 });
 

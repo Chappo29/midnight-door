@@ -6,7 +6,7 @@ import { inRoom, isSoil, key, occupantAt, roomAtCell, roomByDoor, roomCells, roo
 import type { BuildKind, Building, Character, Cmd, Cost, Room, SimEvent } from '../sim/types';
 import type { Hud, MenuOption } from '../ui/hud';
 import { anchorY, doorKeys, firstSprite, fitImage, hasSprite, preloadSprites } from './sprites';
-import { ghostHitIntervalAt, ghostXpNeed } from '../sim/ghost';
+import { ghostHealsLeft, ghostHitIntervalAt, ghostXpNeed } from '../sim/ghost';
 import type { PlayOpts, Sfx } from '../audio/sfx';
 import { TutorialDirector, type TutorialTrack } from '../tutorial/director';
 import { TutorialOverlay } from '../tutorial/overlay';
@@ -1412,7 +1412,21 @@ export class GameScene extends Phaser.Scene {
       const gy = this.ghostView.y - (this.ghostImg ? 54 : 36);
       const frac = g.hp / g.maxHp;
       hi.fillStyle(0x000000, 0.6).fillRoundedRect(gx - 28, gy, 56, 8, 3);
-      hi.fillStyle(g.state === 'healing' ? 0x7dd3ff : 0xc58aff).fillRoundedRect(gx - 27, gy + 1, 54 * frac, 6, 3);
+      // Лечится — голубая, больше не убежит — красная, иначе фиолетовая.
+      const hpColor = g.state === 'healing' ? 0x7dd3ff : g.desperate && !m.script ? 0xff4d6d : 0xc58aff;
+      hi.fillStyle(hpColor).fillRoundedRect(gx - 27, gy + 1, 54 * frac, 6, 3);
+      // Справа от полоски — сколько раз ещё сможет убежать лечиться: горящие домики гаснут по одному
+      // (сверху подпись уровня, поэтому сбоку). В обучении он не убегает, после последнего лечения — полоска красная, домиков нет.
+      if (!m.script && !g.desperate) {
+        const left = ghostHealsLeft(g);
+        for (let i = 0; i < B.ghost.healTargets.length; i++) {
+          const hx = gx + 31 + i * 11;
+          hi.fillStyle(0x000000, 0.6).fillRoundedRect(hx - 1, gy - 1, 11, 11, 2);
+          hi.fillStyle(i < left ? 0x7dd3ff : 0x3a3450);
+          hi.fillTriangle(hx, gy + 4, hx + 4.5, gy, hx + 9, gy + 4);
+          hi.fillRect(hx + 1.5, gy + 4, 6, 5);
+        }
+      }
       // Полоска злости под HP: удары копятся до нового уровня. Почти полна — пульсирует красным.
       // В обучении уровень не растёт — там она была бы застывшим шумом.
       if (!m.script) {
@@ -1597,9 +1611,19 @@ export class GameScene extends Phaser.Scene {
             this.sfx.chime();
           }
           break;
-        case 'ghostRetreat':
+        case 'ghostRetreat': {
           this.sfx.play('ghost_retreat', { volume: 0.6 });
-          this.floatText(this.ghostView.x, this.ghostView.y - 50, 'Убегает лечиться!', '#7dd3ff');
+          // Три захода — три разные стадии (домики справа от полоски HP гаснут по одному), а не один и тот же повтор.
+          const text = e.left >= 2 ? 'Убегает лечиться!' : e.left === 1 ? 'Снова убегает лечиться!' : 'Последний раз лечится!';
+          this.floatText(this.ghostView.x, this.ghostView.y - 50, text, '#7dd3ff');
+          break;
+        }
+        case 'ghostDesperate':
+          // Лечения кончились: призрак больше не убегает (сильнее он не становится). Полоска HP краснеет.
+          this.sfx.play('ghost_laugh', { volume: 0.7, pitch: 0 });
+          this.hud.banner('Больше не убежит! Добей его!', 3000);
+          this.ghostFlash = 250;
+          this.tweens.add({ targets: this.ghostView, scale: { from: 1.3, to: 1 }, duration: 250, ease: 'Quad.easeOut' });
           break;
         case 'ghostDead':
           this.sfx.play('ghost_dead');

@@ -34,7 +34,7 @@ export function createGhost(nest: Vec): Ghost {
   };
 }
 
-export const ghostMaxHp = (m: Match, level: number) => B.ghost.hp * B.ghost.hpMul ** (level - 1) * m.diff.ghostMul;
+export const ghostMaxHp = (m: Match, level: number) => B.ghost.hp * B.ghost.hpMul ** (level - 1) * m.diff.ghostMul * m.diff.ghostHpMul;
 export const ghostDamage = (m: Match, level: number) => B.ghost.dmg * B.ghost.dmgMul ** (level - 1) * m.diff.ghostMul;
 export const ghostHitInterval = (level: number) => B.ghost.hitInterval / (1 + B.ghost.hitSpeedup * (level - 1));
 /** Насколько реже призрак бьёт дверь этой комнаты: холодильник внутри (0 — нет холодильника). */
@@ -45,8 +45,14 @@ export const fridgeSlowOf = (r: Room) => {
 };
 /** Пауза между ударами по двери этой комнаты — одна на симуляцию и отрисовку (кадр удара считается от неё же). */
 export const ghostHitIntervalAt = (m: Match, r: Room) => ghostHitInterval(m.ghost.level) / (1 - fridgeSlowOf(r));
-/** Какую долю макс. HP вылечит этот заход в гнездо: каждый следующий слабее в B.ghost.healDecay раз. */
-export const nestHealFrac = (g: Ghost) => B.ghost.healFrac * B.ghost.healDecay ** g.nestVisits;
+/** До какой доли макс. HP вылечит этот заход в гнездо (B.ghost.healTargets); заходы кончились — 0, не лечит. */
+export const nestHealTarget = (g: Ghost) => B.ghost.healTargets[g.nestVisits] ?? 0;
+/** Сколько ещё раз призрак может убежать лечиться (текущее бегство уже не считается). */
+export const ghostHealsLeft = (g: Ghost) => {
+  if (g.desperate) return 0;
+  const busy = g.state === 'retreating' || g.state === 'healing' ? 1 : 0;
+  return Math.max(0, B.ghost.healTargets.length - g.nestVisits - busy);
+};
 /** Сколько ударов по дверям нужно с уровня level на следующий: каждый уровень на xpGrowth дороже. */
 export const ghostXpNeed = (m: Match, level: number) =>
   // Не меньше 0.01: при hitsPerLevel ≤ 0 (подбор чисел в tune.ts) цикл набора уровней не кончился бы.
@@ -116,7 +122,7 @@ export function updateGhost(m: Match, dt: number): void {
   if (!m.script && !g.desperate && fleeing && g.hp <= g.maxHp * B.ghost.retreatAt) {
     g.state = 'retreating';
     g.waypoints = route(m, m.nest);
-    m.events.push({ type: 'ghostRetreat' });
+    m.events.push({ type: 'ghostRetreat', left: ghostHealsLeft(g) });
   }
 
   switch (g.state) {
@@ -190,17 +196,22 @@ export function updateGhost(m: Match, dt: number): void {
         g.healTimer = B.ghost.healTime;
       }
       break;
-    case 'healing':
+    case 'healing': {
+      // Лечится равномерно до доли этого захода: каждый следующий — ниже, урон прошлых атак копится.
+      const target = g.maxHp * nestHealTarget(g);
+      if (g.hp < target) g.hp += (target - g.hp) * Math.min(1, dt / Math.max(dt, g.healTimer));
       g.healTimer -= dt;
-      // Лечится не до конца и с каждым заходом слабее: урон прошлых атак копится, и призрака можно добить за несколько заходов.
-      g.hp = Math.min(g.maxHp, g.hp + ((g.maxHp * nestHealFrac(g)) / B.ghost.healTime) * dt);
       if (g.healTimer <= 0) {
         g.nestVisits++;
-        // Не поднялся выше порога бегства — иначе тут же убежал бы обратно и крутился у гнезда без конца.
-        g.desperate = g.hp <= g.maxHp * B.ghost.retreatAt;
+        // Заходы кончились — больше не убегает. И на всякий случай: не поднялся выше порога бегства — тоже
+        // (иначе тут же убежал бы обратно и крутился у гнезда без конца).
+        const was = g.desperate;
+        g.desperate = was || g.nestVisits >= B.ghost.healTargets.length || g.hp <= g.maxHp * B.ghost.retreatAt;
+        if (!was && g.desperate) m.events.push({ type: 'ghostDesperate' });
         chooseTarget(m);
       }
       break;
+    }
   }
 }
 

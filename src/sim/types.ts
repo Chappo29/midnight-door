@@ -193,9 +193,9 @@ export interface Ghost {
   siegeDoorHp: number;
   siegeTime: number;
   healTimer: number;
-  /** Сколько раз уже отлечился в гнезде за матч — каждый следующий заход лечит слабее (B.ghost.healDecay). */
+  /** Сколько раз уже отлечился в гнезде за спавн — каждый следующий заход лечит меньше (B.ghost.healTargets). */
   nestVisits: number;
-  /** Гнездо уже не подняло выше порога бегства (B.ghost.retreatAt) — больше не убегает, дерётся до конца. */
+  /** Больше не убегает лечиться, дерётся до конца: заходы в гнездо кончились (или гнездо не подняло выше порога бегства). */
   desperate: boolean;
   /** Секунд без нового уровня — страховка DIFF.levelFallback (сбрасывается любым новым уровнем). */
   levelTimer: number;
@@ -223,7 +223,10 @@ export type SimEvent =
   | { type: 'caught'; roomId: number; charId: number }
   | { type: 'shot'; roomId: number; fromX: number; fromY: number; toX: number; toY: number }
   | { type: 'ghostLevel'; level: number }
-  | { type: 'ghostRetreat' }
+  /** left — сколько ещё раз сможет убежать после этого. */
+  | { type: 'ghostRetreat'; left: number }
+  /** Лечения кончились: больше не убегает, дерётся до конца. */
+  | { type: 'ghostDesperate' }
   /** Призрак бросил эту дверь и пошёл к другой. */
   | { type: 'ghostLeft'; roomId: number }
   /** Призрак выбрал дверь и пошёл к ней (для сигнала «Призрак идёт к тебе!»). */
