@@ -10,6 +10,7 @@
     "test": "vitest run",
     "balance": "tsx scripts/balance.ts",
     "art": "node scripts/import-art.mjs",
+    "sprites:compress": "node scripts/compress-sprites.mjs",
     "sfx": "node scripts/import-sfx.mjs"
   },
   "dependencies": {
