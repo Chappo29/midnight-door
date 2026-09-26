@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Иконки из ChatGPT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@700;800;900&family=Nunito:wght@700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/src/style.css" />
+<style>
+  html, body { height: auto; min-height: 100%; overflow-x: hidden; overflow-y: auto; background: var(--night-4); touch-action: pan-y; }
+  body { padding: 24px 16px 48px; display: flex; flex-direction: column; align-items: center; gap: 30px; color: #fff; }
+  .page-head { text-align: center; max-width: 900px; }
+  .page-head h1 { font-family: var(--font-head); font-weight: 900; font-size: clamp(22px, 4vw, 32px); margin: 0 0 6px; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; }
+  .page-head p, .sec-sub { font-family: var(--font-body); font-weight: 700; font-size: 14px; color: rgba(255,255,255,.72); margin: 0; }
+  section { width: 100%; max-width: 1280px; display: flex; flex-direction: column; gap: 14px; }
+  .sec-title { font-family: var(--font-head); font-weight: 900; font-size: 22px; margin: 0; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; }
+  .row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 1040px) { .row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .cell { background: var(--cream); color: var(--ink); border-radius: 22px; box-shadow: 0 0 0 3px var(--ink), 0 5px 0 var(--ink); padding: 12px 12px 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .cell.now { background: #d9d3e6; }
+  .tag { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-head); font-weight: 800; font-size: 15px; }
+  .letter { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(180deg, var(--amber-light), var(--amber) 55%, var(--amber-dark)); box-shadow: 0 0 0 2px var(--ink); font-weight: 900; font-size: 14px; }
+  .now .letter { background: #a7a0bf; }
+  .big { width: 120px; height: 120px; } .big img, .big svg { width: 100%; height: 100%; object-fit: contain; }
+  .ctx { width: 100%; min-height: 120px; display: flex; align-items: flex-end; justify-content: space-around; gap: 10px; border-radius: 16px; padding: 12px 8px;
+    background: radial-gradient(circle at 30% 20%, #4a3a6e 0, transparent 60%), repeating-linear-gradient(90deg, #3a2f58 0 40px, #342a50 40px 80px); }
+  .cap { font-family: var(--font-body); font-weight: 800; font-size: 10px; color: rgba(255,255,255,.7); text-align: center; margin-top: 6px; }
+  .note { font-family: var(--font-body); font-weight: 700; font-size: 12.5px; line-height: 1.35; text-align: center; margin: 0; }
+  .tiny { display: flex; gap: 10px; align-items: center; font-family: var(--font-body); font-weight: 800; font-size: 11px; color: rgba(28,19,48,.6); }
+  .tiny img, .tiny svg { width: 28px; height: 28px; object-fit: contain; }
+  /* Кнопка-наклейка: сама картинка, без подложки. */
+  .stk { width: 76px; height: 76px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 4px 0 rgba(0,0,0,.45)); }
+  .stk img, .stk svg { width: 100%; height: 100%; object-fit: contain; }
+  /* Конфетный квадрат. */
+  .sq { width: 70px; height: 70px; border-radius: 20px; display: flex; align-items: center; justify-content: center; position: relative; box-shadow: 0 0 0 3px var(--ink), 0 5px 0 var(--ink); }
+  .sq img, .sq svg { width: 80%; height: 80%; object-fit: contain; position: relative; z-index: 1; }
+  .sq::before { content: ''; position: absolute; top: 8%; left: 14%; width: 72%; height: 26%; border-radius: 50%; background: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,0)); }
+  .grape { background: linear-gradient(180deg, var(--grape-light), var(--grape) 55%, var(--grape-dark)); }
+  .mint { background: linear-gradient(180deg, var(--mint-light), var(--mint) 50%, var(--mint-dark)); }
+  .stand-btn { position: relative !important; left: auto !important; right: auto !important; top: auto !important; bottom: auto !important; flex: none; }
+  .home-btn.stand-btn { width: 64px; height: 64px; } .repair-btn.stand-btn { width: 76px; height: 76px; }
+  .opt.stand-opt { width: 100%; min-height: 56px; pointer-events: none; align-self: center; }
+  .tut-skip.stand-btn { display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; }
+  .tut-skip img, .tut-skip svg { width: 70%; height: 70%; object-fit: contain; position: relative; z-index: 1; }
+  .tut-skip .ring.half { background: conic-gradient(rgba(255, 209, 102, 0.85) 220deg, transparent 220deg); }
+  .big.wide { width: 200px; height: 96px; }
+  .big.wide img, .big.wide svg { width: 100%; height: 100%; object-fit: contain; }
+  .stk.sm { width: 52px; height: 52px; } .sq.sm { width: 52px; height: 52px; border-radius: 16px; }
+  .btn-round-sm img { width: 60%; height: 60%; object-fit: contain; position: relative; z-index: 1; }
+  .foot { font-family: var(--font-body); font-weight: 700; font-size: 12px; color: rgba(255,255,255,.55); text-align: center; max-width: 900px; }
+</style>
+</head>
+<body>
+<header class="page-head">
+  <h1>Иконки из ChatGPT: по 4 варианта</h1>
+  <p>Нарисованы по образцу спрайтов игры (герой, тыква, дверь, кот). Каждая показана крупно, в матче — наклейкой без кнопки и на конфетной плитке — и мелко. Серая карточка — как сейчас.</p>
+</header>
+<main id="stand" style="display:contents"></main>
+<p class="foot">Листы — docs/art/source/icons/, нарезка — node scripts/slice-grid.mjs. В игре иконки будут PNG 256 px, как остальные спрайты.</p>
+<script type="module">
+const g = (n) => `/docs/ui-mockups/gen/${n}.png`;
+const im = (src) => `<img src="${src}" alt="">`;
+const NOW = {
+  home: `<svg viewBox="0 0 24 24"><path d="M4 11.5 12 4l8 7.5" stroke="#1c1330" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M6 10.5V20h12v-9.5" fill="#fff" stroke="#1c1330" stroke-width="1.4" stroke-linejoin="round"/><rect x="10" y="14" width="4" height="6" fill="#8b5cf6" stroke="#1c1330" stroke-width="1.2"/></svg>`,
+  repair: `<svg viewBox="0 0 24 24"><path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4l-6 6 2 2 6-6a3.5 3.5 0 0 0 4-4.6l-2.1 2.1-1.6-1.6 2.1-2.1z" fill="#c7ccd6" stroke="#1c1330" stroke-width="1.3" stroke-linejoin="round"/></svg>`,
+  pumpkin: im('/src/assets/sprites/pumpkin.png'),
+  skip: `<svg viewBox="0 0 24 24"><path d="M5 6v12l9-6z" fill="#fff"/><path d="M14 6v12l9-6z" fill="#fff"/></svg>`,
+  pause: `<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.6" fill="#fff" stroke="#1c1330" stroke-width="1.3"/><rect x="14" y="5" width="4" height="14" rx="1.6" fill="#fff" stroke="#1c1330" stroke-width="1.3"/></svg>`,
+  sound: `<svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4H4z" fill="#fff" stroke="#1c1330" stroke-width="1.3" stroke-linejoin="round"/><path d="M16.5 9a4.5 4.5 0 0 1 0 6" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>|<svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4H4z" fill="#fff" stroke="#1c1330" stroke-width="1.3" stroke-linejoin="round"/><path d="M16 9l5 6M21 9l-5 6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+};
+const GROUPS = [
+  { kind: 'home', title: 'Домой — «К своей комнате»', sub: 'Левый нижний угол в матче.', items: [
+    ['home_house', 'Домик', 'Уютный дом с красной крышей и тёплым окном.'],
+    ['home_bed', 'Кроватка', 'Комната = где спит герой. Самая «детская» метафора.'],
+    ['home_pin', 'Метка', 'Метка на карте с домиком: «вернуться к себе».'],
+    ['home_heart', 'Домик с сердцем', 'Сердце на двери = «мой дом».'],
+  ] },
+  { kind: 'repair', title: 'Чинить дверь', sub: 'Большая кнопка в правом нижнем углу.', items: [
+    ['repair_hammer', 'Молоток', 'Один крупный предмет — читается лучше всех.'],
+    ['repair_plank', 'Доска и молоток', 'Прибить доску — сюжетно точно, но деталей много.'],
+    ['repair_plaster', 'Дверь с пластырем', 'Дверь «лечится». Сразу видно, что чиним именно дверь.'],
+    ['repair_combo', 'Молоток и ключ', 'Классический знак ремонта.'],
+  ] },
+  { kind: 'pumpkin', title: 'Тыква — постройка, дающая пламя', sub: 'Пункт меню постройки; эту же картинку можно поставить на грядку вместо pumpkin.png.', items: [
+    ['pumpkin_lantern', 'Светильник Джека', 'Огонь светится изнутри через лицо.'],
+    ['pumpkin_candle', 'Тыква-свечка', 'Свеча вместо хвостика.'],
+    ['pumpkin_sprout', 'Росток на грядке', 'Растёт из земли — видно, что её сажают.'],
+    ['pumpkin_kawaii', 'Добрая тыква', 'Щёчки и огонёк-шапочка, как у кота-маскота.'],
+  ] },
+  { kind: 'skip', title: 'Пропустить обучение', sub: 'Тёмная кнопка в обучении (удержать — кольцо заполняется).', items: [
+    ['skip_ff', 'Перемотка', 'Золотые стрелки «до конца».'],
+    ['skip_jump', 'Прыжок', 'Стрелка перепрыгивает шаги.'],
+    ['skip_shoe', 'Кроссовка', '«Бегом играть!»'],
+    ['skip_paw', 'Лапка кота', 'Кот-помощник сам толкает вперёд.'],
+  ] },
+  { kind: 'pause', title: 'Пауза', sub: 'Маленькая кнопка в правом верхнем углу.', items: [
+    ['pause_gold', 'Золотые полоски', 'Классический знак, самый читаемый.'],
+    ['pause_candy', 'Леденцы', 'Две полосатые карамельки — «конфетная» пауза.'],
+    ['pause_clock', 'Будильник', 'Время остановилось. Милее, но мельче знак паузы.'],
+    ['pause_moon', 'Сонная луна', '«Ночь уснула». Красиво, но знак паузы маленький.'],
+  ] },
+  { kind: 'sound', title: 'Звук: включён / выключен', sub: 'Кнопка под паузой. В каждой карточке пара: слева «звук есть», справа «звук выключен».', items: [
+    ['sound_speaker_on|sound_speaker_off', 'Динамик', 'Привычный знак, выключенный — с красным крестиком.'],
+    ['sound_notes_on|sound_notes_off', 'Ноты', 'Музыка есть / зачёркнута.'],
+    ['sound_cat_on|sound_cat_off', 'Кот поёт / закрыл уши', 'Живой и смешной: сразу понятно без знака.'],
+    ['sound_horn_on|sound_horn_off', 'Дудочка', 'Дудит / с пробкой и «Zzz».'],
+  ] },
+];
+const CTX = {
+  home: (i) => `<div><div class="stk">${i}</div><div class="cap">наклейка</div></div><div><div class="sq grape">${i}</div><div class="cap">плитка</div></div>`,
+  repair: (i) => `<div><div class="stk">${i}</div><div class="cap">наклейка</div></div><div><div class="sq mint">${i}</div><div class="cap">плитка</div></div>`,
+  pumpkin: (i) => `<div class="opt stand-opt"><span class="ico">${i}</span><span class="opt-main"><span class="lbl">Тыква</span><span class="opt-desc">даёт пламя</span></span></div>`,
+  skip: (i) => `<button class="tut-skip stand-btn" type="button"><span class="ring half"></span>${i}</button>`,
+  pause: (i) => `<div><div class="stk sm">${i}</div><div class="cap">наклейка</div></div><div><div class="sq sm grape">${i}</div><div class="cap">плитка</div></div>`,
+  sound: (i) => `<div style="display:flex;gap:10px"><div class="stk sm">${i.split('|')[0]}</div><div class="stk sm">${i.split('|')[1]}</div></div>`,
+};
+const NOW_CTX = {
+  home: (i) => `<button class="btn-round home-btn stand-btn">${i}</button>`,
+  repair: (i) => `<button class="btn-round repair-btn stand-btn"><span class="repair-ico">${i}</span></button>`,
+  pumpkin: CTX.pumpkin, skip: CTX.skip,
+  pause: (i) => `<button class="btn-round-sm">${i}</button>`,
+  sound: (i) => `<div style="display:flex;gap:18px"><button class="btn-round-sm blue">${i.split('|')[0]}</button><button class="btn-round-sm blue">${i.split('|')[1]}</button></div>`,
+};
+const pairBig = (icon) => icon.includes('|') ? `<div style="display:flex;gap:6px;width:100%;height:100%">${icon.split('|').map((x) => `<div style="flex:1">${x}</div>`).join('')}</div>` : icon;
+const cell = (letter, name, icon, ctx, note, now) => `
+  <div class="cell${now ? ' now' : ''}">
+    <span class="tag"><span class="letter">${letter}</span>${name}</span>
+    <div class="big${icon.includes('|') ? ' wide' : ''}">${pairBig(icon)}</div>
+    <div class="ctx">${ctx}</div>
+    <div class="tiny">мелко: ${icon.replace('|', '')}</div>
+    <p class="note">${note}</p>
+  </div>`;
+document.getElementById('stand').innerHTML = GROUPS.map((gr) => `
+  <section>
+    <h2 class="sec-title">${gr.title}</h2><p class="sec-sub">${gr.sub}</p>
+    <div class="row">
+      ${cell('·', 'Сейчас', NOW[gr.kind], NOW_CTX[gr.kind](NOW[gr.kind]), 'Для сравнения.', true)}
+      ${gr.items.map(([f, n, note], i) => cell('АБВГ'[i], n, f.split('|').map((x) => im(g(x))).join('|'), CTX[gr.kind](f.split('|').map((x) => im(g(x))).join('|')), note)).join('')}
+    </div>
+  </section>`).join('');
+</script>
+</body>
+</html>

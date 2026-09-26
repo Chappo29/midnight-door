@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Иконки — варианты</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@700;800;900&family=Nunito:wght@700;800&display=swap" rel="stylesheet" />
+<!-- Реальная таблица стилей игры: кнопки .btn-round, .opt, .tut-skip берутся как в матче. -->
+<link rel="stylesheet" href="/src/style.css" />
+<style>
+  html, body { height: auto; min-height: 100%; overflow-x: hidden; overflow-y: visible; background: var(--night-4); touch-action: pan-y; }
+  body { padding: 24px 16px 48px; display: flex; flex-direction: column; align-items: center; gap: 30px; color: #fff; }
+  .page-head { text-align: center; max-width: 900px; }
+  .page-head h1 { font-family: var(--font-head); font-weight: 900; font-size: clamp(22px, 4vw, 32px); margin: 0 0 6px; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; }
+  .page-head p, .sec-sub { font-family: var(--font-body); font-weight: 700; font-size: 14px; color: rgba(255,255,255,.72); margin: 0; }
+  section { width: 100%; max-width: 1280px; display: flex; flex-direction: column; gap: 14px; }
+  .sec-title { font-family: var(--font-head); font-weight: 900; font-size: 22px; margin: 0; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; }
+  .row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 1040px) { .row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 420px) { .row { grid-template-columns: 1fr; } }
+  .cell { background: var(--cream); color: var(--ink); border-radius: 22px; box-shadow: 0 0 0 3px var(--ink), 0 5px 0 var(--ink); padding: 12px 12px 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .cell.now { background: #d9d3e6; opacity: .92; }
+  .tag { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-head); font-weight: 800; font-size: 15px; }
+  .letter { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(180deg, var(--amber-light), var(--amber) 55%, var(--amber-dark)); box-shadow: 0 0 0 2px var(--ink); font-weight: 900; font-size: 14px; }
+  .now .letter { background: #a7a0bf; }
+  .big { width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; }
+  .big svg, .big img { width: 100%; height: 100%; object-fit: contain; }
+  .ctx { min-height: 104px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 16px; background: var(--night-2); border-radius: 16px; padding: 10px; }
+  .ctx.light { background: #fff; box-shadow: inset 0 0 0 2px var(--cream-dark); }
+  .tiny { display: flex; gap: 10px; align-items: center; font-family: var(--font-body); font-weight: 800; font-size: 11px; color: rgba(28,19,48,.6); }
+  .tiny svg, .tiny img { width: 24px; height: 24px; }
+  .tiny .dark { background: var(--night-2); padding: 3px; border-radius: 6px; display: inline-flex; }
+  .note { font-family: var(--font-body); font-weight: 700; font-size: 12.5px; line-height: 1.35; text-align: center; margin: 0; }
+
+  /* Кнопки игры в потоке страницы, а не в углу экрана. */
+  .stand-btn { position: relative !important; left: auto !important; right: auto !important; top: auto !important; bottom: auto !important; flex: none; }
+  .home-btn.stand-btn { width: 64px; height: 64px; }
+  .repair-btn.stand-btn { width: 80px; height: 80px; }
+  .repair-btn.stand-btn .repair-ico svg { width: 36px; height: 36px; }
+  .repair-btn.cdlook { background: linear-gradient(180deg, #a7a0bf 0%, #7a7391 55%, #5c5570 100%); width: 64px; height: 64px; }
+  .repair-btn.cdlook .repair-ico { opacity: .5; }
+  .repair-btn.cdlook .repair-ico svg { width: 28px; height: 28px; }
+  .repair-btn.cdlook::after { opacity: 1; --cd: .6; }
+  .tut-skip.stand-btn { display: flex; align-items: center; justify-content: center; }
+  .tut-skip svg { width: 58%; height: 58%; position: relative; z-index: 1; }
+  .tut-skip .ring.half { background: conic-gradient(rgba(255, 209, 102, 0.85) 220deg, transparent 220deg); }
+  .opt.stand-opt { width: 100%; min-height: 56px; pointer-events: none; }
+  .opt.stand-opt .lbl { font-size: 15px; }
+  .link-skip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-head); font-weight: 800; font-size: 13px; color: #fff; }
+  .link-skip svg { width: 20px; height: 20px; }
+  /* ---------- Формы кнопок домика и ремонта ---------- */
+  .corner { position: relative; width: 100%; height: 160px; border-radius: 16px; overflow: hidden;
+    background: radial-gradient(circle at 30% 20%, #4a3a6e 0, transparent 60%), repeating-linear-gradient(90deg, #3a2f58 0 40px, #342a50 40px 80px); }
+  .corner .slot { position: absolute; bottom: 14px; display: flex; flex-direction: column; align-items: center; }
+  .corner .slot.l { left: 14px; } .corner .slot.r { right: 14px; }
+  .corner .slot.r2 { right: 118px; }
+  .shp { position: relative; isolation: isolate; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; }
+  .shp svg { position: relative; z-index: 1; }
+  .shp .cd { position: absolute; inset: 0; border-radius: inherit; background: conic-gradient(rgba(15,10,26,.68) 216deg, transparent 0); z-index: 2; }
+  .shp.grey { filter: saturate(0) brightness(.8); }
+  .shp.grey svg { opacity: .55; }
+  .grape-bg { background: linear-gradient(180deg, var(--grape-light), var(--grape) 55%, var(--grape-dark)); --dark: var(--grape-dark); }
+  .mint-bg { background: linear-gradient(180deg, var(--mint-light), var(--mint) 50%, var(--mint-dark)); --dark: var(--mint-dark); }
+  .gloss::before { content: ''; position: absolute; top: 9%; left: 14%; width: 72%; height: 28%; border-radius: 50%; background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,0)); z-index: 0; }
+  .lbl-s { font-family: var(--font-head); font-weight: 900; font-size: 13px; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; position: relative; z-index: 3; line-height: 1; }
+
+  /* А: конфетный квадрат */
+  .s-sq { border-radius: 22px; box-shadow: 0 0 0 3px var(--ink), 0 5px 0 var(--ink); }
+  .s-sq.sm { width: 62px; height: 62px; } .s-sq.bg { width: 84px; height: 84px; border-radius: 26px; }
+  .s-sq.sm svg { width: 64%; height: 64%; } .s-sq.bg svg { width: 62%; height: 62%; }
+  /* Б: иконка-наклейка без подложки */
+  .s-stk { background: none; }
+  .s-stk.sm { width: 64px; height: 64px; } .s-stk.bg { width: 88px; height: 88px; }
+  .s-stk svg { width: 100%; height: 100%; filter: drop-shadow(0 0 0 #fff) drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff) drop-shadow(0 4px 0 rgba(0,0,0,.45)); }
+  .s-stk .ring { position: absolute; inset: -6px; border-radius: 50%; background: conic-gradient(var(--mint) 144deg, rgba(255,255,255,.18) 0); -webkit-mask: radial-gradient(circle, transparent 62%, #000 63%); mask: radial-gradient(circle, transparent 62%, #000 63%); }
+  /* В: плитка с подписью */
+  .s-lbl { border-radius: 20px; box-shadow: 0 0 0 3px var(--ink), 0 5px 0 var(--ink); gap: 1px; padding-top: 4px; }
+  .s-lbl.sm { width: 66px; height: 70px; } .s-lbl.bg { width: 88px; height: 92px; border-radius: 24px; }
+  .s-lbl.sm svg { width: 40px; height: 40px; } .s-lbl.bg svg { width: 54px; height: 54px; }
+  /* Г: круг-пузырь, одна толстая обводка, иконка выглядывает сверху */
+  .s-bub { border-radius: 50%; box-shadow: 0 0 0 3.5px var(--ink), 0 5px 0 var(--ink); }
+  .s-bub.sm { width: 60px; height: 60px; } .s-bub.bg { width: 80px; height: 80px; }
+  .s-bub svg { width: 88%; height: 88%; transform: translateY(-26%); filter: drop-shadow(0 3px 0 rgba(0,0,0,.3)); }
+  .foot { font-family: var(--font-body); font-weight: 700; font-size: 12px; color: rgba(255,255,255,.55); text-align: center; max-width: 900px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="hg-mint" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8bf7d6"/><stop offset=".55" stop-color="#2fe3a6"/><stop offset="1" stop-color="#0e9c6e"/></linearGradient>
+  <linearGradient id="hg-straw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8fa3"/><stop offset=".55" stop-color="#ff4d6d"/><stop offset="1" stop-color="#c31e42"/></linearGradient>
+  <linearGradient id="hg-amber" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd98a"/><stop offset=".55" stop-color="#ffb238"/><stop offset="1" stop-color="#d97f0e"/></linearGradient>
+  <linearGradient id="hg-grape" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c3a6ff"/><stop offset=".55" stop-color="#8b5cf6"/><stop offset="1" stop-color="#5a32b8"/></linearGradient>
+  <linearGradient id="hg-silver" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f6fb"/><stop offset=".6" stop-color="#c7ccd6"/><stop offset="1" stop-color="#8c93a3"/></linearGradient>
+  <!-- Новые для вариантов: тыква, дерево, пластырь, листок. -->
+  <linearGradient id="hg-pump" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc07a"/><stop offset=".5" stop-color="#ff8a1f"/><stop offset="1" stop-color="#d4560a"/></linearGradient>
+  <linearGradient id="hg-wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0c48e"/><stop offset=".55" stop-color="#c98a4b"/><stop offset="1" stop-color="#8f5a2b"/></linearGradient>
+  <linearGradient id="hg-peach" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe0c2"/><stop offset="1" stop-color="#f5b184"/></linearGradient>
+  <linearGradient id="hg-leaf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9be36a"/><stop offset="1" stop-color="#3f9a36"/></linearGradient>
+</defs></svg>
+
+<header class="page-head">
+  <h1>Иконки: 4 варианта на замену</h1>
+  <p>Каждая показана крупно, на своей кнопке из игры и в 24 px, чтобы проверить, читается ли она. Серая карточка — как сейчас.</p>
+</header>
+
+<main id="stand" style="display:contents"></main>
+
+<p class="foot">Всё — инлайн SVG в стиле ICON из hud.ts: тёмный контур var(--ink), глянцевые градиенты hg-*. Новые градиенты: hg-pump, hg-wood, hg-peach, hg-leaf. Тыкву на карте рисует спрайт pumpkin.png: если выбрать новую иконку, спрайт нужно перерисовать в тот же вид, иначе в меню будет одна тыква, а на грядке другая.</p>
+
+<script type="module">
+import pumpkinPng from '/src/assets/sprites/pumpkin.png';
+
+const INK = 'stroke="var(--ink)"';
+const svg = (body) => `<svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+
+/* Тело тыквы: три дольки, средняя поверх — её контур перекрывает внутренние швы боковых. */
+const pumpkinBody = (cy = 14.6, ry = 6.4) => `
+  <ellipse cx="7.6" cy="${cy}" rx="5.3" ry="${ry}" fill="url(#hg-pump)" ${INK} stroke-width="1.3"/>
+  <ellipse cx="16.4" cy="${cy}" rx="5.3" ry="${ry}" fill="url(#hg-pump)" ${INK} stroke-width="1.3"/>
+  <ellipse cx="12" cy="${cy}" rx="4.8" ry="${ry + .4}" fill="url(#hg-pump)" ${INK} stroke-width="1.3"/>
+  <path d="M10 ${cy - ry + 1.6}q-1.2 1.4-1.2 3" stroke="#fff" stroke-width="1.1" opacity=".75"/>`;
+const stem = (y = 8.4) => `<path d="M12 ${y}c0-2 .6-3.4 2.2-4.4" ${INK} stroke-width="3.4"/><path d="M12 ${y}c0-2 .6-3.4 2.2-4.4" stroke="#56b84a" stroke-width="1.5"/>`;
+const flame = (tx, ty, s) => `<g transform="translate(${tx} ${ty}) scale(${s})"><path d="M12 1.8c.6 2.9 3.4 4.6 4.9 7.4 1.9 3.4 1 7.7-2.1 9.6-1.6 1-3.5 1.4-5.3.9-3.3-.9-5.4-4.1-4.8-7.5.3-1.9 1.4-3.3 2.4-4.6.3 1.3 1 2.3 2 2.8-.4-3 .9-6 2.9-8.6z" fill="#ff7a2e" ${INK} stroke-width="${1.4 / s}"/><path d="M12.2 10.6c.4 1.6 2.3 2.5 2.4 4.6.1 1.9-1.3 3.4-3 3.4-1.8 0-3.1-1.6-2.8-3.4.1-.9.6-1.6 1.1-2.2.2.7.6 1.1 1.1 1.3-.2-1.5.4-2.7 1.2-3.7z" fill="#ffd166" ${INK} stroke-width="${1 / s}"/></g>`;
+const hammer = `
+  <path d="M5 20 13.8 11.2" ${INK} stroke-width="5"/>
+  <path d="M5 20 13.8 11.2" stroke="#e0a868" stroke-width="2.8"/>
+  <rect x="9.2" y="6.8" width="12" height="6" rx="1.8" transform="rotate(45 15.2 9.8)" fill="url(#hg-silver)" ${INK} stroke-width="1.4"/>
+  <path d="M13.6 5.6l2.6 2.6" stroke="#fff" stroke-width="1.2"/>`;
+const bandAid = (a) => `<g transform="rotate(${a} 12 12)">
+  <rect x="1.6" y="8.2" width="20.8" height="7.6" rx="3.8" fill="url(#hg-peach)" ${INK} stroke-width="1.3"/>
+  <circle cx="4.6" cy="10.8" r=".6" fill="#c98a4b"/><circle cx="4.6" cy="13.2" r=".6" fill="#c98a4b"/>
+  <circle cx="19.4" cy="10.8" r=".6" fill="#c98a4b"/><circle cx="19.4" cy="13.2" r=".6" fill="#c98a4b"/></g>`;
+
+const ICONS = {
+  home: {
+    title: 'Домик — «К своей комнате»',
+    sub: 'Фиолетовая кнопка слева внизу, возвращает камеру к комнате игрока.',
+    now: `<svg viewBox="0 0 24 24"><path d="M4 11.5 12 4l8 7.5" stroke="var(--ink)" stroke-width="1.6" fill="none" stroke-linejoin="round"/><path d="M6 10.5V20h12v-9.5" fill="#fff" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><rect x="10" y="14" width="4" height="6" fill="url(#hg-grape)" stroke="var(--ink)" stroke-width="1.2"/></svg>`,
+    variants: [
+      { name: 'Пряничный домик', note: 'Та же идея, но толще: красная крыша, труба, янтарная дверь. Сразу видно с 24 px.', svg: svg(`
+        <path d="M15.4 4.2h3.2v6.4h-3.2z" fill="url(#hg-straw)" ${INK} stroke-width="1.3"/>
+        <rect x="5" y="10.5" width="14" height="10.5" rx="1.6" fill="#fff8ec" ${INK} stroke-width="1.4"/>
+        <path d="M12 3.2 2.6 11a1.2 1.2 0 0 0 .8 2.1h17.2a1.2 1.2 0 0 0 .8-2.1z" fill="url(#hg-straw)" ${INK} stroke-width="1.4"/>
+        <path d="M9.8 21v-4a2.2 2.2 0 0 1 4.4 0v4z" fill="url(#hg-amber)" ${INK} stroke-width="1.2"/>
+        <path d="M7.6 9.6 11.2 6.6" stroke="#fff" stroke-width="1.2" opacity=".85"/>`) },
+      { name: 'Кроватка', note: 'Комната в игре — место, где спит герой. «К своей кровати» ребёнку понятнее, чем абстрактный дом.', svg: svg(`
+        <path d="M19.8 17.6v3" ${INK} stroke-width="2.6"/>
+        <rect x="2.5" y="5.5" width="4.6" height="15" rx="1.6" fill="url(#hg-wood)" ${INK} stroke-width="1.3"/>
+        <rect x="4.6" y="13" width="17" height="5" rx="1.6" fill="#fff" ${INK} stroke-width="1.3"/>
+        <path d="M10 10.4h9.5a2 2 0 0 1 2 2V18H10z" fill="url(#hg-straw)" ${INK} stroke-width="1.3"/>
+        <rect x="6.2" y="9.4" width="5.4" height="3.8" rx="1.9" fill="#fff" ${INK} stroke-width="1.2"/>
+        <path d="M10.6 13.4h10.4" stroke="#fff" stroke-width="1" opacity=".8"/>
+        <path d="M15.6 3h3l-3 3.4h3" stroke="#fff" stroke-width="1.5"/>`) },
+      { name: 'Метка «я тут»', note: 'Янтарная метка с домиком внутри. Смысл «вернуться к своему месту», как в картах.', svg: svg(`
+        <path d="M12 22.2s-7.2-6.6-7.2-12.2a7.2 7.2 0 0 1 14.4 0c0 5.6-7.2 12.2-7.2 12.2z" fill="url(#hg-amber)" ${INK} stroke-width="1.4"/>
+        <path d="M12 5.4 8 8.9v4.3h8V8.9z" fill="#fff" ${INK} stroke-width="1.2"/>
+        <path d="M11 13.2v-2.4h2v2.4z" fill="url(#hg-straw)" ${INK} stroke-width=".9"/>
+        <path d="M7.4 7.6a5 5 0 0 1 2.4-2.8" stroke="#fff" stroke-width="1.2"/>`) },
+      { name: 'Домик с сердечком', note: 'Мятная крыша на фиолетовой кнопке, сердце на стене = «мой». Самый тёплый вариант.', svg: svg(`
+        <rect x="4.6" y="10.4" width="14.8" height="10.6" rx="2" fill="#fff8ec" ${INK} stroke-width="1.4"/>
+        <path d="M12 3 2.6 10.8a1.2 1.2 0 0 0 .8 2.1h17.2a1.2 1.2 0 0 0 .8-2.1z" fill="url(#hg-mint)" ${INK} stroke-width="1.4"/>
+        <path d="M12 19.6s-3.6-2.2-3.6-4.6a1.9 1.9 0 0 1 3.6-.8 1.9 1.9 0 0 1 3.6.8c0 2.4-3.6 4.6-3.6 4.6z" fill="url(#hg-straw)" ${INK} stroke-width="1.1"/>
+        <path d="M7.6 9.4 11.2 6.4" stroke="#fff" stroke-width="1.2" opacity=".85"/>`) },
+    ],
+  },
+  repair: {
+    title: 'Ключ — «Чинить дверь»',
+    sub: 'Большая мятная кнопка справа внизу; серая — пока идёт перезарядка.',
+    now: `<svg viewBox="0 0 24 24"><path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4l-6 6 2 2 6-6a3.5 3.5 0 0 0 4-4.6l-2.1 2.1-1.6-1.6 2.1-2.1z" fill="url(#hg-silver)" stroke="var(--ink)" stroke-width="1.3" stroke-linejoin="round"/></svg>`,
+    variants: [
+      { name: 'Молоток', note: 'Для ребёнка «чинить» — это молоток. Толстая деревянная ручка, серебряная головка. Герой в игре уже машет молотком.', svg: svg(hammer) },
+      { name: 'Доска и молоток', note: 'Прибить доску к двери. Сюжетно точнее всех, но деталей больше, в 24 px чуть мельчит.', svg: svg(`
+        <rect x="1.8" y="14" width="16" height="5.6" rx="1.3" transform="rotate(-10 9.8 16.8)" fill="url(#hg-wood)" ${INK} stroke-width="1.3"/>
+        <circle cx="4.8" cy="17.6" r="1" fill="url(#hg-silver)" ${INK} stroke-width=".8"/>
+        <circle cx="14.6" cy="15.9" r="1" fill="url(#hg-silver)" ${INK} stroke-width=".8"/>
+        <path d="M11.6 12.6 17.4 6.8" ${INK} stroke-width="3.8"/><path d="M11.6 12.6 17.4 6.8" stroke="#e0a868" stroke-width="2"/>
+        <rect x="14.8" y="3.4" width="8.4" height="4.4" rx="1.2" transform="rotate(45 19 5.6)" fill="url(#hg-silver)" ${INK} stroke-width="1.2"/>
+        <path d="M4 5.2l.8 1.8 1.8.8-1.8.8-.8 1.8-.8-1.8-1.8-.8 1.8-.8z" fill="#fff" ${INK} stroke-width=".8"/>`) },
+      { name: 'Пластыри крестом', note: 'Дверь «лечится». Пластырь знаком любому малышу и совпадает с полоской здоровья двери.', svg: svg(bandAid(-38) + bandAid(38) + `<rect x="9" y="9" width="6" height="6" rx="1" fill="#fff4e6" ${INK} stroke-width="1.1"/>`) },
+      { name: 'Ключ + молоток', note: 'Классический знак «ремонт». Надёжно читается, но на кнопке выглядит плотнее остальных.', svg: svg(`<g transform="translate(24 0) scale(-1 1)">${hammer}</g>
+        <path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4l-6 6 2 2 6-6a3.5 3.5 0 0 0 4-4.6l-2.1 2.1-1.6-1.6 2.1-2.1z" fill="url(#hg-amber)" ${INK} stroke-width="1.5"/>`) },
+    ],
+  },
+  pumpkin: {
+    title: 'Тыква — постройка, дающая пламя',
+    sub: 'Пункт меню постройки на грядке. Сейчас это спрайт pumpkin.png, тот же, что на карте.',
+    now: `<img src="${pumpkinPng}" alt="">`,
+    variants: [
+      { name: 'Светильник Джека', note: 'Светящееся лицо само и есть «огонь внутри». Сразу Хэллоуин, пламя не нужно рисовать отдельно.', svg: svg(pumpkinBody() + stem() + `
+        <path d="M7.8 12.8l1.9-2.6 1.9 2.6z" fill="#ffe066" ${INK} stroke-width=".9"/>
+        <path d="M12.4 12.8l1.9-2.6 1.9 2.6z" fill="#ffe066" ${INK} stroke-width=".9"/>
+        <path d="M7.6 15.4q4.4 3.8 8.8 0l-1.5 2-1.4-.9-1.5 1.3-1.5-1.3-1.4.9z" fill="#ffe066" ${INK} stroke-width=".9"/>`) },
+      { name: 'Тыква-свечка', note: 'Вместо хвостика свеча с огоньком. «Тыква делает пламя» без лишних слов.', svg: svg(pumpkinBody(15.6, 5.8) + `
+        <rect x="10.2" y="5.2" width="3.6" height="5" rx=".8" fill="#fff8ec" ${INK} stroke-width="1.1"/>
+        <path d="M12 .6c1 1.3 2.1 2.2 2.1 3.4a2.1 2.1 0 0 1-4.2 0c0-1.2 1.1-2.1 2.1-3.4z" fill="#ff9a2e" ${INK} stroke-width=".9"/>
+        <path d="M12 2.6c.4.6.9 1 .9 1.5a.9.9 0 0 1-1.8 0c0-.5.5-.9.9-1.5z" fill="#ffe066"/>`) },
+      { name: 'Росток на грядке', note: 'Тыкву сажают на грядку, это видно по иконке. Из хвостика растёт огонёк, как листок.', svg: svg(`
+        <path d="M1.6 22c1-3.2 4-4.6 10.4-4.6s9.4 1.4 10.4 4.6z" fill="#8a5a36" ${INK} stroke-width="1.3"/>
+        <g transform="translate(3.4 3.6) scale(.72)">${pumpkinBody()}</g>
+        <path d="M12 9.8c.6-2 2.8-3 4.6-2.6-.4 1.9-2.6 3.2-4.6 2.6z" fill="url(#hg-leaf)" ${INK} stroke-width="1"/>
+        ${flame(6.2, -0.6, 0.48)}`) },
+      { name: 'Добрая тыква', note: 'Щёчки, закрытые глазки и огонёк-шапочка. По характеру ближе всех к коту-маскоту.', svg: svg(pumpkinBody(15, 6.2) + `
+        <path d="M8.4 14q1.2-1.3 2.4 0M13.2 14q1.2-1.3 2.4 0" ${INK} stroke-width="1.2"/>
+        <path d="M11 16.4q1 1 2 0" ${INK} stroke-width="1.1"/>
+        <ellipse cx="7.8" cy="16.3" rx="1.3" ry=".8" fill="#ff8fa3" opacity=".8"/>
+        <ellipse cx="16.2" cy="16.3" rx="1.3" ry=".8" fill="#ff8fa3" opacity=".8"/>
+        ${flame(6.6, -1.4, 0.46)}`) },
+    ],
+  },
+  skip: {
+    title: 'Пропустить обучение',
+    sub: 'Тёмная круглая кнопка в обучении (удержать, жёлтое кольцо заполняется) и ссылка в конце. Сейчас в кнопке эмодзи ⏭, в ссылке — два чёрных треугольника.',
+    now: `<svg viewBox="0 0 24 24"><path d="M5 6v12l9-6z" fill="#fff"/><path d="M14 6v12l9-6z" fill="#fff"/></svg>`,
+    variants: [
+      { name: 'Карамельная перемотка', note: 'Тот же знак ⏭, но в стиле игры: янтарные глянцевые треугольники с контуром и чертой «до конца».', svg: svg(`
+        <path d="M3 6.4v11.2l7.6-5.6z" fill="url(#hg-amber)" ${INK} stroke-width="1.4"/>
+        <path d="M10.6 6.4v11.2l7.6-5.6z" fill="url(#hg-amber)" ${INK} stroke-width="1.4"/>
+        <rect x="18.4" y="5.8" width="3" height="12.4" rx="1.3" fill="url(#hg-amber)" ${INK} stroke-width="1.3"/>`) },
+      { name: 'Прыжок через шаги', note: 'Стрелка перепрыгивает три шага обучения. Показывает смысл «перескочить», а не «перемотать видео».', svg: svg(`
+        <circle cx="5" cy="19.4" r="1.6" fill="#fff" ${INK} stroke-width="1"/>
+        <circle cx="10.6" cy="19.4" r="1.6" fill="#fff" ${INK} stroke-width="1"/>
+        <circle cx="16.2" cy="19.4" r="1.6" fill="#fff" ${INK} stroke-width="1"/>
+        <path d="M3.4 14.6C5.6 6.6 15 5.4 18.8 11.6" ${INK} stroke-width="4.6"/>
+        <path d="M3.4 14.6C5.6 6.6 15 5.4 18.8 11.6" stroke="#fff" stroke-width="2.4"/>
+        <path d="M21.6 8.2 20.6 15l-6-2z" fill="url(#hg-amber)" ${INK} stroke-width="1.2"/>`) },
+      { name: 'Сразу играть', note: 'Мятный «плей» с двойной стрелкой: не «пропустить», а «я уже умею — играем!». Звучит позитивнее для ребёнка.', svg: svg(`
+        <circle cx="12" cy="12" r="10" fill="url(#hg-mint)" ${INK} stroke-width="1.4"/>
+        <path d="M6.8 7.6 12 12l-5.2 4.4z" fill="#fff" ${INK} stroke-width="1.2"/>
+        <path d="M11.8 7.6 17 12l-5.2 4.4z" fill="#fff" ${INK} stroke-width="1.2"/>
+        <path d="M6.4 5.4a8 8 0 0 1 4.2-2" stroke="#fff" stroke-width="1.3"/>`) },
+      { name: 'Двойной шеврон', note: 'Самый простой: две толстые мятные «галки» ». Лёгкий, не спорит с котом и подсказкой.', svg: svg(`
+        <path d="M4.4 5.6 10.6 12l-6.2 6.4" ${INK} stroke-width="5.4"/>
+        <path d="M4.4 5.6 10.6 12l-6.2 6.4" stroke="#2fe3a6" stroke-width="2.8"/>
+        <path d="M12.4 5.6 18.6 12l-6.2 6.4" ${INK} stroke-width="5.4"/>
+        <path d="M12.4 5.6 18.6 12l-6.2 6.4" stroke="#2fe3a6" stroke-width="2.8"/>`) },
+    ],
+  },
+};
+
+/** Как иконка выглядит на своей настоящей кнопке. */
+const CONTEXT = {
+  home: (ic) => `<div class="ctx"><button class="btn-round home-btn stand-btn" type="button">${ic}</button></div>`,
+  repair: (ic) => `<div class="ctx"><button class="btn-round repair-btn stand-btn" type="button"><span class="repair-ico">${ic}</span></button><button class="btn-round repair-btn stand-btn cdlook" type="button"><span class="repair-ico">${ic}</span></button></div>`,
+  pumpkin: (ic) => `<div class="ctx"><div class="opt stand-opt"><span class="ico">${ic}</span><span class="opt-main"><span class="lbl">Тыква</span><span class="opt-desc">даёт пламя</span></span></div></div>`,
+  skip: (ic) => `<div class="ctx" style="flex-direction:column;gap:10px"><button class="tut-skip stand-btn" type="button"><span class="ring half"></span>${ic}</button><span class="link-skip">${ic}Пропустить обучение</span></div>`,
+};
+
+const cell = (kind, letter, name, ic, note, isNow) => `
+  <div class="cell${isNow ? ' now' : ''}">
+    <span class="tag"><span class="letter">${letter}</span>${name}</span>
+    <div class="big">${ic}</div>
+    ${CONTEXT[kind](ic)}
+    <div class="tiny">24 px: ${ic}<span class="dark">${ic}</span></div>
+    <p class="note">${note}</p>
+  </div>`;
+
+const LETTERS = ['А', 'Б', 'В', 'Г'];
+
+/* Формы кнопок: у всех новые иконки А (пряничный домик, молоток), чтобы сравнивать только подложку. */
+const H = ICONS.home.variants[0].svg, R = ICONS.repair.variants[0].svg;
+const SHAPES = [
+  { name: 'Сейчас', now: true, note: 'Глянцевый круг, белое кольцо и тёмное кольцо — двойная рамка делает кнопку похожей на значок, а иконка внутри мелкая.',
+    home: `<button class="btn-round home-btn stand-btn">${ICONS.home.now}</button>`,
+    rep: (cd) => `<button class="btn-round repair-btn stand-btn${cd ? ' cdlook' : ''}"><span class="repair-ico">${ICONS.repair.now}</span></button>` },
+  { name: 'Конфетный квадрат', note: 'Скруглённый квадрат с одной тёмной обводкой и «ступенькой» снизу — как кнопки меню постройки и «Забрать». Иконка крупнее на треть.',
+    home: `<button class="shp s-sq sm grape-bg gloss">${H}</button>`,
+    rep: (cd) => `<button class="shp s-sq bg mint-bg gloss${cd ? ' grey' : ''}">${R}${cd ? '<span class="cd"></span>' : ''}</button>` },
+  { name: 'Наклейка без кнопки', note: 'Подложки нет: сама иконка в белой обводке-наклейке. Перезарядка — мятное кольцо вокруг. Самый лёгкий вид, меньше всего закрывает карту.',
+    home: `<button class="shp s-stk sm">${H}</button>`,
+    rep: (cd) => `<button class="shp s-stk bg${cd ? ' grey' : ''}">${cd ? '<span class="ring"></span>' : ''}${R}</button>` },
+  { name: 'Плитка с подписью', note: 'Как кнопки духа «Бу!» и «Искра»: иконка + слово. Тем, кто не читает, хватает картинки, остальным сразу ясно, что делает кнопка.',
+    home: `<button class="shp s-lbl sm grape-bg gloss">${H}<span class="lbl-s">Домой</span></button>`,
+    rep: (cd) => `<button class="shp s-lbl bg mint-bg gloss${cd ? ' grey' : ''}">${R}<span class="lbl-s">Чинить</span>${cd ? '<span class="cd"></span>' : ''}</button>` },
+  { name: 'Круг-пузырь', note: 'Круг остаётся, но без двойного кольца: одна толстая обводка, а иконка крупная и выглядывает сверху, как игрушка из шарика.',
+    home: `<button class="shp s-bub sm grape-bg gloss">${H}</button>`,
+    rep: (cd) => `<button class="shp s-bub bg mint-bg gloss${cd ? ' grey' : ''}">${R}${cd ? '<span class="cd"></span>' : ''}</button>` },
+];
+const shapeCell = (s, i) => `
+  <div class="cell${s.now ? ' now' : ''}">
+    <span class="tag"><span class="letter">${s.now ? '·' : LETTERS[i - 1]}</span>${s.name}</span>
+    <div class="corner"><div class="slot l">${s.home}</div><div class="slot r">${s.rep(false)}</div></div>
+    <div class="tiny" style="gap:12px">перезарядка: <span style="display:inline-flex;transform:scale(.8)">${s.rep(true)}</span></div>
+    <p class="note">${s.note}</p>
+  </div>`;
+
+document.getElementById('stand').innerHTML = `
+  <section>
+    <h2 class="sec-title">Форма кнопок «Домой» и «Чинить»</h2>
+    <p class="sec-sub">Нижние углы экрана в матче. Иконки у всех одинаковые (пряничный домик и молоток), отличается только сама кнопка.</p>
+    <div class="row">${SHAPES.map(shapeCell).join('')}</div>
+  </section>` + Object.entries(ICONS).map(([kind, g]) => `
+  <section>
+    <h2 class="sec-title">${g.title}</h2>
+    <p class="sec-sub">${g.sub}</p>
+    <div class="row">
+      ${cell(kind, '·', 'Сейчас', g.now, 'Текущая иконка — для сравнения.', true)}
+      ${g.variants.map((v, i) => cell(kind, LETTERS[i], v.name, v.svg, v.note, false)).join('')}
+    </div>
+  </section>`).join('');
+</script>
+</body>
+</html>

@@ -1,0 +1,150 @@
+[
+ {
+  "t": 17.7,
+  "type": "ghostRetreat",
+  "left": 2,
+  "hp": 546,
+  "hpPct": 20,
+  "state": "retreating",
+  "visits": 0,
+  "desperate": false
+ },
+ {
+  "t": 17.7,
+  "state": "retreating",
+  "hpPct": 20
+ },
+ {
+  "t": 25.4,
+  "state": "healing",
+  "hpPct": 20
+ },
+ {
+  "t": 30.5,
+  "state": "moving",
+  "hpPct": 75
+ },
+ {
+  "t": 36.1,
+  "state": "attacking",
+  "hpPct": 75
+ },
+ {
+  "t": 41.4,
+  "type": "ghostRetreat",
+  "left": 1,
+  "hp": 546,
+  "hpPct": 20,
+  "state": "retreating",
+  "visits": 1,
+  "desperate": false
+ },
+ {
+  "t": 41.4,
+  "state": "retreating",
+  "hpPct": 20
+ },
+ {
+  "t": 46.8,
+  "state": "healing",
+  "hpPct": 20
+ },
+ {
+  "t": 51.8,
+  "state": "moving",
+  "hpPct": 65
+ },
+ {
+  "t": 58.3,
+  "state": "attacking",
+  "hpPct": 65
+ },
+ {
+  "t": 60.5,
+  "type": "ghostRetreat",
+  "left": 0,
+  "hp": 546,
+  "hpPct": 20,
+  "state": "retreating",
+  "visits": 2,
+  "desperate": false
+ },
+ {
+  "t": 60.5,
+  "state": "retreating",
+  "hpPct": 20
+ },
+ {
+  "t": 66.9,
+  "state": "healing",
+  "hpPct": 20
+ },
+ {
+  "t": 72,
+  "type": "ghostDesperate",
+  "hp": 1502,
+  "hpPct": 55,
+  "state": "moving",
+  "visits": 3,
+  "desperate": true
+ },
+ {
+  "t": 72,
+  "state": "moving",
+  "hpPct": 55
+ },
+ {
+  "t": 78.4,
+  "state": "attacking",
+  "hpPct": 55
+ },
+ {
+  "t": 88.2,
+  "state": "moving",
+  "hpPct": 55
+ },
+ {
+  "t": 92.5,
+  "state": "attacking",
+  "hpPct": 10
+ },
+ {
+  "t": 100.3,
+  "type": "ghostLevel",
+  "level": 2,
+  "hp": 628,
+  "hpPct": 20,
+  "state": "attacking",
+  "visits": 3,
+  "desperate": true
+ },
+ {
+  "t": 101,
+  "state": "moving",
+  "hpPct": 20
+ },
+ {
+  "t": 101.8,
+  "state": "attacking",
+  "hpPct": 20
+ },
+ {
+  "t": 112.1,
+  "state": "moving",
+  "hpPct": 3
+ },
+ {
+  "t": 120,
+  "type": "ghostDead",
+  "hp": 0,
+  "hpPct": 0,
+  "state": "dead",
+  "visits": 3,
+  "desperate": true
+ },
+ {
+  "t": 120,
+  "state": "dead",
+  "hpPct": 0
+ }
+]

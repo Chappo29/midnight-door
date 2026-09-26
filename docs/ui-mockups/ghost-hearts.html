@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Сердечки призрака</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@700;800;900&family=Nunito:wght@700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/src/style.css" />
+<style>
+  html, body { height: auto; overflow: auto; background: var(--night-4); touch-action: pan-y; }
+  body { padding: 20px 12px 40px; display: flex; flex-direction: column; align-items: center; gap: 16px; color: #fff; }
+  h1 { font-family: var(--font-head); font-weight: 900; font-size: 26px; margin: 0; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; }
+  .sub { font-family: var(--font-body); font-weight: 700; font-size: 14px; color: rgba(255,255,255,.72); margin: 0; text-align: center; max-width: 900px; }
+  .grid { display: grid; grid-template-columns: 190px repeat(4, 240px); gap: 10px; align-items: center; }
+  .head { font-family: var(--font-body); font-weight: 800; font-size: 12px; color: rgba(255,255,255,.6); text-align: center; }
+  .name { display: flex; align-items: center; gap: 8px; font-family: var(--font-head); font-weight: 800; font-size: 15px; }
+  .name .pair { display: flex; gap: 4px; }
+  .name .pair img { width: 30px; height: 30px; }
+  .letter { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex: none; border-radius: 50%; color: var(--ink); background: linear-gradient(180deg, var(--amber-light), var(--amber) 55%, var(--amber-dark)); box-shadow: 0 0 0 2px var(--ink); font-weight: 900; font-size: 13px; }
+  .now .letter { background: #a7a0bf; }
+  /* Сцена в мировых пикселях игры (как рисует GameScene), увеличенная вдвое — примерно как на телефоне. */
+  .cell { height: 130px; border-radius: 14px; background: repeating-linear-gradient(90deg, #2b2440 0 32px, #2f2846 32px 64px); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .scene { position: relative; width: 112px; height: 64px; transform: scale(2); }
+  .ghost { position: absolute; left: 22px; top: 12px; width: 44px; }
+  .bar { position: absolute; left: 17px; top: 2px; width: 56px; height: 8px; border-radius: 3px; background: rgba(0,0,0,.6); }
+  .bar i { position: absolute; left: 1px; top: 1px; height: 6px; border-radius: 3px; background: #c58aff; }
+  .bar.red i { background: #ff4d6d; }
+  .hearts { position: absolute; left: 76px; top: -1px; display: flex; gap: 0; }
+  .hearts img { width: 11px; height: 11px; }
+  .houses { position: absolute; left: 76px; top: 1px; display: flex; }
+  .houses svg { width: 11px; height: 11px; }
+  .foot { font-family: var(--font-body); font-weight: 700; font-size: 12px; color: rgba(255,255,255,.55); text-align: center; max-width: 900px; }
+</style>
+</head>
+<body>
+<h1>Сердечки призрака: 4 варианта</h1>
+<p class="sub">Справа от полоски здоровья — сколько раз призрак ещё может сбежать лечиться. Показано в размере игры, увеличенном вдвое (примерно как на телефоне). Когда сердца кончились, полоска краснеет и сердечки пропадают — как сейчас.</p>
+<div class="grid" id="grid"></div>
+<p class="foot">Лист — docs/art/source/icons/icons_hearts_sheet.png. Сердечко 11×11 мировых пикселей, как нынешний домик.</p>
+<script type="module">
+const G = '/src/assets/sprites/ghost_down_idle.png';
+const H = (n) => `/docs/ui-mockups/gen/${n}.png`;
+const house = (on) => `<svg viewBox="0 0 11 11"><rect x="0" y="0" width="11" height="11" rx="2" fill="rgba(0,0,0,.6)"/><path d="M1 5 5.5 1 10 5z" fill="${on ? '#7dd3ff' : '#3a3450'}"/><rect x="2.5" y="5" width="6" height="5" fill="${on ? '#7dd3ff' : '#3a3450'}"/></svg>`;
+const STATES = [[3, 1], [2, 0.7], [1, 0.45], [0, 0.3]];
+const scene = (marks, left, hp) => `<div class="cell"><div class="scene">
+  <div class="bar${left === 0 ? ' red' : ''}"><i style="width:${54 * hp}px"></i></div>
+  ${left === 0 ? '' : marks(left)}
+  <img class="ghost" src="${G}" alt=""></div></div>`;
+const heartsOf = (v) => (left) => `<div class="hearts">${[0, 1, 2].map((i) => `<img src="${H(`heart_${v}_${i < left ? 'full' : 'empty'}`)}" alt="">`).join('')}</div>`;
+const housesOf = (left) => `<div class="houses">${[0, 1, 2].map((i) => house(i < left)).join('')}</div>`;
+const ROWS = [
+  ['·', 'Сейчас', '', housesOf, true],
+  ['А', 'Классика', 'classic'],
+  ['Б', 'Желейное', 'candy'],
+  ['В', 'С хвостиком', 'wisp'],
+  ['Г', 'Пиксельное', 'pixel'],
+];
+let html = `<div></div>${STATES.map(([l]) => `<div class="head">${l === 0 ? 'сердца кончились' : `осталось ${l}`}</div>`).join('')}`;
+for (const [l, n, v, fn, now] of ROWS) {
+  const marks = fn ?? heartsOf(v);
+  const pair = v ? `<span class="pair"><img src="${H(`heart_${v}_full`)}" alt=""><img src="${H(`heart_${v}_empty`)}" alt=""></span>` : '';
+  html += `<div class="name${now ? ' now' : ''}"><span class="letter">${l}</span>${n}${pair}</div>`;
+  html += STATES.map(([left, hp]) => scene(marks, left, hp)).join('');
+}
+document.getElementById('grid').innerHTML = html;
+</script>
+</body>
+</html>
