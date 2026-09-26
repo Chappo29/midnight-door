@@ -1,0 +1,138 @@
+<!doctype html>
+<!-- Страница прослушивания вариантов сигнала «Призрак идёт к тебе!» (выбор звука). Не часть игры. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сигнал «призрак идёт»</title>
+<style>
+  :root { --bg: #1c1330; --card: #fff6e6; --ink: #1c1330; --mint: #2fe3a6; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--card); font: 16px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 22px; margin: 4px 0 4px; }
+  h2 { font-size: 17px; margin: 22px 0 8px; opacity: .85; }
+  p { margin: 0 0 12px; opacity: .8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  button { text-align: left; border: 0; border-radius: 14px; padding: 12px 14px; background: var(--card); color: var(--ink); font: inherit; cursor: pointer; box-shadow: 0 3px 0 #0006; }
+  button b { display: block; font-size: 17px; }
+  button span { font-size: 13px; opacity: .7; }
+  button:active { transform: translateY(2px); box-shadow: 0 1px 0 #0006; }
+  button.now { outline: 3px solid var(--mint); }
+</style>
+</head>
+<body>
+<h1>Сигнал «Призрак идёт к тебе!»</h1>
+<p>Нажимай и сравнивай. Этот звук играет, когда призрак выбрал твою дверь (вместе с надписью «Призрак идёт к тебе!»).
+Какой лучше — напиши букву или имя файла.</p>
+
+<h2>Синтез (короткие, не пугающие)</h2>
+<div class="grid" id="synth"></div>
+
+<h2>Готовые файлы из игры (кандидаты, которые сейчас нигде не звучат)</h2>
+<div class="grid" id="files"></div>
+
+<script>
+const ctx = new (window.AudioContext || window.webkitAudioContext)();
+const out = ctx.createGain();
+out.gain.value = 0.9;
+out.connect(ctx.destination);
+
+/** Тон с огибающей: частота может скользить от f0 к f1. */
+function tone({ type = 'sine', f0, f1 = f0, at = 0, dur = 0.4, vol = 0.3, attack = 0.02, vib = 0, filter = 0 }) {
+  const t = ctx.currentTime + 0.02 + at;
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(f0, t);
+  if (f1 !== f0) osc.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  if (vib) {
+    const lfo = ctx.createOscillator();
+    const lg = ctx.createGain();
+    lfo.frequency.value = vib;
+    lg.gain.value = f0 * 0.03;
+    lfo.connect(lg).connect(osc.frequency);
+    lfo.start(t);
+    lfo.stop(t + dur + 0.05);
+  }
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  let node = osc.connect(g);
+  if (filter) {
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = filter;
+    node = g.connect(lp);
+  }
+  node.connect(out);
+  osc.start(t);
+  osc.stop(t + dur + 0.05);
+}
+
+/** Шум через полосовой фильтр, который скользит: «вжух». */
+function whoosh({ at = 0, dur = 0.6, from = 300, to = 2200, vol = 0.35 }) {
+  const t = ctx.currentTime + 0.02 + at;
+  const len = Math.ceil(ctx.sampleRate * dur);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.Q.value = 2.5;
+  bp.frequency.setValueAtTime(from, t);
+  bp.frequency.exponentialRampToValueAtTime(to, t + dur * 0.8);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + dur * 0.35);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(bp).connect(g).connect(out);
+  src.start(t);
+  src.stop(t + dur + 0.05);
+}
+
+const SYNTH = [
+  { id: 'A', name: 'Нынешний «динь-дон»', desc: 'две ноты вниз, как дверной звонок', now: true,
+    play: () => { tone({ f0: 880, dur: 0.45, vol: 0.3 }); tone({ f0: 660, at: 0.16, dur: 0.45, vol: 0.3 }); } },
+  { id: 'B', name: '«У-у-у» — призрачный вой', desc: 'мягкий скользящий тон с дрожью, 0,8 с',
+    play: () => tone({ type: 'triangle', f0: 280, f1: 460, dur: 0.85, vol: 0.28, attack: 0.15, vib: 6 }) },
+  { id: 'C', name: '«Вжух» — призрак пролетел', desc: 'свист воздуха, без нот',
+    play: () => whoosh({ dur: 0.6 }) },
+  { id: 'D', name: '«Тук-тук» — сердечко', desc: 'два глухих низких удара, как сердцебиение',
+    play: () => { tone({ f0: 90, f1: 55, dur: 0.22, vol: 0.6, attack: 0.005 }); tone({ f0: 90, f1: 55, at: 0.22, dur: 0.26, vol: 0.5, attack: 0.005 }); } },
+  { id: 'E', name: '«Бу-у» — игрушечная труба', desc: 'одна мультяшная нота вниз',
+    play: () => tone({ type: 'square', f0: 330, f1: 220, dur: 0.45, vol: 0.14, attack: 0.02, filter: 1200 }) },
+  { id: 'F', name: '«Внимание!» — три ноты вверх', desc: 'быстрое до-ми-соль, как в мультиках',
+    play: () => { [523, 659, 784].forEach((f, i) => tone({ type: 'triangle', f0: f, at: i * 0.09, dur: 0.22, vol: 0.28 })); } },
+  { id: 'G', name: '«У-ух» + вжух', desc: 'вой и свист вместе, заметнее всего',
+    play: () => { whoosh({ dur: 0.7, vol: 0.25 }); tone({ type: 'triangle', f0: 300, f1: 420, dur: 0.75, vol: 0.2, attack: 0.12, vib: 6 }); } },
+];
+
+const FILES = [
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `ghost_laugh_c${n}`),
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `ghost_boo_c${n}`),
+  ...[1, 2, 3].map((n) => `ghost_retreat_c${n}`),
+  ...[1, 2].map((n) => `midnight_c${n}`),
+];
+
+const mk = (box, label, desc, onClick, now) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  if (now) b.className = 'now';
+  b.innerHTML = `<b>${label}</b><span>${desc}</span>`;
+  b.addEventListener('click', () => { ctx.resume(); onClick(); });
+  box.appendChild(b);
+};
+for (const s of SYNTH) mk(document.getElementById('synth'), `${s.id}. ${s.name}`, s.desc, s.play, s.now);
+// Локально (dev-сервер) — файлы проекта; на GitHub Pages их нет в сборке — берём прямо из репозитория.
+const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const src = (f) => (local ? `/src/assets/sfx/${f}.mp3` : `https://raw.githubusercontent.com/Chappo29/midnight-door/main/src/assets/sfx/${f}.mp3`);
+for (const f of FILES) {
+  const a = new Audio(src(f));
+  a.preload = 'none';
+  a.volume = 0.6;
+  mk(document.getElementById('files'), f, 'файл', () => { a.currentTime = 0; a.play(); });
+}
+</script>
+</body>
+</html>
