@@ -3,8 +3,14 @@ import Phaser from 'phaser';
 /**
  * Звуки из src/assets/sfx/*.mp3. Файл `<ключ>.mp3` или варианты `<ключ>_1.mp3`, `<ключ>_2.mp3`…
  * — тогда играет случайный. Список и источник файлов — scripts/import-sfx.mjs.
+ * В игру идут только выбранные звуки. Кандидаты `<ключ>_c<N>.mp3` (68 файлов, ~1 МБ и 68 запросов на заставке) —
+ * только для страницы прослушивания ?sounds в разработке; в сборку они не попадают (ветка DEV вырезается).
  */
-const urls = import.meta.glob('../assets/sfx/*.mp3', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+const chosen = import.meta.glob(['../assets/sfx/*.mp3', '!../assets/sfx/*_c*.mp3'], { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+const candidates: Record<string, string> = import.meta.env.DEV
+  ? (import.meta.glob('../assets/sfx/*_c*.mp3', { eager: true, query: '?url', import: 'default' }) as Record<string, string>)
+  : {};
+const urls = { ...chosen, ...candidates };
 
 const FILES: Record<string, string> = Object.fromEntries(
   Object.entries(urls).map(([p, url]) => [`sfx_${p.split('/').pop()!.replace(/\.mp3$/, '')}`, url]),
