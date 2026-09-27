@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HOLDOVER_MS, HOLDOVER_PX, TAP_SLOP_TOUCH_PX, isDrag, isEchoAfterScreenChange, isHoldover, menuTopAwayFromFinger } from '../src/ui/inputGuard';
+import { HOLDOVER_MS, HOLDOVER_PX, TAP_SLOP_TOUCH_PX, isDrag, isEchoAfterScreenChange, isHoldover, menuTopAwayFromFinger, staleTouchPointers } from '../src/ui/inputGuard';
 
 describe('защита от повторных тапов (GAME_AUDIT.md, B5)', () => {
   const anchor = { x: 200, y: 400 };
@@ -52,5 +52,22 @@ describe('защита от повторных тапов (GAME_AUDIT.md, B5)', 
       expect(top).toBeGreaterThanOrEqual(18);
       expect(top + h).toBeLessThanOrEqual(vh - 18);
     }
+  });
+});
+
+describe('зависшие касания (Galaxy S24, «не могу двигаться и кликать»)', () => {
+  const pointer = (id: number, active: boolean, identifier: number) => ({ id, active, identifier });
+
+  it('test_input_guard_lost_touchend_pointer_is_stale', () => {
+    // Arrange: указатель 1 «прижат» пальцем 5, но на экране сейчас только новый палец 9.
+    const pointers = [pointer(0, true, 0), pointer(1, true, 5), pointer(2, false, 0)];
+    // Act + Assert: зависший — только указатель 1; мышь и свободный не трогаем.
+    expect(staleTouchPointers(pointers, [9]).map((q) => q.id)).toEqual([1]);
+  });
+
+  it('test_input_guard_real_second_finger_is_not_stale', () => {
+    // Настоящий щипок: оба пальца на экране — ничего не сбрасываем.
+    const pointers = [pointer(0, true, 0), pointer(1, true, 5), pointer(2, true, 6)];
+    expect(staleTouchPointers(pointers, [5, 6, 7])).toEqual([]);
   });
 });

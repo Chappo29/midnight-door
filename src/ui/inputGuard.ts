@@ -56,3 +56,13 @@ export function menuTopAwayFromFinger(y: number, menuH: number, viewH: number, e
   const top = y > viewH / 2 ? above : below;
   return Math.max(edge, Math.min(viewH - menuH - edge, top));
 }
+
+/**
+ * «Зависшие» касательные указатели: Phaser считает их прижатыми (active), а пальца с таким identifier на экране
+ * уже нет — браузер потерял «палец отпущен» (Chrome на Android: жест скриншота, шторка, долгое нажатие).
+ * Мышь (id 0) не трогаем. live — identifier всех пальцев на экране прямо сейчас (TouchEvent.touches).
+ */
+export function staleTouchPointers<P extends { id: number; active: boolean; identifier: number }>(pointers: readonly P[], live: Iterable<number>): P[] {
+  const now = new Set(live);
+  return pointers.filter((q) => q.id !== 0 && q.active && !now.has(q.identifier));
+}

@@ -11,7 +11,7 @@ import type { PlayOpts, Sfx } from '../audio/sfx';
 import { TutorialDirector, type TutorialTrack } from '../tutorial/director';
 import { TutorialOverlay } from '../tutorial/overlay';
 import { HintDirector } from '../tutorial/hints';
-import { isDrag } from '../ui/inputGuard';
+import { isDrag, staleTouchPointers } from '../ui/inputGuard';
 import { caughtTip } from '../ui/caughtTip';
 import type { Target } from '../tutorial/steps';
 
@@ -1872,9 +1872,30 @@ export class GameScene extends Phaser.Scene {
     return this.input.manager.pointers.filter((q) => q.isDown && q.downElement === canvas);
   }
 
+  /**
+   * Chrome на Android иногда теряет «палец отпущен» (жест скриншота ладонью, шторка, долгое нажатие): Phaser держит
+   * такой указатель прижатым вечно. Тогда каждое новое касание — «второй палец» щипка, щипок не сбрасывается,
+   * и тапы с перетаскиванием перестают работать («не могу двигаться и кликать», Galaxy S24, 2026-09-27); а если
+   * зависли все касательные указатели, Phaser новые касания не видит вовсе. Перед каждым новым касанием сверяемся
+   * с настоящим списком пальцев на экране (e.touches) и сбрасываем указатели, которых там нет.
+   */
+  private healStaleTouches(e: TouchEvent): void {
+    const stale = staleTouchPointers(this.input.manager.pointers, Array.from(e.touches, (t) => t.identifier));
+    for (const q of stale) q.reset();
+    if (stale.length && this.fingersOnField().length < 2) {
+      this.pinch.active = false;
+      this.drag.down = false;
+      this.drag.dragging = false;
+    }
+  }
+
   private setupInput(): void {
     this.input.addPointer(1);
     const cam = this.cameras.main;
+    // Слушаем на window в фазе захвата — раньше Phaser (он слушает холст), чтобы новый палец получил свободный указатель.
+    const heal = (e: TouchEvent) => this.healStaleTouches(e);
+    window.addEventListener('touchstart', heal, { capture: true, passive: true });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => window.removeEventListener('touchstart', heal, true));
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       const touching = this.fingersOnField();
       if (touching.length >= 2) {
