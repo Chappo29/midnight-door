@@ -35,6 +35,7 @@ import { track } from './platform/analytics';
 import { bootSave, signInAndSync, type ProgressStore } from './platform/save';
 import { finishTutorial, resolveTutorialOnBoot, type Progress } from './platform/storage';
 import { initYandexSdk } from './platform/yandex';
+import { rendererType, startDiag } from './platform/diag';
 import { Match } from './sim/match';
 import type { Difficulty } from './sim/types';
 import { Hud } from './ui/hud';
@@ -46,7 +47,8 @@ document.addEventListener('contextmenu', (e) => e.preventDefault());
 
 const hud = new Hud(document.getElementById('ui')!);
 const game = new Phaser.Game({
-  type: Phaser.AUTO,
+  // ?canvas — рендер без WebGL (диагностика на телефонах, platform/diag.ts); обычно — AUTO.
+  type: rendererType(),
   parent: 'game',
   backgroundColor: '#140f22',
   // Если вкладка грузится в фоне или iframe Яндекса ещё 0×0, родитель нулевой — WebGL на нулевом canvas
@@ -61,6 +63,8 @@ const game = new Phaser.Game({
   render: { antialias: true },
   banner: false,
 });
+// ?diag — плашка диагностики поверх игры (браузер, GPU, кадры, касания, ошибки).
+startDiag(game);
 /**
  * Поворот телефона: Phaser 3.90 в режиме RESIZE берёт размер родителя до того, как браузер его
  * пересчитал (баг #7213), и поле остаётся в размере прошлой ориентации — полэкрана чёрное.
