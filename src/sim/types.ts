@@ -18,6 +18,8 @@ export interface Building {
   cooldown: number;
   /** Секунд «Искорки» духа (пушка бьёт сильнее). Нет поля — 0. */
   boost?: number;
+  /** Во сколько раз сильнее бьёт, пока горит boost (супер-конфеты); нет поля — B.spirit.sparkMul («Искорка»). */
+  boostMul?: number;
 }
 
 export interface Item {
@@ -76,6 +78,8 @@ export interface Room {
   eliminated: boolean;
   candy: number;
   flame: number;
+  /** Сейф: инструменты игрока. Создаётся при первой покупке (у соседей и в обучении его нет). */
+  tools?: RoomTools;
 }
 
 export type Cmd =
@@ -87,6 +91,8 @@ export type Cmd =
   | { type: 'upgradeDoor' }
   | { type: 'repair' }
   | { type: 'upgradeSofa' }
+  /** Инструмент сейфа: купить (кладётся в сейф, платится сразу) или применить (мгновенно, без ходьбы). */
+  | { type: 'tool'; tool: ToolId; op: 'buy' | 'use' }
   /** Только для духа: напугать призрака рядом. */
   | { type: 'boo' }
   /** Только для духа: «Искорка» — пушка соседа в клетке x,y комнаты roomId или ближайшая в радиусе. */
@@ -227,7 +233,18 @@ export interface Ghost {
 }
 
 /** Почему кончилась осада двери: терпение, побили при крепкой двери, дверь чинят быстрее, убежал лечиться, сломал дверь, комната выбыла, призрак убит. */
-export type SiegeEndReason = 'patience' | 'beaten' | 'stalled' | 'retreat' | 'broke' | 'eliminated' | 'dead';
+export type SiegeEndReason = 'patience' | 'beaten' | 'stalled' | 'retreat' | 'broke' | 'eliminated' | 'dead' | 'scared';
+
+/** Инструменты сейфа: одноразовые покупки в матче (Ghost at the Door: «в сейфе лежат вещи»). */
+export type ToolId = 'garlic' | 'key' | 'charge';
+export const TOOL_IDS: readonly ToolId[] = ['garlic', 'key', 'charge'];
+
+/** Что у комнаты в сейфе: лежит ли инструмент, сколько раз покупали за матч (лимит и цена), откат после применения, с. */
+export interface RoomTools {
+  stock: Record<ToolId, boolean>;
+  bought: Record<ToolId, number>;
+  cd: Record<ToolId, number>;
+}
 
 export type SimEvent =
   | { type: 'phase'; phase: Phase }
@@ -271,5 +288,7 @@ export type SimEvent =
   /** Игрок вернулся в свою комнату (реклама за награду). */
   | { type: 'revived'; charId: number; roomId: number }
   | { type: 'fail'; charId: number; msg: string }
+  /** Инструмент сейфа куплен (op buy) или применён (op use). */
+  | { type: 'tool'; roomId: number; tool: ToolId; op: 'buy' | 'use' }
   /** Начатое дело бросили ради другого (новый тап): что это было и сколько вернулось. */
   | { type: 'taskCancelled'; charId: number; cmd: Cmd; refund: number };

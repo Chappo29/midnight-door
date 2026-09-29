@@ -191,7 +191,7 @@ const RULES: Rule[] = [
       const r = mine(m);
       // hasBuildCell не трогает rng симуляции (buildCells тасует клетки) — подсказка спрашивает каждый кадр.
       if (!r || m.phase === 'pick' || m.hasBuildCell(r, 'cannon')) return null;
-      const weakest = [...r.buildings].sort((a, b) => a.level - b.level)[0];
+      const weakest = [...r.buildings].filter((b) => b.kind !== 'safe').sort((a, b) => a.level - b.level)[0];
       return weakest && m.canAfford(r, m.buildCost('cannon', r)) ? { kind: 'cell', at: weakest } : null;
     },
   },

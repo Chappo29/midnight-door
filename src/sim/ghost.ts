@@ -261,6 +261,21 @@ function levelUp(m: Match): void {
 }
 
 /**
+ * Чеснок (инструмент сейфа): призрак бросает осаду двери комнаты r и secs секунд её не выбирает целью. Режиссёр атак считает,
+ * что комнате дали передышку, даже если ударов было меньше настоящей атаки. Вызывать, только пока он бьёт эту дверь.
+ */
+export function ghostScare(m: Match, r: Room, secs: number): void {
+  const g = m.ghost;
+  endSiege(m, 'scared');
+  g.calmSince[r.id] = m.nightTime;
+  g.attacked[r.id] = true;
+  g.avoidRoom = r.id;
+  g.avoidTimer = Math.max(g.avoidTimer, secs);
+  m.events.push({ type: 'ghostLeft', roomId: r.id });
+  chooseTarget(m, r.id);
+}
+
+/**
  * Осада кончилась (по любой причине): событие siegeEnd для замеров и отклика «Отбился!»; настоящая атака
  * (B.ghost.meaningfulHits ударов) запоминается режиссёром — с этого момента у комнаты передышка.
  */

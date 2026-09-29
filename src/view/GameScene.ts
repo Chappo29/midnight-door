@@ -3,7 +3,7 @@ import { B, LATE_KINDS, TICK, benchHeal, fridgeSlow, isLateKind, trapHold, type 
 import { H, Tile, W } from '../sim/map';
 import type { Match } from '../sim/match';
 import { heroPassable, inRoom, isSoil, key, occupantAt, roomAtCell, roomByDoor, roomCells, roomCenter, walkable } from '../sim/roomgrid';
-import type { BuildKind, Building, Character, Cmd, Cost, Room, SimEvent } from '../sim/types';
+import { TOOL_IDS, type BuildKind, type Building, type Character, type Cmd, type Cost, type Room, type SimEvent, type ToolId } from '../sim/types';
 import type { Hud, MenuOption } from '../ui/hud';
 import { anchorY, doorKeys, firstSprite, fitImage, hasSprite, preloadSprites } from './sprites';
 import { ghostHealsLeft, ghostHitIntervalAt, ghostXpNeed } from '../sim/ghost';
@@ -144,7 +144,13 @@ const BUILD_INFO: Record<BuildKind, { label: string; desc?: string }> = {
   trap: { label: 'Капкан', desc: 'держит призрака' },
   workbench: { label: 'Верстак', desc: 'чинит дверь ночью' },
   fridge: { label: 'Холодильник', desc: 'призрак бьёт реже' },
-  safe: { label: 'Сейф', desc: '+0,7 конфеты в секунду' },
+  safe: { label: 'Сейф', desc: '+0,5 конфеты в секунду · инструменты' },
+};
+/** Инструменты сейфа в его меню: название и серая строка. */
+const TOOL_INFO: Record<ToolId, { label: string; desc: string }> = {
+  garlic: { label: 'Чеснок', desc: 'призрак уходит от двери' },
+  key: { label: 'Запасной ключ', desc: 'чинит дверь сразу' },
+  charge: { label: 'Супер-конфеты', desc: 'пушки бьют сильнее' },
 };
 const DOOR_COLORS = [0x8b5a2b, 0x9c6b35, 0xb07d42, 0x8a8f99, 0x9fa8b3, 0xd4a82c, 0xe8c24a, 0x9ef0ff];
 
@@ -155,7 +161,7 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
  * максимальный уровень, целая дверь, «подлети ближе». Такие показываем спокойной плашкой (Hud.toastInfo).
  */
 export const isNeutralMsg = (msg: string) =>
-  /будет готов|Подожди|Ещё идёт|Максимальный уровень|Дверь целая|Подлети ближе|Сначала дверь/.test(msg);
+  /будет готов|Подожди|Ещё идёт|Максимальный уровень|Дверь целая|Подлети ближе|Сначала дверь|Готово через|Уже в сейфе|Больше нельзя|у двери (ещё не бьёт|нет)|Уже горят|Нет пушек|Сначала диван|Ночью, когда|Ему некуда|Сначала купи|Нужен сейф/.test(msg);
 
 /**
  * Финал победы (мс): камера едет к призраку (если его не видно), существующая анимация смерти доигрывает,
@@ -1678,6 +1684,37 @@ export class GameScene extends Phaser.Scene {
             onComplete: () => this.ghostView.setAngle(0),
           });
           break;
+        case 'tool': {
+          // Инструменты сейфа — только у игрока: банер и эффект у его комнаты.
+          if (e.roomId !== mineId) break;
+          if (e.tool === 'key' && e.op === 'use') this.missedRepair = false;
+          const r = m.rooms[e.roomId];
+          const safe = r.buildings.find((b) => b.kind === 'safe');
+          const sx = ((safe?.x ?? r.door.inside.x) + 0.5) * TS;
+          const sy = ((safe?.y ?? r.door.inside.y) + 0.5) * TS;
+          if (e.op === 'buy') {
+            this.puff(sx, sy, 0xffe066, 8, 26, 4);
+            this.bounce(safe ? this.buildingViews.get(key(safe.x, safe.y)) : undefined);
+            this.sfx.play('build', { volume: 0.7 });
+            this.hud.toastInfo(`В сейфе: ${TOOL_INFO[e.tool].label}`);
+            break;
+          }
+          const d = r.door;
+          if (e.tool === 'garlic') {
+            this.puff((d.x + 0.5) * TS, (d.y + 0.5) * TS, 0xd9ffb3, 16, 44, 6);
+            this.hud.banner('Призрак испугался и ушёл!', 2500);
+            this.sfx.play('ghost_retreat', { volume: 0.8 });
+          } else if (e.tool === 'key') {
+            this.puff((d.x + 0.5) * TS, (d.y + 0.5) * TS, 0xffe066, 12, 34, 5);
+            this.floatText((d.x + 0.5) * TS, d.y * TS, '+ дверь', '#7dff7a');
+            this.sfx.play('repair', { volume: 0.8 });
+          } else {
+            for (const b of r.buildings) if (b.kind === 'cannon') this.bounce(this.buildingViews.get(key(b.x, b.y)));
+            this.hud.banner('Пушки заряжены!', 2000);
+            this.sfx.play('upgrade', { volume: 0.8 });
+          }
+          break;
+        }
         case 'spark':
           this.puff((e.x + 0.5) * TS, (e.y + 0.5) * TS, 0xffe066, 12, 34, 5);
           this.floatText((e.x + 0.5) * TS, e.y * TS, 'Искорка!', '#ffe066');
@@ -2503,6 +2540,26 @@ export class GameScene extends Phaser.Scene {
     this.sfx.play('click', { volume: 0.7 });
   }
 
+  /**
+   * Пункты меню сейфа: купить инструмент впрок (цена) или применить купленный. Цена показывается всегда, где она есть;
+   * причину «пока нельзя» кладём в серую строку под названием (красная плашка на низком экране не помещается).
+   */
+  private toolOptions(room: Room): MenuOption[] {
+    const m = this.m;
+    return TOOL_IDS.map((t): MenuOption => {
+      const { label, desc } = TOOL_INFO[t];
+      const id = `tool:${t}`;
+      if (room.tools?.stock[t]) {
+        const why = m.toolUseBlock(room, t);
+        return { id, icon: '', label, desc: why ?? desc, note: why ? undefined : 'Применить', disabled: !!why, onPick: () => this.cmd({ type: 'tool', tool: t, op: 'use' }) };
+      }
+      const block = m.toolBuyBlock(room, t);
+      const cost: Cost = { candy: m.toolCost(room, t), flame: 0 };
+      if (block) return { id, icon: '', label, desc: block, cost: block.startsWith('Больше') ? undefined : cost, disabled: true, onPick: () => {} };
+      return { id, icon: '', label, desc, cost, ...this.affordance(room, cost), onPick: () => this.cmd({ type: 'tool', tool: t, op: 'buy' }) };
+    });
+  }
+
   private openBuildingMenu(room: Room, b: Building, p: Phaser.Input.Pointer): void {
     const m = this.m;
     this.selected = { x: b.x, y: b.y };
@@ -2527,7 +2584,7 @@ export class GameScene extends Phaser.Scene {
         title,
         options: [
           ...(b.kind === 'safe'
-            ? []
+            ? this.toolOptions(room)
             : [
           {
             id: 'upgrade',
@@ -2547,7 +2604,7 @@ export class GameScene extends Phaser.Scene {
             label: 'Убрать',
             note: `gain:${m.sellValue(b)}`,
             secondary: true,
-            confirm: 'Точно убрать?',
+            confirm: b.kind === 'safe' && room.tools && Object.values(room.tools.stock).some(Boolean) ? 'В сейфе лежат вещи. Точно убрать?' : 'Точно убрать?',
             onPick: () => this.cmd({ type: 'sell', x: b.x, y: b.y }),
           },
         ],

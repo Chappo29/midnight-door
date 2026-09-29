@@ -16,6 +16,7 @@ import {
   pumpkinRate,
   pumpkinUpCost,
   econOf,
+  toolPrice,
   sofaIncome,
   sofaNeedDoor,
   sofaUpCost,
@@ -24,13 +25,13 @@ import {
   unlockDoor,
   type DiffParams,
 } from './balance';
-import { createGhost, endSiege, ghostLeaveRoom, ghostTargetable, spawnGhost, updateGhost } from './ghost';
+import { createGhost, endSiege, ghostLeaveRoom, ghostScare, ghostTargetable, spawnGhost, updateGhost } from './ghost';
 import { Tile, generateMap, type TileT } from './map';
 import { BALANCED, PROFILES, npcThink } from './npc';
 import { bfs } from './path';
 import { Rng } from './rng';
 import { DIRS, buildingAt, heroPassable, inRoom, isSoil, occupantAt, roomCells, walkable } from './roomgrid';
-import type { BuildKind, Building, Character, Cmd, Cost, Difficulty, Ghost, Phase, Room, SimEvent, Task, TutorialScript, Vec, WorkKind } from './types';
+import type { BuildKind, Building, Character, Cmd, Cost, Difficulty, Ghost, Phase, Room, RoomTools, SimEvent, Task, ToolId, TutorialScript, Vec, WorkKind } from './types';
 
 export interface MatchOptions {
   seed: number;
@@ -278,6 +279,96 @@ export class Match {
     return kinds.map((kind) => ({ kind, lockDoor: this.buildLocked(r, kind) }));
   }
 
+  // ---------- инструменты сейфа ----------
+
+  /** Инструменты комнаты (создаются при первой покупке). */
+  toolsOf(r: Room): RoomTools {
+    return (r.tools ??= {
+      stock: { garlic: false, key: false, charge: false },
+      bought: { garlic: 0, key: 0, charge: 0 },
+      cd: { garlic: 0, key: 0, charge: 0 },
+    });
+  }
+
+  /** Есть ли у комнаты сейф (инструменты продаёт он). */
+  hasSafe(r: Room): boolean {
+    return r.buildings.some((b) => b.kind === 'safe');
+  }
+
+  /** Цена инструмента сейчас, конфеты. */
+  toolCost(r: Room, t: ToolId): number {
+    return toolPrice(t, this.opts.difficulty, r.sofa.level, r.tools?.bought[t] ?? 0);
+  }
+
+  /** Почему нельзя КУПИТЬ инструмент (null — можно, деньги проверяются отдельно). */
+  toolBuyBlock(r: Room, t: ToolId): string | null {
+    if (this.script) return 'Пока нельзя';
+    if (!this.hasSafe(r)) return 'Нужен сейф';
+    const need = econOf(this.opts.difficulty).toolSofaMin;
+    if (r.sofa.level < need) return `Сначала диван до ур. ${need}`;
+    if (r.tools?.stock[t]) return 'Уже в сейфе';
+    if ((r.tools?.bought[t] ?? 0) >= B.tools.limit[t]) return 'Больше нельзя за матч';
+    return null;
+  }
+
+  /** Почему нельзя ПРИМЕНИТЬ инструмент из сейфа (null — можно). */
+  toolUseBlock(r: Room, t: ToolId): string | null {
+    const st = r.tools;
+    if (!st?.stock[t]) return 'Сначала купи';
+    // Сейфа нет (продали): купленное лежит до новой постройки, но не применяется — единый путь к инструментам через сейф.
+    if (!this.hasSafe(r)) return 'Нужен сейф';
+    if (this.phase !== 'night' || this.result) return 'Ночью, когда придёт призрак';
+    const g = this.ghost;
+    const atDoor = g.state === 'attacking' && g.targetRoom === r.id;
+    if (t === 'garlic') {
+      if (!atDoor || g.siegeHits < 1) return 'Призрак у двери ещё не бьёт';
+      if (r.door.broken) return 'Дверь сломана';
+      if (!this.rooms.some((q) => q.id !== r.id && q.ownerId !== null && !q.eliminated)) return 'Ему некуда уйти';
+    } else if (t === 'key') {
+      if (r.door.broken) return 'Дверь сломана';
+      if (r.door.hp >= r.door.maxHp) return 'Дверь целая';
+      if (st.cd.key > 0) return `Готово через ${Math.ceil(st.cd.key)} с`;
+    } else {
+      const cannons = r.buildings.filter((b) => b.kind === 'cannon');
+      if (!cannons.length) return 'Нет пушек';
+      if (cannons.some((b) => (b.boost ?? 0) > 0)) return 'Уже горят';
+      if (!atDoor) return 'Призрака у двери нет';
+    }
+    return null;
+  }
+
+  private toolCommand(c: Character, r: Room, t: ToolId, op: 'buy' | 'use'): string | null {
+    if (c.id !== this.playerId) return 'Только для игрока';
+    const st = this.toolsOf(r);
+    if (op === 'buy') {
+      const block = this.toolBuyBlock(r, t);
+      if (block) return block;
+      const cost: Cost = { candy: this.toolCost(r, t), flame: 0 };
+      if (!this.canAfford(r, cost)) return this.missing(r, cost);
+      r.candy -= cost.candy;
+      st.stock[t] = true;
+      st.bought[t]++;
+      this.events.push({ type: 'tool', roomId: r.id, tool: t, op: 'buy' });
+      return null;
+    }
+    const block = this.toolUseBlock(r, t);
+    if (block) return block;
+    st.stock[t] = false;
+    st.cd[t] = B.tools.cooldown[t];
+    if (t === 'garlic') ghostScare(this, r, B.tools.scareSecs);
+    else if (t === 'key') {
+      r.door.hp = Math.min(r.door.maxHp, r.door.hp + r.door.maxHp * B.repair.amount);
+    } else {
+      for (const b of r.buildings) {
+        if (b.kind !== 'cannon') continue;
+        b.boost = B.spirit.sparkTime;
+        b.boostMul = B.tools.chargeMul;
+      }
+    }
+    this.events.push({ type: 'tool', roomId: r.id, tool: t, op: 'use' });
+    return null;
+  }
+
   sellValue(b: Building): number {
     return Math.round(B.sellRefund * buildBaseCost(b.kind).candy * b.level);
   }
@@ -385,6 +476,8 @@ export class Match {
     }
     if (c.roomId === null) return 'Сначала выбери комнату';
     const room = this.rooms[c.roomId];
+    // Инструменты сейфа работают сразу и откуда угодно: ходить к сейфу не нужно (дверь важнее).
+    if (cmd.type === 'tool') return this.toolCommand(c, room, cmd.tool, cmd.op);
     const cur = { x: Math.floor(c.x), y: Math.floor(c.y) };
     if (!inRoom(room, cur.x, cur.y)) return 'Ещё идёт в комнату';
 
@@ -514,6 +607,7 @@ export class Match {
         const target = this.sparkTarget(c, cmd);
         if (!target) return 'Рядом нет пушки соседа';
         target.b.boost = S.sparkTime;
+        target.b.boostMul = undefined;
         c.sparkCd = S.sparkCd;
         this.events.push({ type: 'spark', roomId: target.r.id, x: target.b.x, y: target.b.y });
         return null;
@@ -774,6 +868,7 @@ export class Match {
       if (r.ownerId === null || r.eliminated) continue;
       r.candy += this.incomeOf(r) * (this.script?.incomeMul ?? 1) * dt;
       r.flame += this.flameIncomeOf(r) * dt;
+      if (r.tools) for (const t of Object.keys(r.tools.cd) as ToolId[]) r.tools.cd[t] = Math.max(0, r.tools.cd[t] - dt);
       const d = r.door;
       d.repairCd = Math.max(0, d.repairCd - dt);
       // Обучение ждёт нажатия на ключ: сама дверь не лечится, иначе становится целой, ключ отвечает
@@ -1024,8 +1119,9 @@ export class Match {
         if (b.kind !== 'cannon') continue;
         b.cooldown = Math.max(0, b.cooldown - dt);
         // «Искорка» духа: пока горит — урон ×sparkMul. Гаснет всегда, даже если пушка сейчас не стреляет.
-        const mul = b.boost ? B.spirit.sparkMul : 1;
+        const mul = b.boost ? (b.boostMul ?? B.spirit.sparkMul) : 1;
         if (b.boost) b.boost = Math.max(0, b.boost - dt);
+        if (!b.boost) b.boostMul = undefined;
         if (!active || b.cooldown > 0) continue;
         const bx = b.x + 0.5;
         const by = b.y + 0.5;

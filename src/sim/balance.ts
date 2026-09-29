@@ -1,4 +1,4 @@
-import type { BuildKind, Cost, Difficulty } from './types';
+import type { BuildKind, Cost, Difficulty, ToolId } from './types';
 
 /** Шаг симуляции: 20 тиков в секунду. */
 export const TICK = 1 / 20;
@@ -114,7 +114,32 @@ export const B = {
   /** Воскрешение (раз за матч, реклама за награду): дверь с долей doorHp HP, protect с призрак не идёт к этой комнате. */
   revive: { doorHp: 0.5, protect: 15 },
   /** safe — конфет/с от сейфа; safeCost — его цена в матче, safeDoor — нужный уровень двери (сейф покупают, а не находят на карте, как в Ghost at the Door). */
-  items: { lavender: 0.5, safe: 0.7, safeCost: 50, safeDoor: 2, toolbox: 0.01 },
+  items: { lavender: 0.5, safe: 0.5, safeCost: 50, safeDoor: 2, toolbox: 0.01 },
+  /**
+   * Инструменты сейфа (одноразовые, покупаются впрок, платятся при покупке; соседи их не берут). Лимит — покупок за матч.
+   * Чеснок — самый сильный (при цене 50 на сложной победы +14–18 п.), поэтому дорогой и на 2 раза; ключ — второй ключ
+   * без ходьбы (+repair.amount двери, откат cooldown.key); супер-конфеты — пушки комнаты горят как от «Искорки» духа.
+   * Замеры (scripts/tool-policy-sim.ts, 1200 сидов): «внимательный ребёнок» — сдвиг побед в пределах ±1 п.; жадный игрок — сложная
+   * +8 п., из них +5 даёт сам доход сейфа (0,7/с при диване 1/с), поэтому safe теперь 0,5 (жадный: лёгкая +2, сложная +4,6, кошмар +2,4).
+   */
+  tools: {
+    sofaMin: 3,
+    limit: { garlic: 2, key: 3, charge: 2 } as Record<ToolId, number>,
+    /** Откат после применения, с (чеснок откатывать нечем — он и так одноразовый и уводит призрака). */
+    cooldown: { garlic: 0, key: 15, charge: 0 } as Record<ToolId, number>,
+    /**
+     * После чеснока призрак минимум scareSecs с не выбирает эту комнату; реально дольше: режиссёр атак считает, что комнате дали
+     * передышку (respite 17–28 с), и держит её тоже (замер: 20–78 с, медиана 40–54).
+     */
+    scareSecs: 20,
+    /** Супер-конфеты: во сколько раз сильнее бьют пушки комнаты B.spirit.sparkTime секунд («Искорка» духа — sparkMul 1,5). */
+    chargeMul: 2,
+    flatPrice: 35,
+    garlicPrices: [60, 90],
+    /** Кроме фиксированной цены — границы цены «от дохода дивана» (сложная/кошмар). */
+    minPrice: 40,
+    maxPrice: 120,
+  },
   sellRefund: 0.5,
   ghost: {
     // Рассвета нет — HP растёт медленно, иначе призрака не убить (подобрано scripts/tune.ts, 2026-09-24).
@@ -210,13 +235,28 @@ export interface Econ {
   sofaCost: number;
   /** С какого уровня пушки её улучшение требует пламени (тыквы). */
   cannonFlameFrom: number;
+  /** Инструменты сейфа: с какого уровня дивана продаются (раньше — трата ломает рост дохода). */
+  toolSofaMin: number;
+  /** Цена «ключа» и «супер-конфет»: 0 — фиксированная (B.tools.flatPrice), иначе столько секунд дохода дивана. */
+  toolPriceSecs: number;
+  /** Цена чеснока: первая, вторая покупка (дальше — как вторая). */
+  garlicPrices: readonly number[];
 }
 
 /**
  * Замеры: доход 1/с и ×2,0 дают на сложной ~35% побед (слишком жёстко: соседям тоже медленнее), ×2,2 — 56% / кошмар 38%
  * (было 54 / 33,5). Первый диван 20 (окупается за ~20 с). Без сейфа на карте: он усилитель из магазина.
  */
-const HARD_ECON: Partial<Econ> = { startCandy: 0, sofaIncome: 1, sofaIncomeMul: 2.2, sofaCost: 20, cannonFlameFrom: 5 };
+const HARD_ECON: Partial<Econ> = {
+  startCandy: 0,
+  sofaIncome: 1,
+  sofaIncomeMul: 2.2,
+  sofaCost: 20,
+  cannonFlameFrom: 5,
+  toolSofaMin: 4,
+  toolPriceSecs: 6,
+  garlicPrices: [100, 150],
+};
 
 // Подобрано scripts/tune.ts (2026-09-25, 160 матчей): подготовка 30 с (таймер ждёт игрока), бегство лечиться
 // ускорено по сложности (1 / 1.1 / 1.2). Итог: лёгкая 99%, сложная ~74%, кошмар ~33%, призрака убивают за 8–14 мин.
@@ -285,6 +325,9 @@ export function econOf(d?: Difficulty): Econ {
     sofaIncomeMul: B.sofa.incomeMul,
     sofaCost: B.sofa.cost,
     cannonFlameFrom: B.cannon.flameFrom,
+    toolSofaMin: B.tools.sofaMin,
+    toolPriceSecs: 0,
+    garlicPrices: B.tools.garlicPrices,
     ...(d ? DIFF[d]?.econ : undefined),
   };
 }
@@ -329,6 +372,18 @@ export function cannonUpCost(level: number, d?: Difficulty): Cost | null {
     candy: Math.round(c.upCost * c.upCostMul ** (level - 1)),
     flame: next >= c.flameFrom ? Math.round(c.flameCost * c.flameMul ** (next - c.flameFrom)) : 0,
   };
+}
+
+/**
+ * Цена инструмента сейфа. bought — сколько раз его уже покупали в этом матче (чеснок дорожает). Лёгкая: чеснок 60/90,
+ * остальные 35; сложная/кошмар: чеснок 100/150, остальные ≈ toolPriceSecs секунд дохода дивана (40…120, кратно 5).
+ */
+export function toolPrice(tool: ToolId, d: Difficulty | undefined, sofaLevel: number, bought: number): number {
+  const e = econOf(d);
+  if (tool === 'garlic') return e.garlicPrices[Math.min(bought, e.garlicPrices.length - 1)];
+  if (!e.toolPriceSecs) return B.tools.flatPrice;
+  const p = Math.round((e.toolPriceSecs * sofaIncome(sofaLevel, d)) / 5) * 5;
+  return Math.min(B.tools.maxPrice, Math.max(B.tools.minPrice, p));
 }
 
 export function buildBaseCost(kind: BuildKind): Cost {

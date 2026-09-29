@@ -132,6 +132,7 @@ const ICON = {
   /** Дух кричит «Бу!»: привиденьице с открытым ртом и волнами крика. */
   boo: `<svg viewBox="0 0 24 24"><path d="M4 21V11a7 7 0 0 1 14 0v10l-2.3-1.8L13.3 21 11 19.2 8.7 21 6.3 19.2z" fill="#fff" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><circle cx="8.6" cy="10.5" r="1.3" fill="var(--ink)"/><circle cx="13.4" cy="10.5" r="1.3" fill="var(--ink)"/><ellipse cx="11" cy="14.6" rx="1.7" ry="2.1" fill="var(--ink)"/><path d="M20 7.5l2-1.5M20.5 11h2.2M20 14.5l2 1.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   /** «Искорка»: четырёхлучевая звёздочка с маленькой рядом. */
+  garlic: `<svg viewBox="0 0 24 24"><path d="M12 2.6c.5 1.6.8 2.6.8 3.3 3.5 1.3 6.2 4.2 6.2 8 0 3.9-3.1 6.6-7 6.6s-7-2.7-7-6.6c0-3.8 2.7-6.7 6.2-8 0-.7.3-1.7.8-3.3z" fill="#fff" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><path d="M12 7.5c-1.7 2.2-1.7 8.6 0 11.2M12 7.5c1.7 2.2 1.7 8.6 0 11.2" fill="none" stroke="var(--ink)" stroke-width="1.1" stroke-linecap="round"/></svg>`,
   spark: `<svg viewBox="0 0 24 24"><path d="M11 2.5l2 6.5 6.5 2-6.5 2-2 6.5-2-6.5-6.5-2 6.5-2z" fill="url(#hg-amber)" stroke="var(--ink)" stroke-width="1.3" stroke-linejoin="round"/><path d="M19 15.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z" fill="#fff" stroke="var(--ink)" stroke-width="1" stroke-linejoin="round"/></svg>`,
 };
 
@@ -150,6 +151,9 @@ const OPTION_ICON: Record<string, () => string> = {
   'build:workbench': () => img('workbench') || ICON.bench,
   'build:fridge': () => img('fridge') || ICON.fridge,
   'build:safe': () => img('safe'),
+  'tool:garlic': () => ICON.garlic,
+  'tool:key': () => uiIcon('repair'),
+  'tool:charge': () => ICON.spark,
   upgradeDoor: () => img('door_l1'),
   repair: () => uiIcon('repair'),
   upgradeSofa: () => img('sofa'),
