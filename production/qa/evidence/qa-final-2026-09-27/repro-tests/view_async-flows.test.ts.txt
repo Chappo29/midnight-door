@@ -1,0 +1,117 @@
+/**
+ * QA scratch (VIEW): асинхронные пути вокруг экранов — реклама перед матчем, затухание музыки, плашки.
+ */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { YandexPlatform } from '../../../src/platform/platform';
+import type { YaAdvCallbacks, YaSdk } from '../../../src/platform/yandex';
+
+vi.mock('phaser', () => ({ default: { Sound: { Events: { COMPLETE: 'complete', UNLOCKED: 'unlocked' } } } }));
+(globalThis as unknown as { window: unknown }).window ??= globalThis;
+const { Sfx } = await import('../../../src/audio/sfx');
+
+const mainSrc = readFileSync(fileURLToPath(new URL('../../../src/main.ts', import.meta.url)), 'utf8').replace(/\r\n/g, '\n');
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('VIEW-QA: реклама перед матчем и повторное нажатие', () => {
+  it('test_second_interstitial_resolves_immediately_while_first_is_pending', async () => {
+    // Arrange: SDK, у которого ролик ещё не закрылся (колбэк onClose придёт позже)
+    let first: YaAdvCallbacks = {};
+    const sdk = {
+      adv: {
+        showFullscreenAdv: ({ callbacks }: { callbacks?: YaAdvCallbacks }) => {
+          first = callbacks ?? {};
+        },
+        showRewardedVideo: () => {},
+      },
+    } as unknown as YaSdk;
+    const p = new YandexPlatform();
+    p.attach(sdk);
+    const order: string[] = [];
+
+    // Act: «Ещё раз» нажали дважды — main.start() дважды зовёт showInterstitial()
+    const a = p.showInterstitial().then(() => order.push('first start() continues'));
+    const b = p.showInterstitial().then(() => order.push('second start() continues'));
+    await b;
+
+    // Assert: второй вызов не ждёт ролик — второй start() сразу идёт дальше (hideScreen + scene.start),
+    // а первый продолжится после onClose и перезапустит сцену ещё раз с новым матчем.
+    expect(order).toEqual(['second start() continues']);
+    first.onClose?.();
+    await a;
+    expect(order).toEqual(['second start() continues', 'first start() continues']);
+  });
+
+  it('test_main_start_has_no_reentry_guard_and_hides_screen_only_after_ad', () => {
+    const body = mainSrc.slice(mainSrc.indexOf('async function start('), mainSrc.indexOf('// Страница прослушивания звуков'));
+    // Экран с кнопками остаётся живым всё время ожидания рекламы:
+    expect(body).toMatch(/if \(interstitialBeforeMatch\(progress\)\) await platform\.showInterstitial\(\);\n\s+hud\.hideScreen\(\);/);
+    // …и нет ни флага «уже стартуем», ни отмены по нажатию «Меню»:
+    expect(body).not.toMatch(/starting|pendingStart|startToken|inFlight/i);
+    // Реклама со второго завершённого матча — т.е. почти всегда:
+    expect(mainSrc).toContain("import { YandexPlatform, domFakeAds, interstitialBeforeMatch } from './platform/platform'");
+  });
+});
+
+describe('VIEW-QA: затухание музыки плейлиста', () => {
+  it('test_fade_out_throws_forever_if_track_completes_during_fade', () => {
+    vi.useFakeTimers();
+    // Поддельный WebAudioSound: как у Phaser 3.90 — после destroy() volumeNode = null, setVolume падает.
+    const made: FakeSound[] = [];
+    class FakeSound {
+      volumeNode: { gain: { value: number } } | null = { gain: { value: 1 } };
+      private handlers: Record<string, () => void> = {};
+      once(ev: string, fn: () => void) {
+        this.handlers[ev] = fn;
+      }
+      emit(ev: string) {
+        const h = this.handlers[ev];
+        delete this.handlers[ev];
+        h?.();
+      }
+      play() {}
+      setVolume(v: number) {
+        this.volumeNode!.gain.value = v; // TypeError после destroy()
+        return this;
+      }
+      destroy() {
+        this.volumeNode = null;
+      }
+    }
+    const sound = {
+      locked: false,
+      add: () => {
+        const s = new FakeSound();
+        made.push(s);
+        return s;
+      },
+      once() {},
+    };
+    const game = { sound, cache: { audio: { exists: () => true } } } as never;
+    const sfx = new Sfx(game);
+
+    // Act: матч идёт под плейлист, матч кончился — музыка затихает 400 мс (main.ts onEnd: playMusic(null, 400))
+    sfx.playMusic(['night1', 'night2', 'night3'], 0);
+    const track = made[0];
+    sfx.playMusic(null, 400);
+    vi.advanceTimersByTime(100);
+    // …и именно в эти 400 мс трек доиграл до конца: слушатель COMPLETE делает m.destroy()
+    track.emit('complete');
+
+    // Assert: следующий тик setInterval падает; clearInterval стоит ПОСЛЕ setVolume, поэтому таймер не снимается
+    let errors = 0;
+    for (let i = 0; i < 10; i++) {
+      try {
+        vi.advanceTimersByTime(30);
+      } catch {
+        errors++;
+      }
+    }
+    expect(errors).toBe(10); // падает каждые 30 мс бесконечно
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+  });
+});

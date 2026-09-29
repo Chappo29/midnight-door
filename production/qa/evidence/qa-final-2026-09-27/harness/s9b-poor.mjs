@@ -1,0 +1,34 @@
+import { launch, open, click, sleep, until, scene, cellXY } from './harness.mjs';
+const today = new Date().toISOString().slice(0, 10);
+const VET = JSON.stringify({ v: 2, rev: 50, at: 1, progress: { matches: 9, tutorial: 'done', hints: [], meta: { coins: 10, daily: { step: 1, last: today } }, unlocks: { pumpkin: 'seen', trap: 'seen', workbench: 'seen', fridge: 'seen' }, settings: { muted: true } } });
+const browser = await launch();
+const { page } = await open(browser, { save: VET });
+await until(page, () => document.querySelector('#screen.show button[data-d="easy"]'), null, 20000);
+await sleep(500);
+await click(page, '#screen.show button[data-d="easy"]');
+await until(page, () => window.__game.scene.isActive('game') && window.__game.scene.getScene('game').m?.phase === 'pick', null, 20000);
+await scene(page, `const r = m.rooms.find(r => r.ownerId === null); s.cmd({ type: 'pickRoom', roomId: r.id });`);
+await until(page, () => window.__game.scene.getScene('game').m.phase === 'prep' && !window.__game.scene.getScene('game').m.player.path.length, null, 30000);
+await scene(page, `m.phaseLeft = 9999; window.__log = []; const cmd0 = m.command.bind(m); m.command = (id, c) => { const r = cmd0(id, c); if (id === m.playerId) window.__log.push(JSON.stringify(c) + ' -> ' + r + ' candy=' + m.playerRoom.candy.toFixed(2)); return r; };`);
+const inc = await scene(page, `return m.incomeOf(m.playerRoom)`);
+console.log('income/s', inc);
+for (const candy of [40, 48]) {
+  const cell = await scene(page, `const r = m.playerRoom; return m.placeableCells(r, 'cannon').find(c => !r.buildings.some(b=>b.x===c.x&&b.y===c.y) && Math.abs(c.x+0.5-m.player.x)+Math.abs(c.y+0.5-m.player.y) > 1.5)`);
+  const p = await cellXY(page, cell.x, cell.y);
+  await page.mouse.click(p.x, p.y);
+  await sleep(1100);
+  await scene(page, `m.playerRoom.candy = ${candy}`);
+  await sleep(200);
+  const el = await page.$('#menu [data-opt="build:cannon"]');
+  const bb = await el.boundingBox();
+  const cls = await el.evaluate((e) => e.className);
+  await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2);
+  await sleep(300);
+  const mid = await scene(page, `return { candy: m.playerRoom.candy.toFixed(2), task: m.player.task?.cmd?.type ?? null, menu: s.hud.menuOpen }`);
+  await sleep(4000);
+  const after = await scene(page, `return { candy: m.playerRoom.candy.toFixed(2), b: m.playerRoom.buildings.map(b=>b.kind+'@'+b.x+','+b.y).join(' '), task: m.player.task?.cmd?.type ?? null }`);
+  console.log(`candy ${candy}: button ${cls} → mid`, JSON.stringify(mid), '→ after', JSON.stringify(after));
+  console.log('   cmds:', await page.evaluate(() => window.__log.splice(0)));
+  await page.mouse.click(5, 5); await sleep(1200);
+}
+await browser.close();

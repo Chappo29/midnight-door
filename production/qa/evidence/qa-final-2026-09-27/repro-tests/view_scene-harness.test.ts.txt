@@ -1,0 +1,229 @@
+/**
+ * QA scratch (VIEW): GameScene без браузера. Phaser заглушен, методы отрисовки подменены пустышками —
+ * гоняем настоящий код update()/tap()/setupInput()/refreshMenu() и смотрим побочные эффекты.
+ */
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('phaser', () => {
+  class Scene {
+    constructor(public key?: string) {}
+  }
+  return {
+    default: {
+      Scene,
+      Math: {
+        Clamp: (v: number, a: number, b: number) => Math.max(a, Math.min(b, v)),
+        Distance: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.hypot(x2 - x1, y2 - y1) },
+      },
+      Scenes: { Events: { SHUTDOWN: 'shutdown' } },
+    },
+  };
+});
+
+// Узел без DOM: GameScene трогает document.hidden в init() и window.addEventListener в setupInput().
+(globalThis as unknown as { document: unknown }).document ??= { hidden: false, querySelector: () => null };
+(globalThis as unknown as { window: unknown }).window ??= { addEventListener() {}, removeEventListener() {} };
+
+const { GameScene } = await import('../../../src/view/GameScene');
+const { inRoomMatch } = await import('../../helpers');
+
+const RENDER = [
+  'renderChars',
+  'followPlayerToRoom',
+  'renderGhost',
+  'updateGhostArrow',
+  'syncBuildings',
+  'renderDynamic',
+  'checkUnlocks',
+  'renderTutorial',
+  'renderHint',
+  'refreshMenu',
+  'handleKeys',
+  'trackMissedRepair',
+];
+
+type AnyScene = Record<string, any>;
+
+function fakeHud() {
+  return {
+    hideMenu: vi.fn(),
+    showMenu: vi.fn(),
+    refreshMenu: vi.fn(),
+    showCaught: vi.fn(),
+    hideScreen: vi.fn(),
+    toast: vi.fn(),
+    banner: vi.fn(),
+    update: vi.fn(),
+    menuOpen: false,
+    inputReadyAt: 0,
+    isEchoOfPress: () => false,
+  };
+}
+
+describe('VIEW-QA: GameScene', () => {
+  it('test_update_keeps_stepping_sim_after_player_caught_in_same_frame', () => {
+    // Arrange: поддельный матч — на 2-м тике игрока ловят, на 3-м последний сосед пойман → result = lose.
+    let ticks = 0;
+    let ticksAfterCaught = 0;
+    const m: AnyScene = {
+      events: [],
+      phase: 'night',
+      result: null,
+      playerId: 0,
+      player: { caught: false, spirit: false },
+      playerRoom: null,
+      step() {
+        ticks++;
+        if (this.player.caught) ticksAfterCaught++;
+        this.events = [];
+        if (ticks === 2) {
+          this.player.caught = this.player.spirit = true;
+          this.events = [{ type: 'spirit', charId: 0 }];
+        }
+        if (ticks === 3) this.result = 'lose'; // конец матча в «лишнем» тике — phase 'end' наступит через 1,5 с
+      },
+      canRevive() {
+        return this.result ? 'Игра окончена' : null;
+      },
+    };
+    const hud = fakeHud();
+    const show = vi.fn(async () => true); // «ролик досмотрен»
+    const s = new GameScene() as unknown as AnyScene;
+    s.init({ match: m, hud, sfx: { play() {} }, onEnd: vi.fn(), onMenu: vi.fn(), rewarded: { available: () => true, show } });
+    for (const k of RENDER) s[k] = () => {};
+    s.handleEvents = (ev: { type: string }[]) => ev.forEach((e) => e.type === 'spirit' && s.onPlayerCaught());
+
+    // Act: один кадр 250 мс (clamp) = 5 тиков
+    s.update(0, 250);
+
+    // Assert: карточка поимки поставлена на 2-м тике, но симуляция отработала ещё 3 тика под ней
+    expect(hud.showCaught).toHaveBeenCalledTimes(1);
+    expect(s.caughtPaused).toBe(true);
+    expect(ticks).toBe(5);
+    expect(ticksAfterCaught).toBe(3);
+    expect(m.result).toBe('lose');
+    // На карточке осталась кнопка «Вернуться в комнату» (revive посчитан до конца матча)
+    const onRevive = hud.showCaught.mock.calls[0][4];
+    expect(typeof onRevive).toBe('function');
+    return onRevive().then((ok: boolean) => {
+      expect(show).toHaveBeenCalledTimes(1); // ребёнок посмотрел рекламу…
+      expect(ok).toBe(false); // …а вернуть нельзя: матч уже проигран
+    });
+  });
+
+  it('test_tap_during_victory_window_shows_red_error_and_opens_build_menu', () => {
+    // Arrange: настоящий матч, игрок в комнате; призрак «побеждён» (result = win), фаза ещё не 'end' (endDelay 1,5 с)
+    const m = inRoomMatch();
+    const r = m.playerRoom!;
+    const cell = m.placeableCells(r, 'cannon')[0];
+    m.result = 'win';
+    const hud = fakeHud();
+    const sfx = { play: vi.fn() };
+    const s = new GameScene() as unknown as AnyScene;
+    s.init({ match: m, hud, sfx, onEnd: vi.fn(), onMenu: vi.fn() });
+    s.cameras = { main: { getWorldPoint: (x: number, y: number) => ({ x, y }) } };
+
+    // Act: тап по пустой клетке своей комнаты (TS = 48)
+    s.tap({ x: (cell.x + 0.5) * 48, y: (cell.y + 0.5) * 48 });
+
+    // Assert: красная плашка «Игра окончена» и звук «deny» в момент победы + меню стройки всё равно открылось
+    expect(m.phase).not.toBe('end');
+    expect(hud.toast).toHaveBeenCalledWith('Игра окончена');
+    expect(sfx.play).toHaveBeenCalledWith('deny', expect.anything());
+    expect(hud.showMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('test_tutorial_blocks_drag_and_wheel_but_not_pinch_zoom', () => {
+    // Arrange
+    const CANVAS = {};
+    const handlers: Record<string, (...a: unknown[]) => void> = {};
+    const cam = {
+      zoom: 1,
+      scrollX: 0,
+      scrollY: 0,
+      width: 400,
+      height: 800,
+      setZoom: vi.fn(function (this: { zoom: number }, z: number) {
+        this.zoom = z;
+        return this;
+      }),
+      centerOn: vi.fn(),
+    };
+    const a = { isDown: true, downElement: CANVAS, x: 100, y: 300, wasTouch: true };
+    const b = { isDown: true, downElement: CANVAS, x: 200, y: 300, wasTouch: true };
+    const s = new GameScene() as unknown as AnyScene;
+    s.init({ match: { player: {} }, hud: fakeHud(), sfx: { play() {} }, onEnd() {}, onMenu() {} });
+    s.cameras = { main: cam };
+    s.game = { canvas: CANVAS };
+    s.events = { once() {} };
+    s.input = {
+      addPointer() {},
+      on: (ev: string, fn: (...x: unknown[]) => void) => (handlers[ev] = fn),
+      manager: { pointers: [a, b] },
+      keyboard: { addKeys: () => ({}), on() {} },
+    };
+    s.setupInput();
+    s.tut = { done: false }; // идёт обучение
+
+    // Act 1: колесо мыши — в обучении заблокировано
+    handlers.wheel({}, null, 0, -1);
+    expect(cam.setZoom).not.toHaveBeenCalled();
+
+    // Act 2: два пальца, разводим — щипок НЕ заблокирован
+    handlers.pointerdown(b);
+    b.x = 400; // расстояние 100 → 300
+    handlers.pointermove(b);
+
+    // Assert: зум ×3 в обучении, где перетаскивание карты запрещено (вернуть цель в кадр пальцем нельзя)
+    expect(cam.setZoom).toHaveBeenCalledWith(3);
+    expect(cam.zoom).toBe(3);
+
+    // Act 3: одним пальцем тянем карту — в обучении запрещено
+    a.isDown = b.isDown = false;
+    handlers.pointerup(b); // все пальцы подняты — щипок снят
+    expect(s.pinch.active).toBe(false);
+    const one = { isDown: true, downElement: CANVAS, x: 100, y: 100, wasTouch: true };
+    s.input.manager.pointers = [one];
+    handlers.pointerdown(one);
+    one.x = 300;
+    handlers.pointermove(one);
+    expect(cam.scrollX).toBe(0);
+  });
+
+  it('test_double_tap_on_room_in_pick_shows_red_already_picked_toast', async () => {
+    const { Match } = await import('../../../src/sim/match');
+    const { roomCenter } = await import('../../../src/sim/roomgrid');
+    const m = new Match({ seed: 7, difficulty: 'easy', flameUnlocked: true });
+    const hud = fakeHud();
+    const s = new GameScene() as unknown as AnyScene;
+    s.init({ match: m, hud, sfx: { play() {} }, onEnd() {}, onMenu() {} });
+    s.cameras = { main: { getWorldPoint: (x: number, y: number) => ({ x, y }) } };
+    const c = roomCenter(m.rooms[2]);
+    const p = { x: c.x * 48, y: c.y * 48 };
+
+    // Ребёнок дважды тапает по комнате (двойной тап), NPC ещё выбирают — фаза всё ещё 'pick'
+    s.tap(p);
+    s.tap(p);
+
+    expect(m.phase).toBe('pick');
+    expect(hud.banner).toHaveBeenCalledWith('Это твоя комната! 🏠');
+    expect(hud.toast).toHaveBeenCalledWith('Комната уже выбрана'); // красная плашка сразу после «Это твоя комната!»
+  });
+
+  it('test_selected_cell_highlight_survives_menu_close', () => {
+    // Arrange: меню стройки открыто на клетке (3,4)
+    const hud = fakeHud();
+    const s = new GameScene() as unknown as AnyScene;
+    s.init({ match: {}, hud, sfx: { play() {} }, onEnd() {}, onMenu() {} });
+    s.selected = { x: 3, y: 4 };
+    s.menuBuild = () => ({ title: 'Пол', options: [] });
+
+    // Act: ребёнок закрыл меню крестиком (Hud.hideMenu) — сцена узнаёт об этом в refreshMenu()
+    hud.menuOpen = false;
+    s.refreshMenu();
+
+    // Assert: меню забыто, а жёлтая рамка и круг радиуса (renderDynamic рисует this.selected) остаются
+    expect(s.menuBuild).toBeNull();
+    expect(s.selected).toEqual({ x: 3, y: 4 });
+  });
+});

@@ -1,0 +1,10 @@
+import { serve, launch, open, sleep, out, gameInfo, ylog, host, waitSel, SAVE_MATCH1 } from './lib.mjs';
+const srv = await serve(5199); const b = await launch(['--autoplay-policy=no-user-gesture-required']);
+const url = srv.url + 'games/s3-bucket-abc123/v2/index.html';
+const { page, logs } = await open(b, url, { prof: 't15', save: SAVE_MATCH1 });
+await waitSel(page, '#screen.show', 30000); await sleep(3000);
+out('subpath load:', url, JSON.stringify(await gameInfo(page)));
+out('failed requests (>=400):', JSON.stringify(host.reqLog.filter((r) => r.status >= 400)));
+out('ready sent:', (await ylog(page)).filter((e) => e.ev === 'ready').length, 'logs:', JSON.stringify(logs.filter((l) => !/GL Driver|ReadPixels/.test(l))));
+await page.screenshot({ path: 'C:/Users/bitse/AppData/Local/Temp/claude/C--Users-bitse-Desktop-projects-ghost-on-door/1c342518-5275-477e-b2c1-ec5cfa2a0782/scratchpad/shots/t15.png' });
+await b.close(); srv.close();

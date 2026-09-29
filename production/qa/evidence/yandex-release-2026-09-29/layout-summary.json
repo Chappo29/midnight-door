@@ -1,0 +1,1835 @@
+[
+ {
+  "tag": "844x390",
+  "label": "unlock-card",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "shop",
+  "bad": [
+   "shop-action: OFF-SCREEN 250,466-346,508 (scrollable parent)",
+   "shop-action: OFF-SCREEN 374,466-470,508 (scrollable parent)",
+   "shop-action: OFF-SCREEN 498,466-594,508 (scrollable parent)",
+   "SCROLL inside shop-body (373>191)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "shop-tab1",
+  "bad": [
+   "shop-action: OFF-SCREEN 374,494-470,536 (scrollable parent)",
+   "shop-action: OFF-SCREEN 250,687-346,729 (scrollable parent)",
+   "shop-action: OFF-SCREEN 374,687-470,729 (scrollable parent)",
+   "shop-action: OFF-SCREEN 498,687-594,729 (scrollable parent)",
+   "SCROLL inside shop-body (593>191)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "shop-tab2",
+  "bad": [
+   "SCROLL inside shop-body (269>191)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "844x390",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "unlock-card",
+  "bad": [
+   "SCROLL inside card (355>331)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "shop",
+  "bad": [
+   "shop-action: OFF-SCREEN 228,465-324,507 (scrollable parent)",
+   "shop-action: OFF-SCREEN 352,465-448,507 (scrollable parent)",
+   "shop-action: OFF-SCREEN 476,465-572,507 (scrollable parent)",
+   "SCROLL inside shop-body (373>163)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "shop-tab1",
+  "bad": [
+   "shop-action: OFF-SCREEN 352,493-448,535 (scrollable parent)",
+   "shop-action: OFF-SCREEN 228,686-324,728 (scrollable parent)",
+   "shop-action: OFF-SCREEN 352,686-448,728 (scrollable parent)",
+   "shop-action: OFF-SCREEN 476,686-572,728 (scrollable parent)",
+   "SCROLL inside shop-body (593>163)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "shop-tab2",
+  "bad": [
+   "shop-action: OFF-SCREEN 228,332-324,374 (scrollable parent)",
+   "shop-action: OFF-SCREEN 352,332-448,374 (scrollable parent)",
+   "shop-action: OFF-SCREEN 476,332-572,374 (scrollable parent)",
+   "SCROLL inside shop-body (269>163)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "800x360",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "unlock-card",
+  "bad": [
+   "SCROLL inside card (355>331)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "shop",
+  "bad": [
+   "shop-action: OFF-SCREEN 198,465-294,507 (scrollable parent)",
+   "shop-action: OFF-SCREEN 322,465-418,507 (scrollable parent)",
+   "shop-action: OFF-SCREEN 446,465-542,507 (scrollable parent)",
+   "SCROLL inside shop-body (373>163)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "shop-tab1",
+  "bad": [
+   "shop-action: OFF-SCREEN 322,493-418,535 (scrollable parent)",
+   "shop-action: OFF-SCREEN 198,686-294,728 (scrollable parent)",
+   "shop-action: OFF-SCREEN 322,686-418,728 (scrollable parent)",
+   "shop-action: OFF-SCREEN 446,686-542,728 (scrollable parent)",
+   "SCROLL inside shop-body (593>163)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "shop-tab2",
+  "bad": [
+   "shop-action: OFF-SCREEN 198,332-294,374 (scrollable parent)",
+   "shop-action: OFF-SCREEN 322,332-418,374 (scrollable parent)",
+   "shop-action: OFF-SCREEN 446,332-542,374 (scrollable parent)",
+   "SCROLL inside shop-body (269>163)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "740x360",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "unlock-card",
+  "bad": [
+   "SCROLL inside card (355>345)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "shop",
+  "bad": [
+   "shop-action: OFF-SCREEN 162,466-258,508 (scrollable parent)",
+   "shop-action: OFF-SCREEN 286,466-382,508 (scrollable parent)",
+   "shop-action: OFF-SCREEN 410,466-506,508 (scrollable parent)",
+   "SCROLL inside shop-body (373>177)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "shop-tab1",
+  "bad": [
+   "shop-action: OFF-SCREEN 286,494-382,536 (scrollable parent)",
+   "shop-action: OFF-SCREEN 162,686-258,728 (scrollable parent)",
+   "shop-action: OFF-SCREEN 286,686-382,728 (scrollable parent)",
+   "shop-action: OFF-SCREEN 410,686-506,728 (scrollable parent)",
+   "SCROLL inside shop-body (593>177)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "shop-tab2",
+  "bad": [
+   "SCROLL inside shop-body (269>177)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "667x375",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "unlock-card",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "shop",
+  "bad": [
+   "SCROLL inside shop-body (547>470)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "shop-tab1",
+  "bad": [
+   "shop-action: OFF-SCREEN 147,932-243,974 (scrollable parent)",
+   "SCROLL inside shop-body (752>470)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "shop-tab2",
+  "bad": [
+   "SCROLL inside shop-body (501>470)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "390x844",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "unlock-card",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "shop",
+  "bad": [
+   "SCROLL inside shop-body (547>470)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "shop-tab1",
+  "bad": [
+   "shop-action: OFF-SCREEN 132,910-228,952 (scrollable parent)",
+   "SCROLL inside shop-body (752>470)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "shop-tab2",
+  "bad": [
+   "SCROLL inside shop-body (501>470)"
+  ],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "360x800",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "unlock-card",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "shop",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "shop-tab1",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "shop-tab2",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "768x1024",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "unlock-card",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "shop",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "shop-tab1",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "shop-tab2",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1024x768",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "unlock-card",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "shop",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "shop-tab1",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "shop-tab2",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1280x720",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "unlock-card",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "shop",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "shop-tab1",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "shop-tab2",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1366x768",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "unlock-card",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "shop",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "shop-tab1",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "shop-tab2",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "1920x1080",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "unlock-card",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "shop",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "shop-tab1",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "shop-tab2",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1080",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "unlock-card",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "daily",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "menu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "shop",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "shop-tab1",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "shop-tab2",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "pick",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "prep-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "buildmenu",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "rotated (menu should close)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "pause",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "night-HUD",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "caught",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "spirit",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ },
+ {
+  "tag": "2560x1000",
+  "label": "result(team win)",
+  "bad": [],
+  "pageScroll": [
+   false,
+   false
+  ]
+ }
+]

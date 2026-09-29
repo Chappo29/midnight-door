@@ -1,0 +1,56 @@
+/**
+ * QA scratch (META audit): slow SDK / slow getPlayer at boot.
+ * Green = bug reproduced.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { bootSave } from '../../../src/platform/save';
+import { initYandexSdk, type YaSdk } from '../../../src/platform/yandex';
+
+type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+function kv() {
+  const m = new Map<string, string>();
+  return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) };
+}
+
+describe('late SDK', () => {
+  it('YaGames.init answering after 4 s -> initYandexSdk returns null and the live SDK is dropped (no ready(), no ads, no pause events)', async () => {
+    let inited = false;
+    const sdk = { ready: true } as Any;
+    vi.stubGlobal('window', {
+      YaGames: { init: () => new Promise((r) => setTimeout(() => ((inited = true), r(sdk)), 6000)) },
+    });
+    let got: Any = 'pending';
+    void initYandexSdk().then((s) => (got = s));
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(got).toBeNull();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(inited).toBe(true); // SDK is alive now, but nothing will ever attach it
+    expect(got).toBeNull();
+  });
+
+  it('getPlayer slower than 2.5 s at boot -> authorized player treated as guest for the whole session; cloud never attached', async () => {
+    const player = { isAuthorized: () => true, getData: vi.fn(async () => ({})), setData: vi.fn(async () => {}) };
+    const sdk = {
+      getStorage: async () => kv(),
+      getPlayer: vi.fn(() => new Promise((r) => setTimeout(() => r(player), 3000))),
+      auth: { openAuthDialog: vi.fn(async () => {}) },
+    } as unknown as YaSdk;
+    const booting = bootSave({ sdk: async () => sdk, browser: () => null, log: () => {} });
+    await vi.advanceTimersByTimeAsync(2600);
+    const r = await booting;
+    expect(r.authorized).toBe(false);
+    r.store.update((p) => (p.meta.coins = 500), { critical: true });
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(r.store.cloudAttached).toBe(false);
+    expect(player.getData).not.toHaveBeenCalled();
+    expect(player.setData).not.toHaveBeenCalled();
+    expect((sdk.getPlayer as Any).mock.calls.length).toBe(1); // no retry of getPlayer
+  });
+});

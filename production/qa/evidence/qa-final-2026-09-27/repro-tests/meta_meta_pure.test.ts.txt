@@ -1,0 +1,165 @@
+/**
+ * QA scratch (META audit): pure-logic repros for economy / save / platform.
+ * Each test ASSERTS THE CURRENT (buggy) behaviour, so a green run = bug reproduced.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { BOOSTERS, HEROES, buyBooster, buyHero, claimDaily, dailyAvailable, emptyMeta, normalizeMeta } from '../../../src/meta/economy';
+import { CLOUD_KEY, ProgressStore, SCHEMA_VERSION, parseSnapshot, signInAndSync, type CloudSave, type SaveSnapshot } from '../../../src/platform/save';
+import { emptyProgress } from '../../../src/platform/storage';
+import { AD_TIMEOUT_MS, YandexPlatform } from '../../../src/platform/platform';
+import type { YaAdvCallbacks, YaSdk } from '../../../src/platform/yandex';
+
+const quiet = () => {};
+function kv() {
+  const m = new Map<string, string>();
+  return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) };
+}
+function snap(rev: number, at: number, mutate: (p: ReturnType<typeof emptyProgress>) => void = () => {}): SaveSnapshot {
+  const progress = emptyProgress();
+  mutate(progress);
+  return { v: SCHEMA_VERSION, rev, at, progress };
+}
+
+describe('META-economy', () => {
+  it('daily gift: toggling device date between two days yields a claim on every toggle (uses !== not >)', () => {
+    const m = emptyMeta();
+    let total = 0;
+    for (let i = 0; i < 6; i++) total += claimDaily(m, i % 2 === 0 ? '2026-09-28' : '2026-09-27');
+    // 6 claims in "two days"
+    expect(total).toBe(20 + 30 + 40 + 50 + 60 + 80);
+    // going BACK in time is also "available"
+    const m2 = emptyMeta();
+    claimDaily(m2, '2026-10-10');
+    expect(dailyAvailable(m2, '2026-09-01')).toBe(true);
+  });
+
+  it('economy boundaries: exactly enough buys, 1 short refuses, 0 coins refuses', () => {
+    const m = emptyMeta();
+    m.coins = HEROES[1].price;
+    expect(buyHero(m, 1)).toBeNull();
+    expect(m.coins).toBe(0);
+    m.coins = BOOSTERS.candy.price - 1;
+    expect(buyBooster(m, 'candy')).toBe('Не хватает монет');
+    expect(m.coins).toBe(BOOSTERS.candy.price - 1);
+  });
+
+  it('forward-compat: hero bought in a newer build (look 6) is silently dropped by normalizeMeta', () => {
+    const m = normalizeMeta({ ...emptyMeta(), heroes: [0, 6], hero: 6 } as never);
+    expect(m.heroes).toEqual([0]);
+    expect(m.hero).toBe(0);
+  });
+});
+
+describe('META-save', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('hung getData (never settles) => cloud never attaches, no retry, signInAndSync never resolves', async () => {
+    let loads = 0;
+    const cloud: CloudSave = { load: () => (loads++, new Promise(() => {})), save: async () => {} };
+    const store = new ProgressStore(snap(5, 1), kv(), { log: quiet });
+    void store.attachCloud(cloud, { preferCloudIfFresh: true });
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(store.cloudAttached).toBe(false);
+    expect(loads).toBe(1); // no retry ever scheduled (retry only on throw)
+
+    // signIn afterwards is stuck on the same pending promise
+    const player = { isAuthorized: () => true, getData: vi.fn(async () => ({})), setData: vi.fn(async () => {}) };
+    const sdk = { auth: { openAuthDialog: async () => {} }, getPlayer: async () => player, getStorage: async () => kv() } as unknown as YaSdk;
+    let settled = false;
+    void signInAndSync(sdk, store).then(() => (settled = true));
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(settled).toBe(false);
+    expect(player.getData).not.toHaveBeenCalled();
+  });
+
+  it('preferCloudIfFresh has no time bound: a cloud answer after 5 minutes wipes all progress made on this device', async () => {
+    let resolveLoad!: (v: unknown) => void;
+    const cloud: CloudSave = { load: () => new Promise((r) => (resolveLoad = r)), save: async () => {} };
+    const store = new ProgressStore(null, kv(), { log: quiet }); // fresh device
+    const attaching = store.attachCloud(cloud, { preferCloudIfFresh: true });
+    attaching.catch(() => {});
+    // 5 minutes of real play: tutorial gift, 3 matches, purchases (rev 30)
+    for (let i = 0; i < 30; i++) store.update((p) => (p.meta.coins += 10));
+    store.update((p) => (p.matches = 3));
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    resolveLoad(snap(2, 1, (p) => (p.meta.coins = 5))); // tiny, older cloud (rev 2)
+    await expect(attaching).resolves.toBe('cloud');
+    expect(store.progress.meta.coins).toBe(5); // 300 coins earned here are gone
+    expect(store.progress.matches).toBe(0);
+    expect(store.revision).toBe(2);
+  });
+
+  it('parseSnapshot accepts {v:2, progress: []} as a valid empty profile (not flagged corrupt)', () => {
+    const r = parseSnapshot('{"v":2,"rev":900,"progress":[]}');
+    expect(r.corrupt).toBe(false);
+    expect(r.snapshot?.rev).toBe(900);
+    expect(r.snapshot?.progress.matches).toBe(0);
+  });
+
+  it('huge rev (>MAX_SAFE_INTEGER) is accepted and commit no longer increments it', () => {
+    const r = parseSnapshot(JSON.stringify({ v: 2, rev: 1e300, at: 1, progress: {} }));
+    const store = new ProgressStore(r.snapshot, kv(), { log: quiet });
+    const before = store.revision;
+    store.update((p) => (p.meta.coins = 1));
+    expect(store.revision).toBe(before); // rev frozen
+  });
+});
+
+describe('META-platform', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function sdkWithAds() {
+    let cbs: YaAdvCallbacks = {};
+    const gp: string[] = [];
+    const sdk = {
+      getPlayer: vi.fn(),
+      getStorage: vi.fn(),
+      auth: { openAuthDialog: vi.fn() },
+      features: { GameplayAPI: { start: () => gp.push('start'), stop: () => gp.push('stop') } },
+      adv: {
+        showFullscreenAdv: ({ callbacks }: { callbacks?: YaAdvCallbacks }) => void (cbs = callbacks ?? {}),
+        showRewardedVideo: ({ callbacks }: { callbacks?: YaAdvCallbacks }) => void (cbs = callbacks ?? {}),
+      },
+      on: () => {},
+    } as unknown as YaSdk;
+    return { sdk, cbs: () => cbs, gp };
+  }
+
+  it('rewarded: 90 s timeout fires while the ad is still open -> pause lifted under the ad, later onRewarded is lost', async () => {
+    const f = sdkWithAds();
+    const p = new YandexPlatform();
+    p.attach(f.sdk);
+    const pauses: boolean[] = [];
+    p.onPauseChange = (x) => pauses.push(x);
+    let result: boolean | undefined;
+    void p.showRewarded().then((r) => (result = r));
+    await vi.advanceTimersByTimeAsync(AD_TIMEOUT_MS);
+    expect(result).toBe(false);
+    expect(p.paused).toBe(false); // sound/game resumed although SDK never said onClose
+    f.cbs().onRewarded?.(); // user finishes watching at 95 s
+    f.cbs().onClose?.(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result).toBe(false); // reward lost
+    expect(pauses).toEqual([true, false]);
+  });
+
+  it('interstitial whose SDK never calls back blocks start() for 90 s; a second call meanwhile resolves at once (adBusy)', async () => {
+    const f = sdkWithAds();
+    const p = new YandexPlatform();
+    p.attach(f.sdk);
+    let first = false;
+    let second = false;
+    void p.showInterstitial().then(() => (first = true));
+    void p.showInterstitial().then(() => (second = true));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(second).toBe(true); // second "start" proceeds immediately while the first ad is pending
+    expect(first).toBe(false);
+    expect(p.paused).toBe(true); // 'ad' pause is still held -> match started by the 2nd call is frozen & muted
+    await vi.advanceTimersByTimeAsync(AD_TIMEOUT_MS - 1);
+    expect(first).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(first).toBe(true);
+  });
+});

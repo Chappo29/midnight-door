@@ -1,0 +1,263 @@
+import { describe, expect, it } from 'vitest';
+import { ATTACK_DIRECTOR, B, TICK } from '../../../src/sim/balance';
+import type { Match } from '../../../src/sim/match';
+import type { Room, SimEvent } from '../../../src/sim/types';
+import { inRoomMatch, nightNow, pinGhostAtDoor, quietFloor, runUntil, stepSec } from '../../helpers';
+
+const neighbours = (m: Match) => m.rooms.filter((r) => r.ownerId !== null && r.ownerId !== m.playerId && !r.eliminated);
+
+/** Eliminate every neighbour except `keep` (as if the ghost had caught them). */
+function leaveOnly(m: Match, keep: Room): void {
+  for (const r of neighbours(m)) {
+    if (r === keep) continue;
+    r.eliminated = true;
+    m.chars[r.ownerId!].caught = true;
+  }
+}
+
+/** Collect events for `sec` seconds. */
+function collect(m: Match, sec: number, stop?: (e: SimEvent) => boolean): SimEvent[] {
+  const out: SimEvent[] = [];
+  for (let i = 0; i < sec / TICK; i++) {
+    m.step();
+    out.push(...m.events);
+    if (stop && m.events.some(stop)) break;
+  }
+  return out;
+}
+
+/** Player caught (spirit) with the ghost having just left their room. */
+function catchPlayer(m: Match): Room {
+  const room = m.playerRoom!;
+  room.door.hp = 1;
+  pinGhostAtDoor(m, room);
+  // a real (meaningful) siege that ends with the break
+  m.ghost.siegeRoom = room.id;
+  m.ghost.siegeStart = m.nightTime;
+  m.ghost.siegeHits = 5;
+  runUntil(m, (mm) => mm.player.spirit, 20);
+  if (!m.player.spirit) throw new Error('player not caught');
+  return room;
+}
+
+describe('QA sim repros', () => {
+  it('SIM-1 respite: player re-targeted during respite when the only other live room is the one just left', () => {
+    // Arrange: easy, 2 live rooms (player + X). Player was *just* attacked for real (respite 28 s).
+    const m = inRoomMatch({ difficulty: 'easy', seed: 7 });
+    nightNow(m);
+    quietFloor(m);
+    const me = m.playerRoom!;
+    const x = neighbours(m)[0];
+    leaveOnly(m, x);
+    stepSec(m, 1);
+    const g = m.ghost;
+    g.attacked[me.id] = true;
+    g.calmSince[me.id] = m.nightTime; // meaningful siege on player ended right now
+    pinGhostAtDoor(m, x);
+    g.switchTimer = TICK; // ghost gives up on X next tick (patience)
+    x.door.hp = x.door.maxHp;
+    // Act
+    const ev = collect(m, 2, (e) => e.type === 'ghostTarget');
+    const tgt = ev.find((e) => e.type === 'ghostTarget') as Extract<SimEvent, { type: 'ghostTarget' }> | undefined;
+    const since = m.nightTime - g.calmSince[me.id];
+    console.log(`SIM-1 target=${tgt?.roomId} player=${me.id} X=${x.id} since=${since.toFixed(2)}s respite=${ATTACK_DIRECTOR.easy.respite}`);
+    // Assert (design: "передышка — не выбирают, если есть другие цели"; X is alive)
+    expect(tgt?.roomId).not.toBe(me.id);
+  });
+
+  it('SIM-2 broken door stays broken forever after the ghost flees mid-entry; player cannot repair/upgrade', () => {
+    const m = inRoomMatch({ difficulty: 'easy' });
+    nightNow(m);
+    quietFloor(m);
+    const room = m.playerRoom!;
+    room.door.hp = 1;
+    pinGhostAtDoor(m, room);
+    runUntil(m, (mm) => mm.ghost.state === 'entering', 5);
+    expect(m.ghost.state).toBe('entering');
+    // cannons knock it below retreatAt while it walks in
+    m.ghost.hp = m.ghost.maxHp * 0.2;
+    m.step();
+    expect(m.ghost.state).toBe('retreating');
+    runUntil(m, (mm) => mm.ghost.state === 'healing', 60);
+    room.candy = 1000;
+    const repair = m.command(0, { type: 'repair' });
+    const up = m.command(0, { type: 'upgradeDoor' });
+    console.log(`SIM-2 while ghost heals: caught=${m.player.caught} broken=${room.door.broken} hp=${room.door.hp} repair="${repair}" upgradeDoor="${up}" candy=${Math.floor(room.candy)}`);
+    // Later: every time the ghost picks this room it walks straight in (no siege, no chance to defend).
+    const states: string[] = [];
+    for (let i = 0; i < 180 / TICK && !m.player.caught; i++) {
+      m.step();
+      if (m.ghost.targetRoom === room.id && states[states.length - 1] !== m.ghost.state) states.push(m.ghost.state);
+    }
+    console.log(`SIM-2 later: ghost states at player room ${JSON.stringify(states)} caught=${m.player.caught} broken=${room.door.broken}`);
+    expect(repair === null || up === null).toBe(true); // FAILS: both refused, door permanently broken
+  });
+
+  it('SIM-3 caught during a paid job: the payment is lost and not refunded on revive', () => {
+    const m = inRoomMatch({ difficulty: 'easy' });
+    nightNow(m);
+    quietFloor(m);
+    const room = m.playerRoom!;
+    room.items = [];
+    room.candy = 100;
+    expect(m.command(0, { type: 'upgradeSofa' })).toBeNull();
+    runUntil(m, (mm) => mm.player.task?.stage === 'work', 10);
+    const paid = m.player.task!.paid!.candy;
+    const afterPay = room.candy;
+    // Ghost is inside and grabs the player mid-job.
+    const g = m.ghost;
+    room.door.hp = 0;
+    room.door.broken = true;
+    g.state = 'entering';
+    g.targetRoom = room.id;
+    g.waypoints = [];
+    g.x = m.player.x;
+    g.y = m.player.y;
+    g.held = 0;
+    m.step();
+    expect(m.player.spirit).toBe(true);
+    expect(m.revive()).toBeNull();
+    console.log(`SIM-3 paid=${paid} candyAfterPay=${afterPay.toFixed(2)} candyAfterRevive=${room.candy.toFixed(2)} sofa=${room.sofa.level}`);
+    expect(room.candy).toBeGreaterThanOrEqual(afterPay + paid - 1e-6); // FAILS: 30 candy vanished
+  });
+
+  it('SIM-4 spirit move with NaN coordinates corrupts the player position permanently', () => {
+    const m = inRoomMatch({ difficulty: 'easy' });
+    nightNow(m);
+    quietFloor(m);
+    catchPlayer(m);
+    expect(m.command(0, { type: 'move', x: NaN, y: 3 })).toBeNull();
+    m.step();
+    expect(m.command(0, { type: 'move', x: 3, y: 3 })).toBeNull();
+    stepSec(m, 5);
+    console.log(`SIM-4 spirit pos=${m.player.x},${m.player.y}`);
+    expect(Number.isFinite(m.player.x)).toBe(true); // FAILS
+  });
+
+  it('SIM-5 re-tapping an in-progress paid build answers "Не хватает конфет" although the job runs', () => {
+    const m = inRoomMatch({ difficulty: 'easy' });
+    const room = m.playerRoom!;
+    room.items = [];
+    const cell = m.placeableCells(room, 'cannon')[0];
+    room.candy = 50;
+    const cmd = { type: 'build' as const, kind: 'cannon' as const, ...cell };
+    expect(m.command(0, cmd)).toBeNull();
+    runUntil(m, (mm) => mm.player.task?.stage === 'work', 10);
+    const again = m.command(0, cmd);
+    console.log(`SIM-5 second tap -> "${again}", task still=${m.player.task?.cmd.type}/${m.player.task?.stage}`);
+    expect(again).toBeNull(); // FAILS: error toast for a repeat tap
+  });
+
+  it('SIM-6 float drift: HUD floor shows 79 while an 80-candy price is affordable', () => {
+    const m = inRoomMatch({ difficulty: 'easy' });
+    const room = m.playerRoom!;
+    room.items = [];
+    room.candy = 20;
+    // prep: income 2/s = 0.1/tick; 600 ticks
+    m.phaseLeft = 1e9;
+    for (let i = 0; i < 600; i++) m.step();
+    const shown = Math.floor(room.candy);
+    const canBuy80 = m.canAfford(room, { candy: 80, flame: 0 });
+    console.log(`SIM-6 candy=${room.candy} hud=${shown} canAfford(80)=${canBuy80}`);
+    expect(!(shown < 80 && canBuy80)).toBe(true);
+  });
+
+  it('SIM-7 after the match is decided the sim keeps producing gameplay events for endDelay', () => {
+    const m = inRoomMatch({ difficulty: 'easy' });
+    nightNow(m);
+    const room = m.playerRoom!;
+    room.items = [];
+    room.candy = 500;
+    // Workbench + damaged door to show benchFix after the win.
+    room.door.level = 3;
+    room.door.maxHp = 1500;
+    room.door.hp = 100;
+    const cell = m.placeableCells(room, 'workbench')[0];
+    room.buildings.push({ kind: 'workbench', x: cell.x, y: cell.y, level: 1, cooldown: 3 });
+    // kill ghost now
+    const g = m.ghost;
+    const c2 = m.placeableCells(room, 'cannon')[0];
+    room.buildings.push({ kind: 'cannon', x: c2.x, y: c2.y, level: 1, cooldown: 0 });
+    g.x = c2.x + 0.5;
+    g.y = c2.y + 1.5;
+    g.waypoints = [];
+    g.state = 'attacking';
+    g.targetRoom = room.id;
+    g.switchTimer = 1e9;
+    g.hp = 1;
+    m.step();
+    expect(m.result).toBe('win');
+    const after: string[] = [];
+    let candyAtWin = room.candy;
+    while (m.phase !== 'end') {
+      m.step();
+      after.push(...m.events.map((e) => e.type));
+    }
+    console.log(`SIM-7 events after win: ${JSON.stringify(after)} candy +${(room.candy - candyAtWin).toFixed(2)}`);
+    expect(after.filter((t) => t !== 'phase')).toEqual([]);
+  });
+
+  it('SIM-8 revive → first target choice after protect is forced onto the just-revived player', () => {
+    const m = inRoomMatch({ difficulty: 'easy', seed: 11 });
+    nightNow(m);
+    quietFloor(m);
+    const room = catchPlayer(m);
+    stepSec(m, 30); // watching the rewarded ad / flying around
+    expect(m.revive()).toBeNull();
+    const t0 = m.nightTime;
+    const ev = collect(m, 120, (e) => e.type === 'ghostTarget' && e.roomId === room.id);
+    const hit = ev.find((e) => e.type === 'ghostTarget' && e.roomId === room.id);
+    const targets = ev.filter((e) => e.type === 'ghostTarget').map((e) => (e as { roomId: number }).roomId);
+    console.log(`SIM-8 player targeted ${hit ? (m.nightTime - t0).toFixed(1) : 'never'}s after revive; targets=${JSON.stringify(targets)} doorHp=${Math.round(room.door.hp)}/${room.door.maxHp}`);
+    expect(true).toBe(true);
+  });
+
+  it('SIM-8b revive: over many seeds, is the first choice after protect the revived player?', () => {
+    const rows: string[] = [];
+    let first = 0;
+    let n = 0;
+    for (const diff of ['easy', 'hard', 'nightmare'] as const)
+      for (let seed = 1; seed <= 15; seed++) {
+        const m = inRoomMatch({ difficulty: diff, seed });
+        nightNow(m);
+        quietFloor(m);
+        let room: Room;
+        try {
+          room = catchPlayer(m);
+        } catch {
+          continue;
+        }
+        stepSec(m, 20);
+        if (m.revive()) continue;
+        const tProtectEnd = m.nightTime + B.revive.protect;
+        // first ghostTarget event after protect ended
+        let got: number | null = null;
+        let since = 0;
+        for (let i = 0; i < 200 / TICK && got === null && !m.result; i++) {
+          m.step();
+          for (const e of m.events)
+            if (e.type === 'ghostTarget' && m.nightTime >= tProtectEnd && got === null) {
+              got = e.roomId;
+              since = m.nightTime - m.ghost.calmSince[room.id];
+            }
+        }
+        if (got === null) continue;
+        n++;
+        if (got === room.id) first++;
+        if (rows.length < 6) rows.push(`${diff}/${seed}: first=${got === room.id ? 'PLAYER' : got} sinceLastAttack=${since.toFixed(0)}s forceAfter=${ATTACK_DIRECTOR[diff].forceAfter}`);
+      }
+    console.log(`SIM-8b first target after protect = revived player in ${first}/${n}; ${rows.join(' ; ')}`);
+    expect(true).toBe(true);
+  });
+
+  it('SIM-9 tutorial: idle player, ghost pinned at player door — never loses, never ends', () => {
+    const m = inRoomMatch({ tutorial: true, seed: 20260924, flameUnlocked: false });
+    m.script!.holdPhase = false;
+    m.script!.ghostTarget = m.player.roomId;
+    nightNow(m);
+    stepSec(m, 300);
+    const d = m.playerRoom!.door;
+    console.log(`SIM-9 result=${m.result} door=${Math.round(d.hp)}/${d.maxHp} ghost=${m.ghost.state} caughtAny=${m.chars.some((c) => c.caught)}`);
+    expect(m.result).not.toBe('lose');
+  });
+});

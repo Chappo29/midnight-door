@@ -1,0 +1,248 @@
+import { writeFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { ATTACK_DIRECTOR, B, TICK } from '../../../src/sim/balance';
+import { Match } from '../../../src/sim/match';
+import { inRoom, roomCells } from '../../../src/sim/roomgrid';
+import type { BuildKind, Cmd, Difficulty } from '../../../src/sim/types';
+import { Rng } from '../../../src/sim/rng';
+
+const KINDS: BuildKind[] = ['cannon', 'pumpkin', 'trap', 'workbench', 'fridge'];
+const MAX_LEVEL: Record<BuildKind, number> = { cannon: 6, pumpkin: 5, trap: 3, workbench: 3, fridge: 3 };
+
+type Mode = 'random' | 'auto' | 'idle';
+
+interface Report {
+  seed: number;
+  diff: Difficulty;
+  mode: Mode;
+  violations: string[];
+  result: string | null;
+  night: number;
+  maxNestVisits: number;
+  retreats: number;
+  minCandy: number;
+  floorNeg: boolean;
+}
+
+function randomCmd(m: Match, rng: Rng): Cmd {
+  const r = m.playerRoom;
+  const cells = r ? roomCells(r) : [{ x: 5, y: 5 }];
+  const c = rng.pick(cells);
+  const b = r && r.buildings.length ? rng.pick(r.buildings) : null;
+  const k = rng.int(12);
+  switch (k) {
+    case 0:
+      return { type: 'pickRoom', roomId: rng.int(10) - 1 };
+    case 1:
+    case 2:
+      return { type: 'build', kind: rng.pick(KINDS), x: c.x, y: c.y };
+    case 3:
+      return b ? { type: 'upgrade', x: b.x, y: b.y } : { type: 'upgrade', x: c.x, y: c.y };
+    case 4:
+      return b ? { type: 'sell', x: b.x, y: b.y } : { type: 'sell', x: c.x, y: c.y };
+    case 5:
+      return { type: 'upgradeDoor' };
+    case 6:
+    case 7:
+      return { type: 'repair' };
+    case 8:
+      return { type: 'upgradeSofa' };
+    case 9:
+      return { type: 'move', x: c.x + rng.int(3) - 1, y: c.y + rng.int(3) - 1 };
+    case 10:
+      return { type: 'boo' };
+    default:
+      return { type: 'spark' };
+  }
+}
+
+export function runMatch(seed: number, diff: Difficulty, mode: Mode, opts: { locked?: BuildKind[]; flame?: boolean; maxNightSec?: number } = {}): Report {
+  const m = new Match({
+    seed,
+    difficulty: diff,
+    flameUnlocked: opts.flame ?? true,
+    lockedKinds: opts.locked,
+    autoPlayer: mode === 'auto',
+    autoPlayerSkill: 0.5,
+  });
+  const rng = new Rng(seed * 7919 + 13);
+  const v: string[] = [];
+  const add = (s: string) => {
+    if (v.length < 40 && !v.includes(s)) v.push(s);
+  };
+  let resultSeen: string | null = null;
+  let reasonSeen = '';
+  let nightAtResult = -1;
+  let maxNestVisits = 0;
+  let retreats = 0;
+  let minCandy = Infinity;
+  let floorNeg = false;
+  let stuckT = 0;
+  let lastGX = NaN;
+  let lastGY = NaN;
+  let attackT = 0;
+  let lastPlayerSiegeEnd = -1e9;
+  let revivedAt = -1e9;
+  let deadSeen = false;
+  const maxNight = opts.maxNightSec ?? 1800;
+  let ticks = 0;
+  const cmdEvery = 10;
+
+  while (m.phase !== 'end' && ticks < (maxNight + 200) / TICK) {
+    ticks++;
+    if (mode === 'random' && ticks % cmdEvery === 0) {
+      const cmd = randomCmd(m, rng);
+      try {
+        m.command(0, cmd);
+      } catch (e) {
+        add(`command threw ${JSON.stringify(cmd)}: ${(e as Error).message}`);
+      }
+      if (m.player.spirit && rng.next() < 0.01) m.revive();
+    }
+    const prevResult = m.result;
+    try {
+      m.step();
+    } catch (e) {
+      add(`step threw at t=${m.time.toFixed(2)}: ${(e as Error).stack?.split('\n').slice(0, 3).join(' | ')}`);
+      break;
+    }
+    const g = m.ghost;
+    const t = m.nightTime;
+    // result invariants
+    if (prevResult && m.result !== prevResult) add(`result changed ${prevResult} -> ${m.result}`);
+    if (m.result && !resultSeen) {
+      resultSeen = m.result;
+      reasonSeen = m.resultReason;
+      nightAtResult = m.nightTime;
+      if (m.result === 'lose' && m.survivors !== 0) add(`lose with survivors=${m.survivors}`);
+      if (m.result === 'win' && g.state !== 'dead') add(`win but ghost state=${g.state}`);
+    }
+    if (resultSeen && m.resultReason !== reasonSeen) add('resultReason changed');
+    if (resultSeen && m.nightTime !== nightAtResult) add('nightTime advanced after result');
+    if (g.state === 'dead') deadSeen = true;
+    if (deadSeen && g.state !== 'dead') add(`ghost resurrected state=${g.state}`);
+
+    // economy / door
+    const playerRooms = m.rooms.filter((r) => r.ownerId === 0);
+    if (m.phase !== 'pick' && playerRooms.length !== 1) add(`player rooms=${playerRooms.length}`);
+    for (const r of m.rooms) {
+      if (r.ownerId === null) continue;
+      if (!Number.isFinite(r.candy) || !Number.isFinite(r.flame)) add(`room ${r.id} NaN candy/flame`);
+      if (r.candy < 0 || r.flame < 0) {
+        add(`room ${r.id} negative candy=${r.candy} flame=${r.flame} t=${m.time.toFixed(2)}`);
+      }
+      if (r.ownerId === 0) {
+        minCandy = Math.min(minCandy, r.candy);
+        if (Math.floor(r.candy) < 0) floorNeg = true;
+      }
+      const d = r.door;
+      if (!(d.hp >= 0 && d.hp <= d.maxHp + 1e-9)) add(`room ${r.id} door hp ${d.hp}/${d.maxHp}`);
+      if (d.broken && d.hp !== 0) add(`room ${r.id} broken but hp=${d.hp}`);
+      if (!d.broken && d.hp <= 0) add(`room ${r.id} hp 0 not broken`);
+      if (d.level < 1 || d.level > B.door.length) add(`door level ${d.level}`);
+      const seen = new Set<string>();
+      for (const b of r.buildings) {
+        const k = `${b.x},${b.y}`;
+        if (seen.has(k)) add(`room ${r.id} two buildings in ${k}`);
+        seen.add(k);
+        if (!inRoom(r, b.x, b.y)) add(`room ${r.id} building outside room ${k}`);
+        if (b.x === r.sofa.x && b.y === r.sofa.y) add('building on sofa');
+        if (r.furniture.some((f) => f.x === b.x && f.y === b.y)) add('building on furniture');
+        if (r.items.some((f) => f.x === b.x && f.y === b.y)) add('building on item');
+        if (b.x === r.door.inside.x && b.y === r.door.inside.y) add('building on door.inside');
+        if (b.level < 1 || b.level > MAX_LEVEL[b.kind]) add(`building level ${b.kind} ${b.level}`);
+        if (r.ownerId === 0 && opts.locked?.includes(b.kind)) add(`locked kind built: ${b.kind}`);
+      }
+      for (const kind of ['trap', 'workbench', 'fridge'] as const) {
+        if (r.buildings.filter((b) => b.kind === kind).length > B[kind].maxPerRoom) add(`room ${r.id} too many ${kind}`);
+      }
+    }
+    // characters
+    for (const c of m.chars) {
+      if (!Number.isFinite(c.x) || !Number.isFinite(c.y)) add(`char ${c.id} NaN pos`);
+      if (c.roomId !== null) {
+        const r = m.rooms[c.roomId];
+        if (c.caught !== r.eliminated) add(`char ${c.id} caught=${c.caught} but room eliminated=${r.eliminated}`);
+      }
+      if (c.spirit && !c.isPlayer) add('npc spirit');
+    }
+    if (m.phase === 'night' && !m.result) {
+      const alive = m.rooms.filter((r) => r.ownerId !== null && !r.eliminated).length;
+      if (alive !== m.survivors) add('survivors mismatch');
+    }
+    // ghost
+    if (g.state !== 'hidden') {
+      if (!(g.hp >= 0 && g.hp <= g.maxHp + 1e-9)) add(`ghost hp ${g.hp}/${g.maxHp} state=${g.state}`);
+      if (!Number.isFinite(g.x) || !Number.isFinite(g.y)) add('ghost NaN pos');
+      if (g.nestVisits > B.ghost.healTargets.length) add(`nestVisits=${g.nestVisits}`);
+      maxNestVisits = Math.max(maxNestVisits, g.nestVisits);
+      if ((g.state === 'moving' || g.state === 'attacking' || g.state === 'entering') && !m.result) {
+        const tr = m.rooms[g.targetRoom];
+        if (!tr) add(`ghost ${g.state} with no target (${g.targetRoom})`);
+        else if (tr.eliminated) add(`ghost ${g.state} targets eliminated room ${tr.id} t=${t.toFixed(1)}`);
+      }
+      const moved = g.x !== lastGX || g.y !== lastGY;
+      if ((g.state === 'moving' || g.state === 'retreating') && g.held <= 0 && !moved && !m.result) {
+        stuckT += TICK;
+        if (stuckT > 3) add(`ghost stuck in ${g.state} at ${g.x.toFixed(2)},${g.y.toFixed(2)} t=${t.toFixed(1)}`);
+      } else stuckT = 0;
+      lastGX = g.x;
+      lastGY = g.y;
+      if (g.state === 'attacking') {
+        attackT += TICK;
+        if (attackT > 90) add(`ghost attacking >90s at room ${g.targetRoom} t=${t.toFixed(1)}`);
+      } else attackT = 0;
+    }
+    for (const e of m.events) {
+      if (e.type === 'ghostRetreat') retreats++;
+      if (e.type === 'siegeEnd' && e.meaningful && m.rooms[e.roomId].ownerId === 0) lastPlayerSiegeEnd = t;
+      if (e.type === 'revived') revivedAt = t;
+      if (e.type === 'ghostTarget' && m.rooms[e.roomId].ownerId === 0 && !m.script) {
+        const others = m.rooms.filter((r) => r.ownerId !== null && r.ownerId !== 0 && !r.eliminated).length;
+        const resp = ATTACK_DIRECTOR[diff].respite;
+        if (t - lastPlayerSiegeEnd < resp - 1e-6 && others > 0)
+          add(`RESPITE: player targeted ${(t - lastPlayerSiegeEnd).toFixed(1)}s after meaningful siege with ${others} other alive rooms`);
+        if (t - revivedAt < B.revive.protect - 1e-6 && others > 0) add(`AVOID: player targeted ${(t - revivedAt).toFixed(1)}s after revive with ${others} other rooms`);
+      }
+    }
+    if (m.phase === 'night' && m.nightTime > maxNight && !m.result) {
+      add(`no result after ${maxNight}s night (ghost lvl ${g.level} state ${g.state})`);
+      break;
+    }
+  }
+  if (retreats > B.ghost.healTargets.length) add(`retreat events=${retreats}`);
+  return { seed, diff, mode, violations: v, result: m.result, night: m.nightTime, maxNestVisits, retreats, minCandy, floorNeg };
+}
+
+describe('QA fuzz: invariants over seeded matches', () => {
+  const diffs: Difficulty[] = ['easy', 'hard', 'nightmare'];
+  const modes: Mode[] = ['random', 'auto', 'idle'];
+  it('runs many matches and reports violations', () => {
+    const N = Number(process.env.QA_N ?? 12);
+    const all: Report[] = [];
+    for (const diff of diffs)
+      for (const mode of modes)
+        for (let s = 1; s <= N; s++) {
+          const locked: BuildKind[] | undefined = s % 3 === 0 ? ['trap', 'fridge', 'pumpkin'] : undefined;
+          all.push(runMatch(s * 101 + 5, diff, mode, { locked, flame: s % 4 !== 0 }));
+        }
+    const bad = all.filter((r) => r.violations.length);
+    const out: string[] = [];
+    const log = (...a: unknown[]) => out.push(a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' '));
+    const summary: Record<string, number> = {};
+    for (const r of bad)
+      for (const x of r.violations) {
+        const k = x.replace(/[-\d.]+/g, '#');
+        summary[k] = (summary[k] ?? 0) + 1;
+      }
+    log('matches', all.length, 'with violations', bad.length);
+    log(JSON.stringify(summary, null, 1));
+    for (const r of bad.slice(0, 25)) log(r.seed, r.diff, r.mode, r.result, r.night.toFixed(0), r.violations.slice(0, 4));
+    const neg = all.filter((r) => r.floorNeg);
+    log('floor(candy)<0 in', neg.length, 'matches; min candy', Math.min(...all.map((r) => r.minCandy)));
+    log('results', JSON.stringify(all.reduce<Record<string, number>>((a, r) => ((a[`${r.diff}/${r.mode}/${r.result}`] = (a[`${r.diff}/${r.mode}/${r.result}`] ?? 0) + 1), a), {})));
+    if (process.env.QA_OUT) writeFileSync(process.env.QA_OUT, out.join(String.fromCharCode(10)));
+    else console.log(out.join(String.fromCharCode(10)));
+    expect(true).toBe(true);
+  }, 600_000);
+});

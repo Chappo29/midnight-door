@@ -1,0 +1,271 @@
+== 844x390 touch
+  [unlock-card] canvas 844,390 pageScroll false,false OK
+  [daily] canvas 844,390 pageScroll false,false OK
+  [menu] canvas 844,390 pageScroll false,false OK
+  [shop] canvas 844,390 pageScroll false,false ISSUES: ["shop-action: OFF-SCREEN 250,466-346,508 (scrollable parent)","shop-action: OFF-SCREEN 374,466-470,508 (scrollable parent)","shop-action: OFF-SCREEN 498,466-594,508 (scrollable parent)","SCROLL inside shop-body (373>191)"]
+  [shop-tab1] canvas 844,390 pageScroll false,false ISSUES: ["shop-action: OFF-SCREEN 374,494-470,536 (scrollable parent)","shop-action: OFF-SCREEN 250,687-346,729 (scrollable parent)","shop-action: OFF-SCREEN 374,687-470,729 (scrollable parent)","shop-action: OFF-SCREEN 498,687-594,729 (scrollable parent)","SCROLL inside shop-body (593>191)"]
+  [shop-tab2] canvas 844,390 pageScroll false,false ISSUES: ["SCROLL inside shop-body (269>191)"]
+  [pick] canvas 844,390 pageScroll false,false OK
+  [prep-HUD] canvas 844,390 pageScroll false,false OK
+  [hitbox] tap cell 2,1 zoom 0.77 -> selected {"x":2,"y":1} OK
+  [buildmenu] canvas 844,390 pageScroll false,false OK
+  [rotated (menu should close)] canvas 390,844 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 2,1 zoom 0.90 -> selected {"x":2,"y":1} OK
+  [hitbox-after-rotate-back] tap cell 2,1 zoom 0.77 -> selected {"x":2,"y":1} OK
+  [pause] canvas 844,390 pageScroll false,false OK
+  [night-HUD] canvas 844,390 pageScroll false,false OK
+  [caught] canvas 844,390 pageScroll false,false OK
+  [spirit] canvas 844,390 pageScroll false,false OK
+  [result(team win)] canvas 844,390 pageScroll false,false OK
+== 800x360 touch
+  [unlock-card] canvas 800,360 pageScroll false,false ISSUES: ["SCROLL inside card (355>331)"]
+  [daily] canvas 800,360 pageScroll false,false OK
+  [menu] canvas 800,360 pageScroll false,false OK
+  [shop] canvas 800,360 pageScroll false,false ISSUES: ["shop-action: OFF-SCREEN 228,465-324,507 (scrollable parent)","shop-action: OFF-SCREEN 352,465-448,507 (scrollable parent)","shop-action: OFF-SCREEN 476,465-572,507 (scrollable parent)","SCROLL inside shop-body (373>163)"]
+  [shop-tab1] canvas 800,360 pageScroll false,false ISSUES: ["shop-action: OFF-SCREEN 352,493-448,535 (scrollable parent)","shop-action: OFF-SCREEN 228,686-324,728 (scrollable parent)","shop-action: OFF-SCREEN 352,686-448,728 (scrollable parent)","shop-action: OFF-SCREEN 476,686-572,728 (scrollable parent)","SCROLL inside shop-body (593>163)"]
+  [shop-tab2] canvas 800,360 pageScroll false,false ISSUES: ["shop-action: OFF-SCREEN 228,332-324,374 (scrollable parent)","shop-action: OFF-SCREEN 352,332-448,374 (scrollable parent)","shop-action: OFF-SCREEN 476,332-572,374 (scrollable parent)","SCROLL inside shop-body (269>163)"]
+  [pick] canvas 800,360 pageScroll false,false OK
+  [prep-HUD] canvas 800,360 pageScroll false,false OK
+  [hitbox] tap cell 3,1 zoom 0.71 -> selected {"x":3,"y":1} OK
+  [buildmenu] canvas 800,360 pageScroll false,false OK
+  [rotated (menu should close)] canvas 360,800 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 3,1 zoom 0.83 -> selected {"x":3,"y":1} OK
+  [hitbox-after-rotate-back] tap cell 3,1 zoom 0.71 -> selected {"x":3,"y":1} OK
+  [pause] canvas 800,360 pageScroll false,false OK
+  [night-HUD] canvas 800,360 pageScroll false,false OK
+  [caught] canvas 800,360 pageScroll false,false OK
+  [spirit] canvas 800,360 pageScroll false,false OK
+  [result(team win)] canvas 800,360 pageScroll false,false OK
+== 740x360 touch
+  [unlock-card] canvas 740,360 pageScroll false,false ISSUES: ["SCROLL inside card (355>331)"]
+  [daily] canvas 740,360 pageScroll false,false OK
+  [menu] canvas 740,360 pageScroll false,false OK
+  [shop] canvas 740,360 pageScroll false,false ISSUES: ["shop-action: OFF-SCREEN 198,465-294,507 (scrollable parent)","shop-action: OFF-SCREEN 322,465-418,507 (scrollable parent)","shop-action: OFF-SCREEN 446,465-542,507 (scrollable parent)","SCROLL inside shop-body (373>163)"]
+  [shop-tab1] canvas 740,360 pageScroll false,false ISSUES: ["shop-action: OFF-SCREEN 322,493-418,535 (scrollable parent)","shop-action: OFF-SCREEN 198,686-294,728 (scrollable parent)","shop-action: OFF-SCREEN 322,686-418,728 (scrollable parent)","shop-action: OFF-SCREEN 446,686-542,728 (scrollable parent)","SCROLL inside shop-body (593>163)"]
+  [shop-tab2] canvas 740,360 pageScroll false,false ISSUES: ["shop-action: OFF-SCREEN 198,332-294,374 (scrollable parent)","shop-action: OFF-SCREEN 322,332-418,374 (scrollable parent)","shop-action: OFF-SCREEN 446,332-542,374 (scrollable parent)","SCROLL inside shop-body (269>163)"]
+  [pick] canvas 740,360 pageScroll false,false OK
+  [prep-HUD] canvas 740,360 pageScroll false,false OK
+  [hitbox] tap cell 2,1 zoom 0.71 -> selected {"x":2,"y":1} OK
+  [buildmenu] canvas 740,360 pageScroll false,false OK
+  [rotated (menu should close)] canvas 360,740 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 2,1 zoom 0.83 -> selected {"x":2,"y":1} OK
+  [hitbox-after-rotate-back] tap cell 2,1 zoom 0.71 -> selected {"x":2,"y":1} OK
+  [pause] canvas 740,360 pageScroll false,false OK
+  [night-HUD] canvas 740,360 pageScroll false,false OK
+  [caught] canvas 740,360 pageScroll false,false OK
+  [spirit] canvas 740,360 pageScroll false,false OK
+  [result(team win)] canvas 740,360 pageScroll false,false OK
+== 667x375 touch
+  [unlock-card] canvas 667,375 pageScroll false,false ISSUES: ["SCROLL inside card (355>345)"]
+  [daily] canvas 667,375 pageScroll false,false OK
+  [menu] canvas 667,375 pageScroll false,false OK
+  [shop] canvas 667,375 pageScroll false,false ISSUES: ["shop-action: OFF-SCREEN 162,466-258,508 (scrollable parent)","shop-action: OFF-SCREEN 286,466-382,508 (scrollable parent)","shop-action: OFF-SCREEN 410,466-506,508 (scrollable parent)","SCROLL inside shop-body (373>177)"]
+  [shop-tab1] canvas 667,375 pageScroll false,false ISSUES: ["shop-action: OFF-SCREEN 286,494-382,536 (scrollable parent)","shop-action: OFF-SCREEN 162,686-258,728 (scrollable parent)","shop-action: OFF-SCREEN 286,686-382,728 (scrollable parent)","shop-action: OFF-SCREEN 410,686-506,728 (scrollable parent)","SCROLL inside shop-body (593>177)"]
+  [shop-tab2] canvas 667,375 pageScroll false,false ISSUES: ["SCROLL inside shop-body (269>177)"]
+  [pick] canvas 667,375 pageScroll false,false OK
+  [prep-HUD] canvas 667,375 pageScroll false,false OK
+  [hitbox] tap cell 3,2 zoom 0.74 -> selected {"x":3,"y":2} OK
+  [buildmenu] canvas 667,375 pageScroll false,false OK
+  [rotated (menu should close)] canvas 375,667 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 3,2 zoom 0.87 -> selected {"x":3,"y":2} OK
+  [hitbox-after-rotate-back] tap cell 3,2 zoom 0.74 -> selected {"x":3,"y":2} OK
+  [pause] canvas 667,375 pageScroll false,false OK
+  [night-HUD] canvas 667,375 pageScroll false,false OK
+  [caught] canvas 667,375 pageScroll false,false OK
+  [spirit] canvas 667,375 pageScroll false,false OK
+  [result(team win)] canvas 667,375 pageScroll false,false OK
+== 390x844 touch
+  [unlock-card] canvas 390,844 pageScroll false,false OK
+  [daily] canvas 390,844 pageScroll false,false OK
+  [menu] canvas 390,844 pageScroll false,false OK
+  [shop] canvas 390,844 pageScroll false,false ISSUES: ["SCROLL inside shop-body (547>470)"]
+  [shop-tab1] canvas 390,844 pageScroll false,false ISSUES: ["shop-action: OFF-SCREEN 147,932-243,974 (scrollable parent)","SCROLL inside shop-body (752>470)"]
+  [shop-tab2] canvas 390,844 pageScroll false,false ISSUES: ["SCROLL inside shop-body (501>470)"]
+  [pick] canvas 390,844 pageScroll false,false OK
+  [prep-HUD] canvas 390,844 pageScroll false,false OK
+  [hitbox] tap cell 1,1 zoom 0.90 -> selected {"x":1,"y":1} OK
+  [buildmenu] canvas 390,844 pageScroll false,false OK
+  [rotated (menu should close)] canvas 844,390 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 1,1 zoom 0.77 -> selected {"x":1,"y":1} OK
+  [hitbox-after-rotate-back] tap cell 1,1 zoom 0.90 -> selected {"x":1,"y":1} OK
+  [pause] canvas 390,844 pageScroll false,false OK
+  [night-HUD] canvas 390,844 pageScroll false,false OK
+  [caught] canvas 390,844 pageScroll false,false OK
+  [spirit] canvas 390,844 pageScroll false,false OK
+  [result(team win)] canvas 390,844 pageScroll false,false OK
+== 360x800 touch
+  [unlock-card] canvas 360,800 pageScroll false,false OK
+  [daily] canvas 360,800 pageScroll false,false OK
+  [menu] canvas 360,800 pageScroll false,false OK
+  [shop] canvas 360,800 pageScroll false,false ISSUES: ["SCROLL inside shop-body (547>470)"]
+  [shop-tab1] canvas 360,800 pageScroll false,false ISSUES: ["shop-action: OFF-SCREEN 132,910-228,952 (scrollable parent)","SCROLL inside shop-body (752>470)"]
+  [shop-tab2] canvas 360,800 pageScroll false,false ISSUES: ["SCROLL inside shop-body (501>470)"]
+  [pick] canvas 360,800 pageScroll false,false OK
+  [prep-HUD] canvas 360,800 pageScroll false,false OK
+  [hitbox] tap cell 3,1 zoom 0.83 -> selected {"x":3,"y":1} OK
+  [buildmenu] canvas 360,800 pageScroll false,false OK
+  [rotated (menu should close)] canvas 800,360 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 3,1 zoom 0.71 -> selected {"x":3,"y":1} OK
+  [hitbox-after-rotate-back] tap cell 3,1 zoom 0.83 -> selected {"x":3,"y":1} OK
+  [pause] canvas 360,800 pageScroll false,false OK
+  [night-HUD] canvas 360,800 pageScroll false,false OK
+  [caught] canvas 360,800 pageScroll false,false OK
+  [spirit] canvas 360,800 pageScroll false,false OK
+  [result(team win)] canvas 360,800 pageScroll false,false OK
+== 768x1024 touch
+  [unlock-card] canvas 768,1024 pageScroll false,false OK
+  [daily] canvas 768,1024 pageScroll false,false OK
+  [menu] canvas 768,1024 pageScroll false,false OK
+  [shop] canvas 768,1024 pageScroll false,false OK
+  [shop-tab1] canvas 768,1024 pageScroll false,false OK
+  [shop-tab2] canvas 768,1024 pageScroll false,false OK
+  [pick] canvas 768,1024 pageScroll false,false OK
+  [prep-HUD] canvas 768,1024 pageScroll false,false OK
+  [hitbox] tap cell 1,1 zoom 1.78 -> selected {"x":1,"y":1} OK
+  [buildmenu] canvas 768,1024 pageScroll false,false OK
+  [rotated (menu should close)] canvas 1024,768 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 1,1 zoom 1.52 -> selected {"x":1,"y":1} OK
+  [hitbox-after-rotate-back] tap cell 1,1 zoom 1.78 -> selected {"x":1,"y":1} OK
+  [pause] canvas 768,1024 pageScroll false,false OK
+  [night-HUD] canvas 768,1024 pageScroll false,false OK
+  [caught] canvas 768,1024 pageScroll false,false OK
+  [spirit] canvas 768,1024 pageScroll false,false OK
+  [result(team win)] canvas 768,1024 pageScroll false,false OK
+== 1024x768 touch
+  [unlock-card] canvas 1024,768 pageScroll false,false OK
+  [daily] canvas 1024,768 pageScroll false,false OK
+  [menu] canvas 1024,768 pageScroll false,false OK
+  [shop] canvas 1024,768 pageScroll false,false OK
+  [shop-tab1] canvas 1024,768 pageScroll false,false OK
+  [shop-tab2] canvas 1024,768 pageScroll false,false OK
+  [pick] canvas 1024,768 pageScroll false,false OK
+  [prep-HUD] canvas 1024,768 pageScroll false,false OK
+  [hitbox] tap cell 2,1 zoom 1.52 -> selected {"x":2,"y":1} OK
+  [buildmenu] canvas 1024,768 pageScroll false,false OK
+  [rotated (menu should close)] canvas 768,1024 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 2,1 zoom 1.78 -> selected {"x":2,"y":1} OK
+  [hitbox-after-rotate-back] tap cell 2,1 zoom 1.52 -> selected {"x":2,"y":1} OK
+  [pause] canvas 1024,768 pageScroll false,false OK
+  [night-HUD] canvas 1024,768 pageScroll false,false OK
+  [caught] canvas 1024,768 pageScroll false,false OK
+  [spirit] canvas 1024,768 pageScroll false,false OK
+  [result(team win)] canvas 1024,768 pageScroll false,false OK
+== 1280x720 mouse
+  [unlock-card] canvas 1280,720 pageScroll false,false OK
+  [daily] canvas 1280,720 pageScroll false,false OK
+  [menu] canvas 1280,720 pageScroll false,false OK
+  [shop] canvas 1280,720 pageScroll false,false OK
+  [shop-tab1] canvas 1280,720 pageScroll false,false OK
+  [shop-tab2] canvas 1280,720 pageScroll false,false OK
+  [pick] canvas 1280,720 pageScroll false,false OK
+  [prep-HUD] canvas 1280,720 pageScroll false,false OK
+  [hitbox] tap cell 2,1 zoom 1.43 -> selected {"x":2,"y":1} OK
+  [buildmenu] canvas 1280,720 pageScroll false,false OK
+  [rotated (menu should close)] canvas 720,1280 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 2,1 zoom 1.67 -> selected {"x":2,"y":1} OK
+  [hitbox-after-rotate-back] tap cell 2,1 zoom 1.43 -> selected {"x":2,"y":1} OK
+  [pause] canvas 1280,720 pageScroll false,false OK
+  [night-HUD] canvas 1280,720 pageScroll false,false OK
+  [caught] canvas 1280,720 pageScroll false,false OK
+  [spirit] canvas 1280,720 pageScroll false,false OK
+  [result(team win)] canvas 1280,720 pageScroll false,false OK
+== 1366x768 mouse
+  [unlock-card] canvas 1366,768 pageScroll false,false OK
+  [daily] canvas 1366,768 pageScroll false,false OK
+  [menu] canvas 1366,768 pageScroll false,false OK
+  [shop] canvas 1366,768 pageScroll false,false OK
+  [shop-tab1] canvas 1366,768 pageScroll false,false OK
+  [shop-tab2] canvas 1366,768 pageScroll false,false OK
+  [pick] canvas 1366,768 pageScroll false,false OK
+  [prep-HUD] canvas 1366,768 pageScroll false,false OK
+  [hitbox] tap cell 2,1 zoom 1.52 -> selected {"x":2,"y":1} OK
+  [buildmenu] canvas 1366,768 pageScroll false,false OK
+  [rotated (menu should close)] canvas 768,1366 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 2,1 zoom 1.78 -> selected {"x":2,"y":1} OK
+  [hitbox-after-rotate-back] tap cell 2,1 zoom 1.52 -> selected {"x":2,"y":1} OK
+  [pause] canvas 1366,768 pageScroll false,false OK
+  [night-HUD] canvas 1366,768 pageScroll false,false OK
+  [caught] canvas 1366,768 pageScroll false,false OK
+  [spirit] canvas 1366,768 pageScroll false,false OK
+  [result(team win)] canvas 1366,768 pageScroll false,false OK
+== 1920x1080 mouse
+  [unlock-card] canvas 1920,1080 pageScroll false,false OK
+  [daily] canvas 1920,1080 pageScroll false,false OK
+  [menu] canvas 1920,1080 pageScroll false,false OK
+  [shop] canvas 1920,1080 pageScroll false,false OK
+  [shop-tab1] canvas 1920,1080 pageScroll false,false OK
+  [shop-tab2] canvas 1920,1080 pageScroll false,false OK
+  [pick] canvas 1920,1080 pageScroll false,false OK
+  [prep-HUD] canvas 1920,1080 pageScroll false,false OK
+  [hitbox] tap cell 4,1 zoom 0.84 -> selected {"x":4,"y":1} OK
+  [buildmenu] canvas 1920,1080 pageScroll false,false OK
+  [rotated (menu should close)] canvas 1080,1920 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 4,1 zoom 0.73 -> selected {"x":4,"y":1} OK
+  [hitbox-after-rotate-back] tap cell 4,1 zoom 0.84 -> selected {"x":4,"y":1} OK
+  [pause] canvas 1920,1080 pageScroll false,false OK
+  [night-HUD] canvas 1920,1080 pageScroll false,false OK
+  [caught] canvas 1920,1080 pageScroll false,false OK
+  [spirit] canvas 1920,1080 pageScroll false,false OK
+  [result(team win)] canvas 1920,1080 pageScroll false,false OK
+== 2560x1080 mouse
+  [unlock-card] canvas 2160,1080 pageScroll false,false OK
+  [daily] canvas 2160,1080 pageScroll false,false OK
+  [menu] canvas 2160,1080 pageScroll false,false OK
+  [shop] canvas 2160,1080 pageScroll false,false OK
+  [shop-tab1] canvas 2160,1080 pageScroll false,false OK
+  [shop-tab2] canvas 2160,1080 pageScroll false,false OK
+  [pick] canvas 2160,1080 pageScroll false,false OK
+  [prep-HUD] canvas 2160,1080 pageScroll false,false OK
+  [hitbox] tap cell 2,1 zoom 0.84 -> selected {"x":2,"y":1} OK
+  [buildmenu] canvas 2160,1080 pageScroll false,false OK
+  [rotated (menu should close)] canvas 1080,2560 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 2,1 zoom 0.73 -> selected {"x":2,"y":1} OK
+  [hitbox-after-rotate-back] tap cell 2,1 zoom 0.84 -> selected {"x":2,"y":1} OK
+  [pause] canvas 2160,1080 pageScroll false,false OK
+  [night-HUD] canvas 2160,1080 pageScroll false,false OK
+  [caught] canvas 2160,1080 pageScroll false,false OK
+  [spirit] canvas 2160,1080 pageScroll false,false OK
+  [result(team win)] canvas 2160,1080 pageScroll false,false OK
+== 2560x1000 mouse
+  [unlock-card] canvas 2000,1000 pageScroll false,false OK
+  [daily] canvas 2000,1000 pageScroll false,false OK
+  [menu] canvas 2000,1000 pageScroll false,false OK
+  [shop] canvas 2000,1000 pageScroll false,false OK
+  [shop-tab1] canvas 2000,1000 pageScroll false,false OK
+  [shop-tab2] canvas 2000,1000 pageScroll false,false OK
+  [pick] canvas 2000,1000 pageScroll false,false OK
+  [prep-HUD] canvas 2000,1000 pageScroll false,false OK
+  [hitbox] tap cell 1,1 zoom 0.78 -> selected {"x":1,"y":1} OK
+  [buildmenu] canvas 2000,1000 pageScroll false,false OK
+  [rotated (menu should close)] canvas 1000,2560 pageScroll false,false OK
+  [hitbox-after-rotate] tap cell 1,1 zoom 2.31 -> selected {"x":1,"y":1} OK
+  [hitbox-after-rotate-back] tap cell 1,1 zoom 0.78 -> selected {"x":1,"y":1} OK
+  [pause] canvas 2000,1000 pageScroll false,false OK
+  [night-HUD] canvas 2000,1000 pageScroll false,false OK
+  [caught] canvas 2000,1000 pageScroll false,false OK
+  [spirit] canvas 2000,1000 pageScroll false,false OK
+  [result(team win)] canvas 2000,1000 pageScroll false,false OK
+
+TOTAL audits 195, with issues 21
+  844x390 shop ["shop-action: OFF-SCREEN 250,466-346,508 (scrollable parent)","shop-action: OFF-SCREEN 374,466-470,508 (scrollable parent)","shop-action: OFF-SCREEN 498,466-594,508 (scrollable parent)","SCROLL inside shop-body (373>191)"]
+  844x390 shop-tab1 ["shop-action: OFF-SCREEN 374,494-470,536 (scrollable parent)","shop-action: OFF-SCREEN 250,687-346,729 (scrollable parent)","shop-action: OFF-SCREEN 374,687-470,729 (scrollable parent)","shop-action: OFF-SCREEN 498,687-594,729 (scrollable parent)","SCROLL inside shop-body (593>191)"]
+  844x390 shop-tab2 ["SCROLL inside shop-body (269>191)"]
+  800x360 unlock-card ["SCROLL inside card (355>331)"]
+  800x360 shop ["shop-action: OFF-SCREEN 228,465-324,507 (scrollable parent)","shop-action: OFF-SCREEN 352,465-448,507 (scrollable parent)","shop-action: OFF-SCREEN 476,465-572,507 (scrollable parent)","SCROLL inside shop-body (373>163)"]
+  800x360 shop-tab1 ["shop-action: OFF-SCREEN 352,493-448,535 (scrollable parent)","shop-action: OFF-SCREEN 228,686-324,728 (scrollable parent)","shop-action: OFF-SCREEN 352,686-448,728 (scrollable parent)","shop-action: OFF-SCREEN 476,686-572,728 (scrollable parent)","SCROLL inside shop-body (593>163)"]
+  800x360 shop-tab2 ["shop-action: OFF-SCREEN 228,332-324,374 (scrollable parent)","shop-action: OFF-SCREEN 352,332-448,374 (scrollable parent)","shop-action: OFF-SCREEN 476,332-572,374 (scrollable parent)","SCROLL inside shop-body (269>163)"]
+  740x360 unlock-card ["SCROLL inside card (355>331)"]
+  740x360 shop ["shop-action: OFF-SCREEN 198,465-294,507 (scrollable parent)","shop-action: OFF-SCREEN 322,465-418,507 (scrollable parent)","shop-action: OFF-SCREEN 446,465-542,507 (scrollable parent)","SCROLL inside shop-body (373>163)"]
+  740x360 shop-tab1 ["shop-action: OFF-SCREEN 322,493-418,535 (scrollable parent)","shop-action: OFF-SCREEN 198,686-294,728 (scrollable parent)","shop-action: OFF-SCREEN 322,686-418,728 (scrollable parent)","shop-action: OFF-SCREEN 446,686-542,728 (scrollable parent)","SCROLL inside shop-body (593>163)"]
+  740x360 shop-tab2 ["shop-action: OFF-SCREEN 198,332-294,374 (scrollable parent)","shop-action: OFF-SCREEN 322,332-418,374 (scrollable parent)","shop-action: OFF-SCREEN 446,332-542,374 (scrollable parent)","SCROLL inside shop-body (269>163)"]
+  667x375 unlock-card ["SCROLL inside card (355>345)"]
+  667x375 shop ["shop-action: OFF-SCREEN 162,466-258,508 (scrollable parent)","shop-action: OFF-SCREEN 286,466-382,508 (scrollable parent)","shop-action: OFF-SCREEN 410,466-506,508 (scrollable parent)","SCROLL inside shop-body (373>177)"]
+  667x375 shop-tab1 ["shop-action: OFF-SCREEN 286,494-382,536 (scrollable parent)","shop-action: OFF-SCREEN 162,686-258,728 (scrollable parent)","shop-action: OFF-SCREEN 286,686-382,728 (scrollable parent)","shop-action: OFF-SCREEN 410,686-506,728 (scrollable parent)","SCROLL inside shop-body (593>177)"]
+  667x375 shop-tab2 ["SCROLL inside shop-body (269>177)"]
+  390x844 shop ["SCROLL inside shop-body (547>470)"]
+  390x844 shop-tab1 ["shop-action: OFF-SCREEN 147,932-243,974 (scrollable parent)","SCROLL inside shop-body (752>470)"]
+  390x844 shop-tab2 ["SCROLL inside shop-body (501>470)"]
+  360x800 shop ["SCROLL inside shop-body (547>470)"]
+  360x800 shop-tab1 ["shop-action: OFF-SCREEN 132,910-228,952 (scrollable parent)","SCROLL inside shop-body (752>470)"]
+  360x800 shop-tab2 ["SCROLL inside shop-body (501>470)"]
+done

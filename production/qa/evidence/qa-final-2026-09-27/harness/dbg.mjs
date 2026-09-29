@@ -1,0 +1,10 @@
+import { launch, open, state, shot, sleep } from './harness.mjs';
+const VET = process.argv[2];
+const browser = await launch();
+const { page, logs } = await open(browser, { save: VET });
+await sleep(5000);
+console.log(JSON.stringify(await state(page)));
+console.log(await page.evaluate(() => localStorage.getItem('midnight-door-progress')));
+await shot(page, 'dbg');
+console.log(logs.filter(l=>!l.includes('GL Driver')).join('\n'));
+await browser.close();

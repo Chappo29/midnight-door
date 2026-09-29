@@ -1,0 +1,86 @@
+/**
+ * QA scratch (VIEW): Hud без браузера — минимальные поддельные элементы вместо DOM, плюс статические проверки CSS.
+ */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { HOLDOVER_MS, HOLDOVER_PX, isHoldover } from '../../../src/ui/inputGuard';
+
+(globalThis as unknown as { window: unknown }).window ??= globalThis;
+const { Hud } = await import('../../../src/ui/hud');
+
+const css = readFileSync(fileURLToPath(new URL('../../../src/style.css', import.meta.url)), 'utf8').replace(/\r\n/g, '\n');
+const overlaySrc = readFileSync(fileURLToPath(new URL('../../../src/tutorial/overlay.ts', import.meta.url)), 'utf8');
+const sceneSrc = readFileSync(fileURLToPath(new URL('../../../src/view/GameScene.ts', import.meta.url)), 'utf8');
+
+function fakeEl() {
+  const cls = new Set<string>();
+  return {
+    textContent: '',
+    classList: {
+      add: (c: string) => cls.add(c),
+      remove: (c: string) => cls.delete(c),
+      contains: (c: string) => cls.has(c),
+    },
+    cls,
+  };
+}
+
+afterEach(() => vi.useRealTimers());
+
+describe('VIEW-QA: Hud', () => {
+  it('test_second_info_toast_turns_red_mid_display', () => {
+    vi.useFakeTimers();
+    const toast = fakeEl();
+    const hud = Object.create(Hud.prototype) as InstanceType<typeof Hud> & Record<string, unknown>;
+    (hud as Record<string, unknown>).el = { toast };
+    (hud as Record<string, unknown>).toastTimer = 0;
+
+    // «Дверь целая» по ключу, и через 1,5 с — ещё раз
+    hud.toastInfo('Дверь целая');
+    vi.advanceTimersByTime(1500);
+    hud.toastInfo('Дверь целая');
+    vi.advanceTimersByTime(250); // t = 1,75 с: сработал таймер первой плашки
+
+    // Вторая плашка ещё на экране (до 3,1 с), но уже без .info — стала красной «ошибкой»
+    expect(toast.cls.has('show')).toBe(true);
+    expect(toast.cls.has('info')).toBe(false);
+  });
+
+  it('test_desktop_fast_click_on_menu_option_near_cursor_is_swallowed', () => {
+    // Широкий экран (> 600 px): меню ставится справа от точки нажатия (left = x + 16) и по центру по высоте
+    // (top = y - h/2); у .menu-body padding 14 px, у .opt min-height 64 px — пункт начинается в ~30 px правее курсора.
+    const anchor = { x: 500, y: 400 };
+    const optionLeftEdge = anchor.x + 16 + 14;
+    const click = { x: optionLeftEdge + 20, y: anchor.y + 20 }; // внутри кнопки пункта (иконка), 54 px от точки нажатия
+    const dist = Math.hypot(click.x - anchor.x, click.y - anchor.y);
+    expect(dist).toBeLessThan(HOLDOVER_PX);
+    // Взрослый на ПК кликает по пункту через 0,6 с — Hud.showMenu() молча выкидывает клик (return без звука/тряски)
+    expect(isHoldover(600, 0, anchor, click)).toBe(true);
+    expect(HOLDOVER_MS).toBe(1000);
+  });
+
+  it('test_pause_and_sound_column_sits_above_modal_screen', () => {
+    // .hud-side (пауза, звук) — z-index 6; #screen (пауза, «Тебя поймали!») без z-index → колонка поверх карточки.
+    const hudSide = /\n\.hud-side \{[^}]*\}/.exec(css)![0];
+    const screen = /\n#screen \{[^}]*\}/.exec(css)![0];
+    expect(hudSide).toMatch(/z-index:\s*6/);
+    expect(screen).not.toMatch(/z-index/);
+    // и в списке «спрятать под окном» (#ui.screen-open …) её нет
+    const hiddenUnderScreen = /#ui\.screen-open \.hud-top,[\s\S]*?\{/.exec(css)![0];
+    expect(hiddenUnderScreen).not.toContain('.hud-side');
+  });
+
+  it('test_ultrawide_desktop_tutorial_overlay_uses_viewport_while_game_is_centered', () => {
+    // На ПК с окном шире 2:1 #game и #ui сужаются до 200vh и центрируются…
+    expect(css).toMatch(/@media \(hover: hover\) and \(pointer: fine\) and \(min-aspect-ratio: 2\/1\) \{\s*#game,\s*#ui \{[^}]*width: 200vh;[^}]*margin-inline: auto;/);
+    // …а слой обучения висит на body (fixed, inset 0 — координаты окна),
+    expect(overlaySrc).toContain('document.body.appendChild(this.top)');
+    // и прямоугольник клетки/призрака считается от левого края КАНВАСА (без смещения полосы).
+    expect(sceneSrc).toContain('return new DOMRect((wx - cam.worldView.x) * cam.zoom - s / 2, (wy - cam.worldView.y) * cam.zoom - s / 2, s, s);');
+    // Итого палец и «прожектор» левее цели на (vw - 2·vh)/2: 2560×1080 (окно ~2560×950) → ~330 px.
+    const vw = 2560;
+    const vh = 950;
+    expect((vw - 2 * vh) / 2).toBe(330);
+  });
+});

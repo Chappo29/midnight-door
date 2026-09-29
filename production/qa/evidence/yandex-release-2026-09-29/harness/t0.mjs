@@ -1,0 +1,10 @@
+import { serve, launch, open, ylog, gameInfo, shot, sleep, host } from './lib.mjs';
+const srv = await serve(5199); const b = await launch();
+const { page, logs } = await open(b, srv.url, { prof: 'fresh1' });
+await sleep(4000);
+console.log(JSON.stringify(await gameInfo(page)));
+console.log(JSON.stringify(await ylog(page)));
+console.log(logs, await page.evaluate(() => window.__errors));
+await shot(page, 't0-boot');
+console.log(host.reqLog.filter(r=>r.status>=400));
+await b.close(); srv.close();
