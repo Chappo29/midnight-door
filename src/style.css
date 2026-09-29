@@ -4208,6 +4208,21 @@ img {
   }
 }
 
+/*
+ * Полосы по бокам поля (окно шире 2:1, например 1920×920 с панелью закладок): на главном экране они были почти чёрными,
+ * а меню — фиолетовое, и выглядело, будто масштаб сломался. Пока показано меню, страница красится тем же ночным градиентом.
+ */
+@media (hover: hover) and (pointer: fine) and (min-aspect-ratio: 2/1) {
+  body:has(.menu-frame) {
+    --menu-floor-h: max(12vh, 70px);
+    background:
+      linear-gradient(var(--ink), var(--ink)) left bottom calc(var(--menu-floor-h) - 6px) / 100% 6px no-repeat,
+      linear-gradient(90deg, var(--wood-1) 0 64px, var(--wood-2) 64px 68px) calc((100vw - 200vh) / 2) bottom / 68px var(--menu-floor-h) repeat-x,
+      radial-gradient(60% 46% at 50% -6%, #4a3f79 0%, transparent 70%),
+      radial-gradient(120% 90% at 50% 120%, var(--night-3) 0%, var(--night-1) 65%);
+  }
+}
+
 /* «Новое!» на совсем низком экране (800×360): сценка чуть меньше — «В меню» под кнопкой видно без прокрутки (QA-06). */
 @media (max-height: 400px) {
   .unlock-card .unlock-demo {
