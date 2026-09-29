@@ -155,6 +155,22 @@ describe('ежедневный подарок', () => {
     expect(m.daily.step).toBe(0);
     expect(m.coins).toBe(DAILY.reduce((s, c) => s + c, 0));
   });
+
+  it('test_daily_not_claimable_again_when_clock_goes_back_or_timezone_west', () => {
+    const m = emptyMeta();
+    claimDaily(m, '2026-09-30');
+    // Часы отвели назад / пояс к западу: местная дата стала «вчера» — второй раз нельзя.
+    expect(dailyAvailable(m, '2026-09-29')).toBe(false);
+    expect(dailyAvailable(m, '2026-09-28')).toBe(false);
+    expect(claimDaily(m, '2026-09-29')).toBe(0);
+    // Наступил следующий день — снова можно.
+    expect(dailyAvailable(m, '2026-10-01')).toBe(true);
+    // Часы сильно уходили вперёд (последняя отметка на много суток вперёд) — подарок не запирается надолго.
+    const far = emptyMeta();
+    far.daily = { last: '2030-01-01', step: 0 };
+    expect(dailyAvailable(far, '2026-09-29')).toBe(true);
+    expect(dailyAvailable(emptyMeta(), '2026-09-29')).toBe(true);
+  });
 });
 
 describe('усилители и герой в матче', () => {

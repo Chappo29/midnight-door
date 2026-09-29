@@ -75,15 +75,35 @@ export class Sfx {
 
   setMuted(v: boolean): void {
     this._muted = v;
-    this.game.sound.mute = v;
+    // Во время рекламы или паузы от платформы кнопка звука его не включает — только запоминает выбор.
+    this.applyMute(v || this.suspended);
   }
 
   /**
-   * Заглушить всё на время рекламы (правило Яндекса 4.7) — без записи в настройки игрока,
-   * в отличие от setMuted. После ролика звук возвращается к выбору игрока.
+   * Выключить или включить весь звук. Не через game.sound.mute: в Phaser 3.90 он пишет громкость «на момент 0»
+   * (setValueAtTime(v, 0)), и в Chrome срабатывает только первая такая запись — второй раз звук уже не гас
+   * (ни кнопкой, ни на рекламе; правила Яндекса 1.3, 4.7). setValueAtTime(v, currentTime) тоже ненадёжен: рядом
+   * с pauseAll запись терялась. Надёжно — снять все запланированные значения и присвоить напрямую.
+   */
+  private applyMute(on: boolean): void {
+    const node = (this.game.sound as unknown as { masterMuteNode?: GainNode }).masterMuteNode;
+    if (node) {
+      node.gain.cancelScheduledValues(0);
+      node.gain.value = on ? 0 : 1;
+    } else this.game.sound.mute = on;
+  }
+
+  /** Звук снят платформой: реклама, пауза Яндекса, скрытая вкладка (platform/platform.ts). */
+  private suspended = false;
+
+  /**
+   * Заглушить всё на время рекламы и паузы платформы (правила Яндекса 1.3, 4.7) — без записи в настройки игрока,
+   * в отличие от setMuted. После — звук возвращается к выбору игрока.
    */
   suspend(on: boolean): void {
-    this.game.sound.mute = on || this._muted;
+    if (on === this.suspended) return;
+    this.suspended = on;
+    this.applyMute(on || this._muted);
     if (on) this.game.sound.pauseAll();
     else this.game.sound.resumeAll();
   }
@@ -124,6 +144,8 @@ export class Sfx {
       if (this.musicKey !== id) return;
       const m = this.game.sound.add(keys[i], { loop: keys.length === 1 });
       if (keys.length > 1) m.once(Phaser.Sound.Events.COMPLETE, () => {
+        // Трек доиграл посреди затухания — затухание снимаем до destroy (см. fade).
+        this.cancelFade(m);
         m.destroy();
         playAt((i + 1) % keys.length, 0);
       });
@@ -147,8 +169,9 @@ export class Sfx {
    */
   private fade(sound: Phaser.Sound.BaseSound, from: number, to: number, ms: number, done?: () => void): void {
     const s = sound as Phaser.Sound.WebAudioSound;
-    window.clearInterval(this.fades.get(sound));
-    this.fades.delete(sound);
+    this.cancelFade(sound);
+    // Уничтоженному звуку громкость не поставить: у Phaser после destroy() узел громкости null, setVolume бросает.
+    if (s.pendingRemove) return done?.();
     s.setVolume(from);
     if (ms <= 0) {
       s.setVolume(to);
@@ -159,6 +182,13 @@ export class Sfx {
     // и старый трек так и остался бы играть поверх нового.
     const t0 = performance.now();
     const timer = window.setInterval(() => {
+      // Трек уничтожили, пока шло затухание (доиграл до конца плейлиста): таймер останавливаем. Иначе setVolume
+      // бросал раньше clearInterval, и ошибка сыпалась каждые 30 мс до перезагрузки (FINAL_QA_REPORT.md, QA-10).
+      if (s.pendingRemove) {
+        this.cancelFade(sound);
+        done?.();
+        return;
+      }
       const k = Math.min(1, (performance.now() - t0) / ms);
       s.setVolume(from + (to - from) * k);
       if (k < 1) return;
@@ -169,13 +199,19 @@ export class Sfx {
     this.fades.set(sound, timer);
   }
 
+  /** Снять идущее затухание звука (если есть). */
+  private cancelFade(sound: Phaser.Sound.BaseSound): void {
+    window.clearInterval(this.fades.get(sound));
+    this.fades.delete(sound);
+  }
+
   /**
    * «Тук-тук» — сигнал «призрак идёт к тебе»: два глухих низких удара, как сердцебиение (вариант D со страницы
    * public/sounds.html, выбран 2026-09-26 вместо «динь-дон»). Синтез на лету, без файла: не страшный и не похожий
    * на стук в дверь. Громкость и выключение — как у остальных звуков.
    */
   heartbeat(volume = 0.55): void {
-    if (this._muted || this.game.sound.locked) return;
+    if (this._muted || this.suspended || this.game.sound.locked) return;
     const mgr = this.game.sound as Phaser.Sound.WebAudioSoundManager;
     const ctx = mgr.context;
     const out = mgr.destination as AudioNode | undefined;

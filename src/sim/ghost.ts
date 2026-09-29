@@ -41,7 +41,7 @@ export function createGhost(nest: Vec): Ghost {
 }
 
 export const ghostMaxHp = (m: Match, level: number) => B.ghost.hp * B.ghost.hpMul ** (level - 1) * m.diff.ghostMul * m.diff.ghostHpMul;
-export const ghostDamage = (m: Match, level: number) => B.ghost.dmg * B.ghost.dmgMul ** (level - 1) * m.diff.ghostMul;
+export const ghostDamage = (m: Match, level: number) => B.ghost.dmg * B.ghost.dmgMul ** (level - 1) * m.diff.ghostMul * m.diff.ghostDmgMul;
 export const ghostHitInterval = (level: number) => B.ghost.hitInterval / (1 + B.ghost.hitSpeedup * (level - 1));
 /** Насколько реже призрак бьёт дверь этой комнаты: холодильник внутри (0 — нет холодильника). */
 export const fridgeSlowOf = (r: Room) => {
@@ -128,7 +128,9 @@ export function updateGhost(m: Match, dt: number): void {
     return;
   }
 
-  const fleeing = g.state === 'moving' || g.state === 'attacking' || g.state === 'entering';
+  // Вошедший (дверь уже сломана) не убегает: иначе комната оставалась жить со сломанной дверью, которую нельзя
+  // ни чинить, ни улучшать, а вернувшись, призрак входил без осады (FINAL_QA_REPORT.md, QA-05).
+  const fleeing = g.state === 'moving' || g.state === 'attacking';
   if (!m.script && !g.desperate && fleeing && g.hp <= g.maxHp * B.ghost.retreatAt) {
     endSiege(m, 'retreat');
     g.state = 'retreating';
@@ -225,6 +227,7 @@ export function updateGhost(m: Match, dt: number): void {
         const was = g.desperate;
         g.desperate = was || g.nestVisits >= B.ghost.healTargets.length || g.hp <= g.maxHp * B.ghost.retreatAt;
         if (!was && g.desperate) m.events.push({ type: 'ghostDesperate' });
+        m.events.push({ type: 'ghostHealed' });
         chooseTarget(m);
       }
       break;
@@ -390,6 +393,7 @@ function catchOwner(m: Match, r: Room): void {
   r.eliminated = true;
   c.caught = true;
   c.task = null;
+  c.queue = [];
   c.path = [];
   m.events.push({ type: 'caught', roomId: r.id, charId: c.id });
   m.onEliminated(c);

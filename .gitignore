@@ -15,3 +15,6 @@ docs/audio/**/*.mp3
 
 # Логи и снимки сессий Playwright-проверок
 .playwright-cli/
+
+# Архив для Яндекс Игр (npm run build:yandex)
+yandex/

@@ -55,7 +55,7 @@ describe('map', () => {
 
 describe('match', () => {
 
-  it('test_match_abandoned_build_reports_cancel_with_refund', () => {
+  it('test_match_tap_elsewhere_during_paid_build_does_not_cancel', () => {
     // Arrange: игрок уже строит пушку (оплачено, идёт работа).
     const m = inRoomMatch();
     const r = m.playerRoom!;
@@ -63,15 +63,108 @@ describe('match', () => {
     const cell = m.placeableCells(r, 'cannon').find((c) => !(c.x === r.door.inside.x && c.y === r.door.inside.y))!;
     expect(m.command(0, { type: 'build', kind: 'cannon', x: cell.x, y: cell.y })).toBeNull();
     runUntil(m, (mm) => mm.player.task?.stage === 'work', 10);
-    const paid = m.player.task!.paid!.candy;
-    // Act: ребёнок ткнул в другое место.
+    // Act: ребёнок ткнул в другое место пола (CORE_LOOP_UX_PASS.md, п. 6).
     const other = m.placeableCells(r, 'cannon').find((c) => c.x !== cell.x || c.y !== cell.y)!;
     expect(m.command(0, { type: 'move', x: other.x, y: other.y })).toBeNull();
+    const cancelled: SimEvent[] = [];
+    for (let i = 0; i < 20 * 5; i++) {
+      m.step();
+      cancelled.push(...m.events.filter((q) => q.type === 'taskCancelled'));
+    }
+    // Assert: пушка достроена, списано ровно один раз, отмены нет, а герой потом дошёл, куда тапнули.
+    expect(cancelled).toHaveLength(0);
+    expect(r.buildings.filter((b) => b.kind === 'cannon')).toHaveLength(1);
+    expect(r.candy).toBeGreaterThanOrEqual(500 - B.cannon.cost);
+    expect(r.candy).toBeLessThan(500 - B.cannon.cost + 20);
+    expect({ x: Math.floor(m.player.x), y: Math.floor(m.player.y) }).toEqual(other);
+  });
+
+  it('test_match_second_purchase_during_work_is_queued_not_lost', () => {
+    // Arrange: строит первую пушку (оплачено).
+    const m = inRoomMatch();
+    const r = m.playerRoom!;
+    r.candy = 500;
+    const cells = m.placeableCells(r, 'cannon').filter((c) => !(c.x === r.door.inside.x && c.y === r.door.inside.y));
+    expect(m.command(0, { type: 'build', kind: 'cannon', ...cells[0] })).toBeNull();
+    runUntil(m, (mm) => mm.player.task?.stage === 'work', 10);
+    // Act: вторая покупка на другой клетке, пока первая строится, — и двойной тап той же покупки.
+    expect(m.command(0, { type: 'build', kind: 'cannon', ...cells[1] })).toBeNull();
+    expect(m.command(0, { type: 'build', kind: 'cannon', ...cells[1] })).toBeNull();
+    stepSec(m, 8);
+    // Assert: обе пушки стоят, каждая оплачена один раз.
+    expect(r.buildings.filter((b) => b.kind === 'cannon')).toHaveLength(2);
+    expect(r.candy).toBeGreaterThanOrEqual(500 - 2 * B.cannon.cost);
+    expect(r.candy).toBeLessThan(500 - 2 * B.cannon.cost + 30);
+    expect(m.player.queue).toHaveLength(0);
+  });
+
+  it('test_match_rapid_taps_queue_is_bounded', () => {
+    // Arrange: игрок строит (оплачено).
+    const m = inRoomMatch();
+    const r = m.playerRoom!;
+    r.candy = 5000;
+    const cells = m.placeableCells(r, 'cannon').filter((c) => !(c.x === r.door.inside.x && c.y === r.door.inside.y));
+    expect(m.command(0, { type: 'build', kind: 'cannon', ...cells[0] })).toBeNull();
+    runUntil(m, (mm) => mm.player.task?.stage === 'work', 10);
+    // Act: быстрые тапы по полу (мобильные касания), потом четыре покупки.
+    for (let i = 1; i < 6; i++) m.command(0, { type: 'move', ...cells[i] });
+    expect(m.player.queue.filter((q) => q.type === 'move')).toHaveLength(1);
+    const errs = [1, 2, 3, 4].map((i) => m.command(0, { type: 'build', kind: 'cannon', ...cells[i] }));
+    // Assert: «иди сюда» в очереди не копится; покупок не больше трёх — четвёртая честно отказана, а не потеряна молча.
+    expect(m.player.queue).toHaveLength(3);
+    expect(errs.slice(0, 3)).toEqual([null, null, null]);
+    expect(errs[3]).toMatch(/Подожди/);
+  });
+
+  it('test_match_repair_jumps_unpaid_walk_and_purchase_resumes', () => {
+    // Arrange: ночь, дверь побита; герой идёт строить пушку в дальний угол (ещё не оплачено).
+    const m = inRoomMatch();
+    nightNow(m);
+    m.ghost.state = 'hidden';
+    m.ghost.x = m.ghost.y = -50;
+    const r = m.playerRoom!;
+    r.candy = 500;
+    r.door.hp = r.door.maxHp * 0.3;
+    r.door.repairCd = 0;
+    const d = r.door.inside;
+    const far = [...m.placeableCells(r, 'cannon')].sort((a, b) => Math.hypot(b.x - d.x, b.y - d.y) - Math.hypot(a.x - d.x, a.y - d.y))[0];
+    expect(m.command(0, { type: 'build', kind: 'cannon', ...far })).toBeNull();
     m.step();
-    // Assert: сцена узнаёт об отмене и о возврате — стройка не пропадает молча.
-    const e = m.events.find((q) => q.type === 'taskCancelled');
-    expect(e && e.type === 'taskCancelled' && e.refund).toBe(paid);
-    expect(e && e.type === 'taskCancelled' && e.cmd.type).toBe('build');
+    expect(m.player.task?.stage).toBe('walk');
+    // Act: жмёт ключ.
+    const events: SimEvent[] = [];
+    expect(m.command(0, { type: 'repair' })).toBeNull();
+    for (let i = 0; i < 20 * 12; i++) {
+      m.step();
+      events.push(...m.events);
+    }
+    // Assert: сначала починил, потом всё-таки построил; ничего не «отменено».
+    expect(events.some((e) => e.type === 'repaired')).toBe(true);
+    expect(r.buildings.some((b) => b.kind === 'cannon' && b.x === far.x && b.y === far.y)).toBe(true);
+    expect(events.some((e) => e.type === 'taskCancelled')).toBe(false);
+  });
+
+  it('test_match_broken_door_refunds_door_upgrade_exactly_once', () => {
+    // Arrange: игрок улучшает дверь (оплачено), призрак вот-вот её сломает.
+    const m = inRoomMatch();
+    nightNow(m);
+    const r = m.playerRoom!;
+    r.candy = 1000;
+    expect(m.command(0, { type: 'upgradeDoor' })).toBeNull();
+    runUntil(m, (mm) => mm.player.task?.stage === 'work', 10);
+    const before = r.candy;
+    const paid = m.player.task!.paid!.candy;
+    pinGhostAtDoor(m, r);
+    r.door.hp = 1;
+    // Act
+    const refunds: number[] = [];
+    for (let i = 0; i < 20 * 3; i++) {
+      m.step();
+      for (const e of m.events) if (e.type === 'taskCancelled') refunds.push(e.refund);
+    }
+    // Assert: одно событие отмены, возврат ровно раз, и конфеты вернулись.
+    expect(refunds).toEqual([paid]);
+    expect(r.candy).toBeGreaterThanOrEqual(before + paid - 1);
   });
 
   it('test_match_repeated_repair_taps_do_not_restart_repair', () => {
@@ -133,7 +226,7 @@ describe('match', () => {
     expect(m.command(0, { type: 'repair' })).toMatch(/Ключ будет готов/);
   });
 
-  it('прерванная стройка возвращает конфеты', () => {
+  it('тап во время оплаченной стройки её не прерывает', () => {
     const m = new Match({ seed: 7, difficulty: 'easy', flameUnlocked: true });
     m.command(0, { type: 'pickRoom', roomId: 2 });
     while (m.phase === 'pick') m.step();
@@ -146,8 +239,10 @@ describe('match', () => {
     expect(room.candy).toBeLessThan(500);
     const spot = m.randomWalkableCell(room)!;
     expect(m.command(0, { type: 'move', ...spot })).toBeNull();
-    expect(room.candy).toBeCloseTo(500 + 0, -1);
-    expect(room.buildings).toHaveLength(0);
+    // Работа идёт дальше: деньги не возвращаются, потому что покупка не отменена, а достраивается.
+    expect(m.player.task?.stage).toBe('work');
+    finishTask(m);
+    expect(room.buildings).toHaveLength(1);
   });
 
   it('радиус пушки растёт с уровнем', () => {

@@ -119,6 +119,18 @@ img.ico-img,
   pointer-events: none;
 }
 
+/* Картинки не перетаскиваются мышью (тянулась «призрачная» копия — правила Яндекса 1.6.2.7). Клики они не глотают. */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* Палец и стрелка обучения — SVG вместо эмодзи (platform: старые системы без цветных эмодзи). */
+.pointer-svg {
+  display: block;
+  overflow: visible;
+}
+
 /* ---------------------------------------------------------
    Верхняя панель: конфеты / пламя / таймер / уровень призрака
    --------------------------------------------------------- */
@@ -1535,6 +1547,33 @@ img.ico-img,
     min-height: 50px;
   }
 }
+
+/*
+ * Кнопки за рекламу («×2 монеты» на итогах, «Вернуться в комнату» на поимке) и подарок дня добавили высоты —
+ * на телефоне лёжа главные кнопки снова ушли за край (FINAL_QA_REPORT.md, QA-06). То же правило, что выше:
+ * на низком экране без маскота, плотнее отступы и кнопки — всё видно без прокрутки.
+ */
+@media (max-height: 500px) {
+  .caught-card .result-mascot {
+    display: none;
+  }
+  .caught-card .stroke-title {
+    margin: 0 0 6px;
+  }
+  .caught-card .diffs {
+    gap: 8px;
+  }
+  .caught-card .btn-big,
+  .result-card .btn-big {
+    min-height: 48px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .result-card .double-btn {
+    margin-top: 8px;
+  }
+}
+
 
 /* --------------------- награда за матч --------------------- */
 
@@ -4118,5 +4157,440 @@ img.ico-img,
   }
   .unlock-dots {
     margin-bottom: 6px;
+  }
+}
+
+/* ---------------- Реклама за награду и требования Яндекс Игр (YANDEX_READINESS.md) ---------------- */
+
+/* На кнопке «за рекламу» видно, что это реклама (правило 4.5.1): маленькая плашка справа сверху. */
+.ad-btn {
+  position: relative;
+}
+.ad-tag {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--cream);
+  box-shadow: 0 0 0 2px var(--ink);
+  color: var(--ink);
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  pointer-events: none;
+}
+.double-btn {
+  display: flex;
+  margin: 10px auto 0;
+  min-height: 48px;
+  font-size: 18px;
+}
+.ad-btn:disabled {
+  filter: grayscale(0.6);
+  opacity: 0.7;
+}
+
+/*
+ * Правило 1.6.2.2: на десктопе длинная сторона поля не больше чем в 2 раза длиннее короткой. Ультраширокое окно —
+ * игра и её интерфейс в полосе не шире 2:1 по центру, по краям фон. Только мышь (десктоп): телефоны лёжа бывают
+ * 2,16:1, и там поле не сужаем.
+ */
+@media (hover: hover) and (pointer: fine) and (min-aspect-ratio: 2/1) {
+  #game,
+  #ui {
+    left: 0;
+    right: 0;
+    width: 200vh;
+    margin-inline: auto;
+  }
+}
+
+/* «Новое!» на совсем низком экране (800×360): сценка чуть меньше — «В меню» под кнопкой видно без прокрутки (QA-06). */
+@media (max-height: 400px) {
+  .unlock-card .unlock-demo {
+    width: min(200px, 60vw);
+  }
+}
+
+/*
+ * Подарок дня на телефоне лёжа: «Забрать» видно без прокрутки (FINAL_QA_REPORT.md, QA-06; то же правило низкого
+ * экрана, что у итогов и поимки). В конце файла: общие правила .card для низких экранов выше перебили бы отступы.
+ */
+@media (max-height: 500px) {
+  .card.daily-card {
+    padding: 12px 20px 14px;
+  }
+  .daily-mascot {
+    width: 56px;
+    margin: 0 auto;
+  }
+  .daily-card .stroke-title {
+    margin: 0;
+  }
+  .daily-grid {
+    gap: 6px;
+    margin: 8px 0 10px;
+  }
+  .daily-tile {
+    min-height: 48px;
+  }
+  .daily-card .btn-big {
+    min-height: 48px;
+  }
+}
+
+/*
+ * Меню стройки на телефоне лёжа: все пункты (пушка, капкан, верстак, холодильник) видны без прокрутки — иначе
+ * холодильник уезжал под край (FINAL_QA_REPORT.md, UX-16). Плотнее пункты и шапка, а высота тела меню — остаток
+ * окна, а не 58 % от него. Только внутри #menu: .menu-title есть и в главном меню.
+ */
+@media (max-height: 500px) {
+  #menu .menu-title {
+    padding: 8px 46px 8px 14px;
+    font-size: 16px;
+  }
+  #menu .menu-close {
+    top: 8px;
+  }
+  #menu .menu-body {
+    padding: 10px;
+    gap: 8px;
+    max-height: calc(100vh - 90px);
+  }
+  #menu .opt {
+    min-height: 50px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+}
+
+/* ---------------------------------------------------------
+   Core loop UX pass (CORE_LOOP_UX_PASS.md)
+   --------------------------------------------------------- */
+
+/* Цена с пламенем: слева зачёркнутая цена «без огня» — огонь экономит конфеты. */
+.cost-was {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 12px;
+  color: #8a7fa3;
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  margin-right: 5px;
+}
+
+/* Возврат конфет у счётчика: «+70» всплывает и тает (покупку отменили — деньги вернулись). */
+.candy-chip {
+  position: relative;
+}
+.refund-pop {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: 18px;
+  color: #ffe066;
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: refund-pop 1.5s ease-out forwards;
+}
+@keyframes refund-pop {
+  0% { transform: translate(-50%, 10px) scale(0.6); opacity: 0; }
+  15% { transform: translate(-50%, 0) scale(1.15); opacity: 1; }
+  70% { transform: translate(-50%, -4px) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -14px) scale(1); opacity: 0; }
+}
+
+/* ---------------------------------------------------------
+   Final polish: итоги матча (CORE_LOOP_UX_PASS.md, Final polish)
+   «Ещё раз» и «Меню» — всегда целиком и без прокрутки; «×2 монеты» за рекламу — ниже/сбоку и скромнее.
+   В конце файла: правила низкого экрана выше (B2, QA-06) иначе перебили бы эти.
+   --------------------------------------------------------- */
+
+.result-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.result-actions .diffs {
+  margin-top: 0;
+}
+/* Реклама — второстепенная: белая, ниже и уже основных кнопок (не зовёт нажать её первой). */
+.result-card .double-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  min-height: 42px;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 15px;
+  box-shadow: 0 0 0 3px var(--ink), 0 3px 0 var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.result-card .double-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Куда идут монеты: та же иконка, что у кнопки «Магазин» в меню, и сколько там всего. */
+.reward-bank {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 4px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 2px var(--ink);
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--ink);
+}
+.reward-bank-ico {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 0 2px var(--ink);
+  padding: 2px;
+}
+.reward-bank-ico svg {
+  width: 100%;
+  height: 100%;
+}
+.reward-bank-n {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--amber-dark);
+}
+.reward-bank-n .reward-ico {
+  width: 18px;
+  height: 18px;
+}
+
+/* ×2 досмотрен: число сразу новое — всплеск и метка «×2» рядом. */
+.reward-total.doubled {
+  animation: reward-bump 0.6s ease-out;
+}
+.reward-x2 {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--mint);
+  box-shadow: 0 0 0 2px var(--ink);
+  color: var(--ink);
+  font-size: 0.55em;
+}
+@keyframes reward-bump {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reward-total.doubled {
+    animation: none;
+  }
+}
+
+/* Низкий экран (телефон лёжа): маскот меньше, отступы плотнее, все кнопки в один ряд. */
+@media (max-height: 500px) {
+  .card.result-card {
+    padding: 10px 18px 12px;
+  }
+  .result-card .result-mascot {
+    width: 44px;
+    margin: 0 auto;
+  }
+  .result-card .stroke-title {
+    font-size: 21px;
+    margin: 0 0 2px;
+  }
+  .result-card .unlock-pill {
+    margin-top: 0;
+    padding: 2px 12px;
+  }
+  .result-card .stat-row {
+    margin: 4px 0 2px;
+    gap: 8px;
+  }
+  .result-card .stat {
+    padding: 2px 10px;
+  }
+  .result-card .reward-block {
+    margin-top: 4px;
+    gap: 3px;
+  }
+  .result-card .reward-total {
+    font-size: 26px;
+  }
+  .result-actions {
+    flex-direction: row;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .result-actions .diffs {
+    flex-wrap: nowrap;
+    gap: 10px;
+  }
+  .result-card .btn-big {
+    min-width: 128px;
+    min-height: 46px;
+    padding: 4px 16px;
+  }
+  .result-card .double-btn {
+    min-height: 46px;
+  }
+}
+@media (max-height: 400px) {
+  .result-card .result-mascot {
+    display: none;
+  }
+  .result-card .reward-chip {
+    padding: 1px 8px;
+  }
+}
+/* Средняя высота (ноутбук 1280×720): маскот поменьше — итоги без прокрутки и на ПК. */
+@media (min-height: 501px) and (max-height: 800px) {
+  .result-card .result-mascot {
+    width: 96px;
+  }
+}
+
+/* ---------------------------------------------------------
+   Final polish: ключ, пламя, пауза (CORE_LOOP_UX_PASS.md, Final polish)
+   --------------------------------------------------------- */
+
+/* Дверь побита (< 50 %), ключ готов: кнопка дышит и светится золотом — «нажми меня». Красное кольцо «срочно»
+   (< 40 %) рисуется поверх своим правилом; перезарядка (.cd) этот сигнал выключает. */
+#repair.ready:not(.cd) {
+  animation: repair-ready 0.8s ease-in-out infinite alternate;
+}
+@keyframes repair-ready {
+  from { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255, 209, 102, 0)); }
+  to { transform: scale(1.1); filter: drop-shadow(0 0 12px rgba(255, 209, 102, 0.95)); }
+}
+/* Перезарядка кончилась, а дверь побита — кнопка один раз «выпрыгивает». */
+#repair.ready-pop:not(.cd) {
+  animation: repair-ready-pop 0.5s ease-out, repair-ready 0.8s ease-in-out 0.5s infinite alternate;
+}
+@keyframes repair-ready-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #repair.ready:not(.cd),
+  #repair.ready-pop:not(.cd) {
+    animation: none;
+    filter: drop-shadow(0 0 10px rgba(255, 209, 102, 0.95));
+  }
+}
+
+/* Цена с пламенем: зачёркнутая «без огня» — крупнее и красной чертой; подпись — со значком огня. */
+.cost-was {
+  font-size: 14px;
+  color: #6e6388;
+  text-decoration-color: #ff4d5e;
+  text-decoration-thickness: 3px;
+}
+.flame-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #c2410c;
+  font-weight: 800;
+}
+.flame-save svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+/* Под окном (поимка, итоги) пауза не работает — не показываем её поверх карточки. Звук остаётся. */
+#ui.screen-open #pause {
+  visibility: hidden;
+}
+
+/* Кнопка «Звук» в меню: иконка — картинка (как в матче), а не SVG — вписываем её в круглую плашку. */
+.meta-side .btn-round-sm img.ui-ico {
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/*
+ * «Новое!» на высоте ≤ 400 px (800×360, 740×360, 667×375): карточка прокручивалась внутри на 10–24 px
+ * (YANDEX_RELEASE_AUDIT.md, RA-06). Правило в конце файла — общие правила .card и .unlock-* выше перебили бы его.
+ */
+@media (max-height: 400px) {
+  .unlock-card {
+    padding: 8px 18px 10px;
+  }
+  .unlock-card .unlock-kicker {
+    font-size: 15px;
+    padding: 2px 14px;
+  }
+  .unlock-card .unlock-head {
+    margin: 2px 0;
+  }
+  .unlock-card .unlock-demo {
+    width: min(170px, 55vw);
+    margin: 2px auto 0;
+  }
+  .unlock-card .unlock-cap {
+    font-size: 14px;
+  }
+  .unlock-card .unlock-dots {
+    margin-bottom: 4px;
+  }
+}
+
+/* Вход в Яндекс из меню: карточка с пользой (правило Яндекса 1.2.1) — до окна входа. */
+.cloud-card {
+  width: min(400px, 92vw);
+  text-align: center;
+}
+.cloud-card .cloud-text {
+  margin: 6px 0 14px;
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: var(--ink);
+}
+@media (max-height: 500px) {
+  .cloud-card .cloud-text {
+    margin: 2px 0 8px;
+    font-size: 15px;
+  }
+}
+
+/*
+ * Кнопка пропуска обучения лежит в слое обучения (вне #ui) на всю ширину окна, а поле и колонка паузы/звука на ПК шире 2:1
+ * сжаты до 200vh по центру: кнопка «уезжала» к краю окна и стояла отдельно от них. Сдвигаем её на ту же величину.
+ * В конце файла: базовое правило `.tut-skip.bare` выше задаёт right.
+ */
+@media (hover: hover) and (pointer: fine) and (min-aspect-ratio: 2/1) {
+  .tut-skip.bare {
+    right: calc(10px + env(safe-area-inset-right) + (100vw - 200vh) / 2);
   }
 }

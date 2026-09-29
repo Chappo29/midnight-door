@@ -154,6 +154,19 @@ describe('лечение в гнезде', () => {
     return m;
   }
 
+  it('test_ghost_heal_end_emits_healed_before_new_target', () => {
+    // Arrange
+    const m = nestMatch();
+    // Act: полный заход в гнездо.
+    const { events } = retreatCycle(m);
+    // Assert: сцена узнаёт, что вышел тот же призрак после лечения, — раньше, чем он выберет дверь.
+    const healed = events.findIndex((e) => e.type === 'ghostHealed');
+    const target = events.findIndex((e, i) => i > healed && e.type === 'ghostTarget');
+    expect(healed).toBeGreaterThanOrEqual(0);
+    expect(target).toBeGreaterThan(healed);
+    expect(events.filter((e) => e.type === 'ghostHealed')).toHaveLength(1);
+  });
+
   // Регрессия: раньше призрак убегал ~10 раз за матч (лечил 40% × 0.85^заходов без лимита), и половина ночи была
   // циклом «почти убили → убежал» (GHOST_HEAL_BALANCE.md). Теперь 3 захода: до 75 / 65 / 55%, потом дерётся до конца.
   it('test_ghost_nest_three_heals_to_targets_then_desperate', () => {
@@ -306,9 +319,9 @@ describe('HP призрака по сложности', () => {
       const k = DIFF[difficulty];
       expect(ghostMaxHp(m, 1)).toBeCloseTo(B.ghost.hp * k.ghostMul * k.ghostHpMul, 6);
       expect(ghostMaxHp(m, 3)).toBeCloseTo(B.ghost.hp * B.ghost.hpMul ** 2 * k.ghostMul * k.ghostHpMul, 6);
-      // Урон от ghostHpMul не зависит.
-      expect(ghostDamage(m, 1)).toBeCloseTo(B.ghost.dmg * k.ghostMul, 6);
-      expect(ghostDamage(m, 3)).toBeCloseTo(B.ghost.dmg * B.ghost.dmgMul ** 2 * k.ghostMul, 6);
+      // Урон от ghostHpMul не зависит (у него свой множитель ghostDmgMul).
+      expect(ghostDamage(m, 1)).toBeCloseTo(B.ghost.dmg * k.ghostMul * k.ghostDmgMul, 6);
+      expect(ghostDamage(m, 3)).toBeCloseTo(B.ghost.dmg * B.ghost.dmgMul ** 2 * k.ghostMul * k.ghostDmgMul, 6);
     }
   });
 

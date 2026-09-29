@@ -57,6 +57,9 @@ export interface MatchOptions {
 export const HERO_NAMES = ['Сёма', 'Мия', 'Тимоха', 'Зоя', 'Лёва', 'Бублик'];
 export const CHAR_COLORS = [0x4aa3ff, 0xff7a7a, 0x7ad97a, 0xffc94a, 0xc58aff, 0x5ee0d0];
 
+/** Сколько покупок/дел ждёт в очереди героя (плюс одно последнее «иди сюда»). */
+const QUEUE_MAX = 3;
+
 /** Та же команда: тот же тип и та же клетка (и то же, что строить). */
 function sameCmd(a: Cmd, b: Cmd): boolean {
   if (a.type !== b.type) return false;
@@ -144,6 +147,7 @@ export class Match {
         prevY: y,
         path: [],
         task: null,
+        queue: [],
         facing: 1,
         caught: false,
         spirit: false,
@@ -213,7 +217,22 @@ export class Match {
   upgradeCost(b: Pick<Building, 'kind' | 'level'>, r: Room | null): Cost | null {
     const k = b.kind;
     const c = k === 'cannon' ? cannonUpCost(b.level) : k === 'pumpkin' ? pumpkinUpCost(b.level) : extraUpCost(k, b.level);
+    if (c && k === 'cannon') this.earlyFlame(c, b.level, r);
     return c && adjustCost(c, this.flameOpen(r));
+  }
+
+  /**
+   * Ранняя скидка пламенем (B.cannon.earlyFlame), только игроку: на улучшении пушки до ур. 2 часть конфет меняется на пламя
+   * по курсу flameToCandy — если пламя есть; нет его (или тыква не открыта) — цена прежняя, в конфетах.
+   */
+  private earlyFlame(c: Cost, level: number, r: Room | null): void {
+    const e = B.cannon.earlyFlame;
+    if (!e || level !== 1 || c.flame > 0 || r?.ownerId !== this.playerId) return;
+    const flame = Math.min(e, Math.floor(c.candy / B.flameToCandy));
+    // Скидка, а не требование: пламени нет (тыкву не посадили) — прежняя цена в конфетах, без тупика.
+    if (!r || r.flame + 1e-6 < flame || !this.flameOpen(r)) return;
+    c.candy -= flame * B.flameToCandy;
+    c.flame += flame;
   }
 
   doorUpgradeCost(r: Room): Cost | null {
@@ -424,10 +443,43 @@ export class Match {
     if (!stands.length) return 'Не подойти';
     const path = bfs(cur, stands, (x, y) => heroPassable(room, x, y));
     if (!path) return 'Не подойти';
+    // Герой занят делом (покупка, ремонт) — новое ждёт своей очереди, начатое не отменяется. Исключение — ключ:
+    // он перебивает ещё не оплаченную дорогу к покупке (дверь важнее), а покупка встаёт первой в очередь.
+    const busy = c.task && c.task.cmd.type !== 'move';
+    if (busy && !(cmd.type === 'repair' && c.task!.stage === 'walk')) return this.enqueue(c, cmd);
+    if (busy) {
+      // Не отмена: неоплаченная покупка просто ждёт ремонта первой в очереди (без «Отменено» в сцене).
+      c.queue.unshift(c.task!.cmd);
+      c.task = null;
+    }
     c.path = path;
     this.cancelTask(c);
     c.task = { cmd, stage: 'walk', kind: null, target: null, workLeft: 0, workTotal: 0, paid: null };
     return null;
+  }
+
+  /**
+   * Поставить команду в очередь героя: повтор той же — ничего; «иди сюда» — одно, последнее и в конце;
+   * покупок и дел — не больше QUEUE_MAX (лишняя — ошибка для подсказки, а не молчаливая потеря).
+   */
+  private enqueue(c: Character, cmd: Cmd): string | null {
+    if (c.queue.some((q) => sameCmd(q, cmd))) return null;
+    c.queue = c.queue.filter((q) => q.type !== 'move');
+    if (cmd.type !== 'move' && c.queue.length >= QUEUE_MAX) return 'Подожди, герой занят';
+    c.queue.push(cmd);
+    return null;
+  }
+
+  /**
+   * Дело кончилось (или не вышло) — следующая команда из очереди. Она проверяется заново: денег уже может не
+   * хватать, постройку могли улучшить — тогда подсказка, как при обычном тапе, и дальше по очереди.
+   */
+  private runQueue(c: Character): void {
+    while (!c.task && !c.path.length && c.queue.length && !c.caught) {
+      const next = c.queue.shift()!;
+      const err = this.command(c.id, next);
+      if (err && next.type !== 'move') this.events.push({ type: 'fail', charId: c.id, msg: err });
+    }
   }
 
   /**
@@ -529,6 +581,7 @@ export class Match {
     p.spirit = false;
     p.flyTo = null;
     p.task = null;
+    p.queue = [];
     p.path = [];
     p.x = p.prevX = d.inside.x + 0.5;
     p.y = p.prevY = d.inside.y + 0.5;
@@ -778,7 +831,7 @@ export class Match {
       if (c.path.length) return;
     }
     const t = c.task;
-    if (!t) return;
+    if (!t) return this.runQueue(c);
     const room = this.rooms[c.roomId!];
 
     if (t.stage === 'walk') this.startWork(c, room, t);
@@ -786,6 +839,7 @@ export class Match {
       t.workLeft -= dt;
       if (t.workLeft <= 0) this.finishWork(c, room, t);
     }
+    if (!c.task) this.runQueue(c);
   }
 
   /** Дух: откаты умений и полёт по прямой к flyTo — без пути, сквозь стены. */

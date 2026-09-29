@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { HOLDOVER_MS, HOLDOVER_PX, TAP_SLOP_TOUCH_PX, isDrag, isEchoAfterScreenChange, isHoldover, menuTopAwayFromFinger, staleTouchPointers } from '../src/ui/inputGuard';
+import {
+  HOLDOVER_MS,
+  HOLDOVER_PX,
+  INPUT_GUARD_MS,
+  TAP_SLOP_TOUCH_PX,
+  acceptPress,
+  avoidRect,
+  isDrag,
+  isEchoAfterScreenChange,
+  isHoldover,
+  menuTopAwayFromFinger,
+  staleTouchPointers,
+  type PressGuardState,
+} from '../src/ui/inputGuard';
 
 describe('защита от повторных тапов (GAME_AUDIT.md, B5)', () => {
   const anchor = { x: 200, y: 400 };
@@ -69,5 +82,67 @@ describe('зависшие касания (Galaxy S24, «не могу двиг�
     // Настоящий щипок: оба пальца на экране — ничего не сбрасываем.
     const pointers = [pointer(0, true, 0), pointer(1, true, 5), pointer(2, true, 6)];
     expect(staleTouchPointers(pointers, [5, 6, 7])).toEqual([]);
+  });
+});
+
+describe('цепочка повторных тапов через смену окна (FINAL_QA_REPORT.md, QA-04)', () => {
+  const at = { x: 300, y: 500 };
+  /** Окно сменилось сразу после принятого нажатия: showScreen → armInput(350) + screenChangedAt. */
+  const changeScreen = (s: PressGuardState, now: number) => {
+    s.readyAt = Math.max(s.readyAt, now + INPUT_GUARD_MS);
+    s.screenChangedAt = now;
+  };
+
+  it('test_input_guard_triple_tap_does_not_pass_into_new_screen', () => {
+    const s: PressGuardState = { last: { t: -Infinity, x: 0, y: 0 }, readyAt: 0, screenChangedAt: -Infinity };
+    expect(acceptPress(s, 0, at, true)).toBe(true); // «Выйти в меню»
+    changeScreen(s, 1);
+    expect(acceptPress(s, 80, at, true)).toBe(false); // второй — в окно защиты
+    expect(acceptPress(s, 680, at, true)).toBe(false); // третий — всё ещё повтор первого (раньше проходил в «Лёгкая»)
+  });
+
+  it('test_input_guard_deliberate_tap_after_holdover_passes', () => {
+    const s: PressGuardState = { last: { t: -Infinity, x: 0, y: 0 }, readyAt: 0, screenChangedAt: -Infinity };
+    expect(acceptPress(s, 0, at, true)).toBe(true);
+    changeScreen(s, 1);
+    expect(acceptPress(s, 80, at, true)).toBe(false);
+    expect(acceptPress(s, HOLDOVER_MS + 50, at, true)).toBe(true); // через секунду — это уже новое решение
+  });
+
+  it('test_input_guard_other_button_same_screen_passes', () => {
+    const s: PressGuardState = { last: { t: -Infinity, x: 0, y: 0 }, readyAt: 0, screenChangedAt: -Infinity };
+    expect(acceptPress(s, 0, at, true)).toBe(true);
+    expect(acceptPress(s, 400, { x: 300, y: 520 }, true)).toBe(true); // окно не менялось — второе нажатие настоящее
+  });
+
+  it('test_input_guard_programmatic_click_does_not_move_anchor', () => {
+    const s: PressGuardState = { last: { t: -Infinity, x: 0, y: 0 }, readyAt: 0, screenChangedAt: -Infinity };
+    expect(acceptPress(s, 0, at, true)).toBe(true);
+    expect(acceptPress(s, 500, { x: 0, y: 0 }, false)).toBe(true);
+    expect(s.last.t).toBe(0);
+  });
+});
+
+describe('меню не закрывает свою дверь во время атаки (CORE_LOOP_UX_PASS.md, п. 7)', () => {
+  const door = { left: 380, top: 120, right: 470, bottom: 230 };
+
+  it('test_avoid_rect_moves_menu_beside_door', () => {
+    // Arrange: меню встало бы прямо на дверь.
+    const menu = { left: 360, top: 100, w: 260, h: 150 };
+    // Act
+    const pos = avoidRect(menu, door, 844, 390, 18);
+    // Assert: справа от двери, по вертикали там же, дверь свободна.
+    expect(pos).toEqual({ left: 478, top: 100 });
+  });
+
+  it('test_avoid_rect_uses_left_side_when_right_does_not_fit', () => {
+    const pos = avoidRect({ left: 360, top: 100, w: 360, h: 150 }, { ...door, left: 420, right: 520 }, 844, 390, 18);
+    expect(pos.left + 360).toBeLessThanOrEqual(420);
+  });
+
+  it('test_avoid_rect_keeps_menu_when_no_overlap_or_no_threat', () => {
+    const menu = { left: 20, top: 100, w: 260, h: 150 };
+    expect(avoidRect(menu, door, 844, 390, 18)).toEqual({ left: 20, top: 100 });
+    expect(avoidRect({ left: 360, top: 100, w: 260, h: 150 }, null, 844, 390, 18)).toEqual({ left: 360, top: 100 });
   });
 });

@@ -182,6 +182,11 @@ const CRITICAL_MS = 300;
 /** Не чаще одной записи в облако за столько: лимит SDK — 100 запросов за 5 минут. */
 const MIN_INTERVAL_MS = 5000;
 const SEND_TIMEOUT_MS = 10000;
+/**
+ * Потолок на чтение облака. Ответ позже — сбой и повтор (выбор уже по ревизии): иначе ответ через минуты
+ * с приоритетом облака стёр бы всё, что сыграно на новом устройстве, а зависший getData навсегда занял бы attachCloud.
+ */
+const LOAD_TIMEOUT_MS = 10000;
 const RETRY_BASE_MS = 5000;
 const RETRY_MAX_MS = 60000;
 /** Облако не ответило при подключении — пробуем ещё столько раз. */
@@ -320,7 +325,7 @@ export class ProgressStore {
   private async tryAttach(cloud: CloudSave, preferCloudIfFresh: boolean, retriesLeft: number): Promise<AttachResult> {
     let raw: unknown;
     try {
-      raw = await cloud.load();
+      raw = await withTimeout(cloud.load(), LOAD_TIMEOUT_MS, 'getData');
     } catch (e) {
       this.log(`[Save] cloud load failed: ${(e as Error).message}`);
       if (retriesLeft > 0 && !this.attachRetry) {
@@ -574,17 +579,39 @@ export async function bootSave(deps: BootDeps): Promise<BootResult> {
   // 3. Игрок и облако. Только если уже вошёл: окно входа само не открываем никогда.
   let authorized = false;
   if (sdk) {
+    let pending: Promise<YaPlayer> | null = null;
     try {
-      const player = await withTimeout(sdk.getPlayer(), t.player, 'getPlayer');
+      pending = sdk.getPlayer();
+      const player = await withTimeout(pending, t.player, 'getPlayer');
+      pending = null;
       authorized = player.isAuthorized();
       log(`[Save] player authorized: ${authorized}`);
       if (authorized) await withTimeout(store.attachCloud(yandexCloud(player), { preferCloudIfFresh: true }), t.cloud, 'cloud load');
     } catch (e) {
       // Облако подключится позже (повтор в attachCloud), а пока — локальный прогресс.
       log(`[Save] cloud unavailable at start: ${(e as Error).message}`);
+      // Игрок не успел ответить — не выбрасываем его: ответит позже, облако подключится (выбор уже по ревизии).
+      if (pending) void connectPlayer(pending, store, log);
     }
   }
   return { store, sdk, backend, authorized };
+}
+
+/**
+ * Подключить игрока, когда бы он ни ответил (медленный getPlayer при запуске, SDK, пришедший позже запуска):
+ * вошёл в Яндекс — подключить облако, выбор снимка по ревизии. true — игрок вошёл. Не бросает.
+ */
+export async function connectPlayer(player: Promise<YaPlayer>, store: ProgressStore, log: Log = devLog): Promise<boolean> {
+  try {
+    const p = await player;
+    if (!p.isAuthorized()) return false;
+    log('[Save] late player: authorized');
+    await store.attachCloud(yandexCloud(p)).catch(() => {});
+    return true;
+  } catch (e) {
+    log(`[Save] late player unavailable: ${(e as Error).message}`);
+    return false;
+  }
 }
 
 /**

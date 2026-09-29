@@ -51,7 +51,7 @@ const same = (a: Vec, x: number, y: number) => a.x === x && a.y === y;
 export const STEPS: Step[] = [
   {
     id: 'intro',
-    text: '👻 Ночью придёт призрак!',
+    text: 'Ночью придёт призрак!',
     pose: 'oh',
     target: () => ({ kind: 'none' }),
     allowCell: () => false,
@@ -60,7 +60,7 @@ export const STEPS: Step[] = [
   },
   {
     id: 'pick',
-    text: '👆 Выбери комнату',
+    text: 'Выбери комнату',
     pose: 'point',
     target: (_m, c) => cellAt(floorVec(roomCenter(c.suggested))),
     // Только показанная комната (или её дверь): тапы мимо ничего не делают.
@@ -69,7 +69,7 @@ export const STEPS: Step[] = [
   },
   {
     id: 'walk',
-    text: '🏃 Бежим домой!',
+    text: 'Бежим домой!',
     pose: 'wave',
     target: () => ({ kind: 'none' }),
     allowCell: () => false,
@@ -80,7 +80,7 @@ export const STEPS: Step[] = [
   },
   {
     id: 'sofa',
-    text: '🛋️ Нажми на диван',
+    text: 'Нажми на диван',
     pose: 'point',
     target: (m) => cellAt(room(m).sofa),
     menu: ['upgradeSofa'],
@@ -90,7 +90,7 @@ export const STEPS: Step[] = [
   },
   {
     id: 'candy',
-    text: '🍬 Диван даёт конфеты!',
+    text: 'Диван даёт конфеты!',
     pose: 'cheer',
     target: () => ({ kind: 'dom', sel: '#candy' }),
     allowCell: () => false,
@@ -109,7 +109,7 @@ export const STEPS: Step[] = [
   },
   {
     id: 'cannon',
-    text: '💥 Поставь пушку тут',
+    text: 'Поставь пушку тут',
     pose: 'point',
     target: (m, c) => cellAt(c.cannonCell ?? room(m).door.inside),
     allowCell: (_m, c, x, y) => !!c.cannonCell && same(c.cannonCell, x, y),
@@ -120,7 +120,7 @@ export const STEPS: Step[] = [
   },
   {
     id: 'door',
-    text: '🚪 Сделай дверь крепче',
+    text: 'Сделай дверь крепче',
     pose: 'point',
     target: (m) => cellAt(room(m).door),
     allowCell: (m, _c, x, y) => same(room(m).door, x, y),
@@ -131,7 +131,7 @@ export const STEPS: Step[] = [
   },
   {
     id: 'midnight',
-    text: '🕛 Полночь! Призрак идёт!',
+    text: 'Полночь! Призрак идёт!',
     pose: 'oh',
     target: () => ({ kind: 'ghost' }),
     allowCell: () => false,
@@ -146,7 +146,7 @@ export const STEPS: Step[] = [
   {
     // Сначала пусть побьёт: пока дверь цела, чинить нечего — ключ ответил бы «Дверь целая».
     id: 'knock',
-    text: '👻 Призрак стучит в дверь!',
+    text: 'Призрак стучит в дверь!',
     pose: 'oh',
     target: () => ({ kind: 'ghost' }),
     allowCell: () => false,
@@ -157,7 +157,7 @@ export const STEPS: Step[] = [
   },
   {
     id: 'repair',
-    text: '🔧 Чини дверь!',
+    text: 'Чини дверь!',
     pose: 'point',
     // Кнопка ключа; меню двери тоже годится (там есть «Чинить»).
     target: () => ({ kind: 'dom', sel: '#repair' }),
@@ -179,7 +179,7 @@ export const STEPS: Step[] = [
   },
   {
     id: 'upcannon',
-    text: '⬆ Улучши пушку!',
+    text: 'Улучши пушку!',
     pose: 'point',
     target: (m) => cellAt(room(m).buildings.find((b) => b.kind === 'cannon') ?? room(m).sofa),
     allowCell: (m, _c, x, y) => room(m).buildings.some((b) => b.kind === 'cannon' && same(b, x, y)),
@@ -199,7 +199,7 @@ export const STEPS: Step[] = [
   },
   {
     id: 'finale',
-    text: '💥 Пушки бьют призрака!',
+    text: 'Пушки бьют призрака!',
     pose: 'cheer',
     target: () => ({ kind: 'ghost' }),
     allowCell: () => true,

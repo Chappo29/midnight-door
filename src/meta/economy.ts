@@ -242,8 +242,22 @@ export function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** Сколько суток «вперёд» терпим: перелёт на запад или сбитые часы не должны дать подарок второй раз (YANDEX_RELEASE_AUDIT.md, RA-05). */
+const DAILY_FUTURE_GRACE_DAYS = 2;
+
+/**
+ * Подарок дня доступен, если сегодняшний день ещё не забирали. Ключи дней — «ГГГГ-ММ-ДД», сравниваются строками.
+ * Забирали «завтра» (часы отвели назад, пояс сменился на западный) — подарка нет, пока день не наступит;
+ * а если забрано больше чем на двое суток вперёд, часы когда-то сильно ушли вперёд — не запираем подарок на месяцы.
+ */
 export function dailyAvailable(m: Meta, today: string): boolean {
-  return m.daily.last !== today;
+  const last = m.daily.last;
+  if (last === today) return false;
+  if (last > today) {
+    const ahead = (Date.parse(`${last}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000;
+    return !(ahead <= DAILY_FUTURE_GRACE_DAYS);
+  }
+  return true;
 }
 
 /** Забрать подарок дня. Возвращает монеты (0 — сегодня уже забран). */

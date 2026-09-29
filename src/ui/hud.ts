@@ -10,7 +10,8 @@ import type { CaughtTip, CaughtTipKind } from './caughtTip';
 import type { UnlockKind } from '../meta/unlocks';
 import { UNLOCK_INFO, unlockFrames } from './unlockPreview';
 import { doorHudState } from './doorHud';
-import { HOLDOVER_MS, INPUT_GUARD_MS, isEchoAfterScreenChange, isHoldover, menuTopAwayFromFinger } from './inputGuard';
+import { stripEmoji } from './emoji';
+import { HOLDOVER_MS, INPUT_GUARD_MS, acceptPress, avoidRect, isHoldover, menuTopAwayFromFinger } from './inputGuard';
 
 export interface MenuOption {
   /** Код пункта (для обучения: какой пункт показать и куда указать пальцем; и для подбора иконки). */
@@ -52,6 +53,8 @@ export interface MenuMeta {
   giftReady: boolean;
   onShop: () => void;
   onGift: () => void;
+  /** «Сохранить прогресс» — вход в Яндекс для облачного сохранения (есть SDK, игрок не вошёл). */
+  onCloud?: () => void;
 }
 
 export interface ShopView {
@@ -80,9 +83,6 @@ export function costText(c: Cost): string {
   return `${Math.round(c.candy)} конфет${c.flame ? ` + ${Math.round(c.flame)} пламени` : ''}`;
 }
 
-/** Любые уцелевшие эмодзи в тексте, который пришёл снаружи (GameScene), вырезаем перед показом как «значок». */
-const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}]/gu;
-const stripEmoji = (s: string): string => s.replace(EMOJI_RE, '').replace(/\s{2,}/g, ' ').trim();
 
 function img(key: string, cls = ''): string {
   const url = SPRITES[key];
@@ -126,6 +126,7 @@ const ICON = {
   coin: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.6" fill="url(#hg-coin)" stroke="var(--ink)" stroke-width="1.5"/><circle cx="12" cy="12" r="7.2" fill="none" stroke="#fff3c4" stroke-width="1" stroke-opacity=".85"/><path d="M12 7.4l1.1 2.4 2.6.3-1.9 1.8.5 2.6-2.3-1.3-2.3 1.3.5-2.6-1.9-1.8 2.6-.3z" fill="#fff3c4" stroke="var(--ink)" stroke-width=".9" stroke-linejoin="round"/></svg>`,
   shop: `<svg viewBox="0 0 24 24"><path d="M5 9l1.4-4.6A2 2 0 0 1 8.3 3h7.4a2 2 0 0 1 1.9 1.4L19 9" fill="none" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><path d="M4.4 9h15.2l-1 10.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8L4.4 9z" fill="url(#hg-straw)" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><path d="M8.5 9a3.5 3.5 0 0 0 7 0" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>`,
   gift: `<svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="1.6" fill="url(#hg-mint)" stroke="var(--ink)" stroke-width="1.4"/><rect x="3" y="7" width="18" height="4" rx="1.2" fill="#fff" stroke="var(--ink)" stroke-width="1.3"/><rect x="11" y="7" width="2" height="13" fill="var(--ink)" opacity=".85"/><path d="M12 7c-1.5-3.4-6-3.6-6-.6 0 1.6 2.6.6 6 .6zm0 0c1.5-3.4 6-3.6 6-.6 0 1.6-2.6.6-6 .6z" fill="url(#hg-straw)" stroke="var(--ink)" stroke-width="1.1" stroke-linejoin="round"/></svg>`,
+  cloud: `<svg viewBox="0 0 24 24"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7.4 9.1 4.7 4.7 0 0 0 7 18.5z" fill="#fff" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/><path d="M12 16.5v-5m0 0-2.2 2.2M12 11.5l2.2 2.2" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   /** Телевизор — «посмотреть ролик» (реклама за награду). */
   tv: `<svg viewBox="0 0 24 24"><path d="M9 3l3 3 3-3" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.5" y="6" width="19" height="14" rx="3" fill="url(#hg-grape)" stroke="var(--ink)" stroke-width="1.4"/><rect x="5" y="8.5" width="14" height="9" rx="1.6" fill="#fff" stroke="var(--ink)" stroke-width="1.2"/><path d="M10.5 10.6v4.8l4-2.4z" fill="url(#hg-straw)" stroke="var(--ink)" stroke-width="1" stroke-linejoin="round"/></svg>`,
   /** Дух кричит «Бу!»: привиденьице с открытым ртом и волнами крика. */
@@ -160,14 +161,62 @@ function optionIcon(o: MenuOption): string {
   return o.icon ? stripEmoji(o.icon) : '';
 }
 
+/**
+ * Цена в меню. Если в ней есть пламя — рядом зачёркнутая цена «без огня» (конфеты + пламя × B.flameToCandy):
+ * связь «огонь экономит конфеты» видна прямо на кнопке (AGE_UX_PLAYTEST.md, №5: 6 лет — не понял вовсе).
+ */
 function costPill(c: Cost): string {
-  const candy = `<span class="cost-part">${img('candy_shot', 'cost-ico')}${Math.round(c.candy)}</span>`;
+  const was = c.flame ? `<span class="cost-was">${Math.round(c.candy + c.flame * B.flameToCandy)}</span>` : '';
+  const candy = `${was}<span class="cost-part">${img('candy_shot', 'cost-ico')}${Math.round(c.candy)}</span>`;
   const flame = c.flame ? `<span class="cost-part flame"><span class="cost-ico">${ICON.flame}</span>${Math.round(c.flame)}</span>` : '';
   return candy + flame;
 }
 
 /** Доля HP двери: ниже — ключ ремонта «срочно» (красное кольцо, мигает). Индикатор двери — ui/doorHud.ts. */
 const DOOR_DANGER = 0.4;
+/** Ниже этой доли HP готовый ключ зовёт нажать (пульс и свечение, CORE_LOOP_UX_PASS.md, Final polish). */
+export const REPAIR_READY = 0.5;
+
+/** Ключ зовёт нажать: ночь, дверь цела, но побита (< REPAIR_READY), перезарядки нет и герой уже не чинит. */
+export function repairReady(s: { night: boolean; broken: boolean; busy: boolean; cd: number; frac: number }): boolean {
+  return s.night && !s.broken && !s.busy && s.cd <= 0 && s.frac < REPAIR_READY;
+}
+
+/**
+ * Кнопки итогов: сначала «Ещё раз» и «Меню» — они всегда целиком видны; «×2 монеты» за рекламу — после них и
+ * скромнее (не btn-big): реклама не вытесняет обычное продолжение (AGE_UX_PLAYTEST.md, №1).
+ */
+export function resultActionsHtml(double: boolean): string {
+  return `<div class="result-actions">
+          <div class="diffs result-main">
+            <button class="btn-big straw" id="again" type="button">${ICON.replay}Ещё раз</button>
+            <button class="btn-big cream" id="tomenu" type="button">${ICON.menuList}Меню</button>
+          </div>
+          ${double ? `<button class="ad-btn double-btn" id="double" type="button">${ICON.tv}×2 монеты<span class="ad-tag">реклама</span></button>` : ''}
+        </div>`;
+}
+
+/** Мини-интерфейс элемента, который трогает showDoubledReward (для тестов без DOM). */
+interface RewardEl {
+  textContent: string | null;
+  closest(sel: string): { classList: DOMTokenList | { add(c: string): void; remove(c: string): void }; querySelector(sel: string): unknown; insertAdjacentHTML(pos: InsertPosition, html: string): void } | null;
+}
+
+/**
+ * «×2 монеты» досмотрен: число награды сразу новое (не счёт заново с нуля), всплеск и метка «×2»,
+ * и сумма в плашке «Магазин» — тоже новая.
+ */
+export function showDoubledReward(num: RewardEl, coins: number, bankEl: { textContent: string | null } | null, bank?: number): void {
+  num.textContent = String(coins);
+  const total = num.closest('.reward-total');
+  if (total) {
+    total.classList.remove('doubled');
+    void (total as unknown as HTMLElement).offsetWidth;
+    total.classList.add('doubled');
+    if (!total.querySelector('.reward-x2')) total.insertAdjacentHTML('beforeend', '<span class="reward-x2">×2</span>');
+  }
+  if (bankEl && bank !== undefined) bankEl.textContent = String(bank);
+}
 
 /** Картинка к совету на карточке поимки: понятна и тому, кто не читает. */
 const TIP_ICON: Record<CaughtTipKind, () => string> = {
@@ -190,7 +239,7 @@ function lockPill(doorLevel: number): string {
 
 /** Небольшая метка вместо цены — «+30%», «через 5 с», а для «Продать» — число конфет со значком. */
 function noteVisual(note: string): string {
-  const gain = /🍬\s*(\d+)/u.exec(note);
+  const gain = /^gain:(\d+)$/.exec(note);
   if (gain) return `<span class="cost-part gain">+${img('candy_shot', 'cost-ico')}${gain[1]}</span>`;
   const clean = stripEmoji(note);
   return clean ? `<span class="cost-note">${clean}</span>` : '';
@@ -218,6 +267,9 @@ export class Hud {
   /** Меню постройки: когда и у какой точки открыли — повторный тап ребёнка рядом не покупает. */
   private menuOpenedAt = 0;
   private menuAnchor = { x: 0, y: 0 };
+  /** Что меню не должно закрывать (своя дверь во время атаки), в координатах #ui. */
+  private menuAvoid: DOMRect | null = null;
+  private refundTimer = 0;
   /** Последнее нажатие мышью/пальцем по интерфейсу — чтобы его повтор не ушёл в игру под окном. */
   private lastPress = { t: -Infinity, x: 0, y: 0 };
   /** Когда последний раз сменилось окно (#screen открыли, перерисовали или закрыли). */
@@ -283,9 +335,10 @@ export class Hud {
       (e) => {
         const now = performance.now();
         const pt = { x: e.clientX, y: e.clientY };
-        const echo = e.detail > 0 && isEchoAfterScreenChange(now, this.lastPress, this.screenChangedAt, pt);
-        if (e.detail > 0) this.lastPress = { t: now, ...pt };
-        if (now < this.inputReadyAt || echo) {
+        const guard = { last: this.lastPress, readyAt: this.inputReadyAt, screenChangedAt: this.screenChangedAt };
+        const ok = acceptPress(guard, now, pt, e.detail > 0);
+        this.lastPress = guard.last;
+        if (!ok) {
           e.stopImmediatePropagation();
           e.preventDefault();
         }
@@ -321,8 +374,14 @@ export class Hud {
   }
 
   setMuteIcon(muted: boolean): void {
+    this.muted = muted;
     this.el.sound.innerHTML = uiIcon(muted ? 'sound_off' : 'sound_on');
+    const menu = this.el.screen.querySelector('#metaSound .btn-round-sm');
+    if (menu) menu.innerHTML = uiIcon(muted ? 'sound_off' : 'sound_on');
   }
+
+  /** Звук выключен (для кнопки «Звук» в меню). */
+  private muted = false;
 
   bind(h: HudHandlers): void {
     this.handlers = h;
@@ -436,6 +495,13 @@ export class Hud {
     this.toggle('repair', 'alert', danger);
     this.toggle('repair', 'busy', busy);
     this.toggle('repair', 'idle', !!d && !busy && doorFrac >= 0.999);
+    // Дверь заметно побита (< 50 %) и ключ готов — кнопка зовёт: пульсирует и светится (без окна и без красного).
+    // Только что кончилась перезарядка при побитой двери — ещё и «выпрыгивает» один раз.
+    const ready = !!d && repairReady({ night: m.phase === 'night', broken: d.broken, busy, cd: d.repairCd, frac: doorFrac });
+    if (ready && this.last.get('repair-ready') === '0' && this.last.get('repair-cd-was') === '1') this.flash('repair', 'ready-pop');
+    this.last.set('repair-cd-was', d && d.repairCd > 0 ? '1' : '0');
+    this.last.set('repair-ready', ready ? '1' : '0');
+    this.toggle('repair', 'ready', ready);
     // Перезарядка ключа: серая кнопка + кольцо, сколько секунд до готовности.
     const cd = d ? Math.ceil(d.repairCd) : 0;
     this.toggle('repair', 'cd', cd > 0);
@@ -488,6 +554,14 @@ export class Hud {
       this.toggle('boo', 'off', !m.booInRange(p));
       this.toggle('spark', 'off', m.sparkCannons(p).length === 0);
     }
+  }
+
+  /** Одноразовая анимация-класс на элементе (перезапускается, если уже шла). */
+  private flash(id: string, cls: string): void {
+    const el = this.el[id];
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
   }
 
   /** Умение духа сработало: кнопка «выстреливает» — ребёнок видит, что нажатие что-то сделало. */
@@ -555,7 +629,8 @@ export class Hud {
     this.toastScreenTimer = window.setTimeout(() => t.classList.remove('show'), 1600);
   }
 
-  showMenu(x: number, y: number, title: string, options: MenuOption[]): void {
+  /** avoid — прямоугольник (координаты окна), который меню не закрывает: своя дверь во время атаки. */
+  showMenu(x: number, y: number, title: string, options: MenuOption[], avoid: DOMRect | null = null): void {
     const menu = this.el.menu;
     menu.innerHTML = `
       <div class="menu-head">
@@ -608,7 +683,10 @@ export class Hud {
     this.refreshMenu(title, options);
     menu.style.display = 'block';
     this.menuOpenedAt = performance.now();
-    this.menuAnchor = { x, y };
+    // x, y — от начала #ui (меню внутри него), а клик приходит в координатах окна; на ПК шире 2:1 #ui сдвинут (QA-07).
+    const ui = this.root.getBoundingClientRect();
+    this.menuAnchor = { x: x + ui.left, y: y + ui.top };
+    this.menuAvoid = avoid && new DOMRect(avoid.x - ui.left, avoid.y - ui.top, avoid.width, avoid.height);
     this.armInput();
     this.onSound('popup');
     this.placeMenu(x, y);
@@ -632,8 +710,24 @@ export class Hud {
     const narrow = vw <= 600;
     const left = narrow ? (vw - w) / 2 : Math.min(vw - w - edge, x + 16);
     const top = narrow ? menuTopAwayFromFinger(y, h, vh, edge) : Math.max(edge, Math.min(vh - h - edge, y - h / 2));
-    menu.style.left = `${Math.max(edge, left)}px`;
-    menu.style.top = `${top}px`;
+    const pos = avoidRect({ left: Math.max(edge, left), top, w, h }, this.menuAvoid, vw, vh, edge);
+    menu.style.left = `${pos.left}px`;
+    menu.style.top = `${pos.top}px`;
+  }
+
+  /**
+   * Покупку отменили (дверь сломали посреди улучшения и т.п.): «+70» у счётчика конфет — возврат видно там,
+   * где ребёнок смотрит на деньги (AGE_UX_PLAYTEST.md, №6).
+   */
+  refund(amount: number): void {
+    const chip = this.el.candy;
+    chip.querySelector('.refund-pop')?.remove();
+    const pop = document.createElement('span');
+    pop.className = 'refund-pop';
+    pop.textContent = `+${amount}`;
+    chip.appendChild(pop);
+    window.clearTimeout(this.refundTimer);
+    this.refundTimer = window.setTimeout(() => pop.remove(), 1600);
   }
 
   /**
@@ -698,7 +792,9 @@ export class Hud {
 
       setHtml('.ico', optionIcon(o));
       if (!wrap.classList.contains('confirming')) setText('.lbl', o.label);
-      setText('.opt-desc', o.desc ?? '');
+      // Цена с пламенем — коротко, зачем оно: значок огня и подпись рядом с зачёркнутой ценой без огня.
+      if (o.desc || !o.cost?.flame) setText('.opt-desc', o.desc ?? '');
+      else setHtml('.opt-desc', `<span class="flame-save">${ICON.flame}огонь экономит конфеты</span>`);
 
       const showReason = !!o.disabled && !!o.note;
       // Не хватает — та же цена, только вся кнопка серая (.opt.poor): полоска-«банка» вместо цены была непонятна.
@@ -745,7 +841,11 @@ export class Hud {
     this.el.screen.querySelector('#play')!.addEventListener('click', onPlay);
   }
 
+  /** Аргументы последнего меню: карточка входа возвращает в него. */
+  private startArgs: Parameters<Hud['showStart']> | null = null;
+
   showStart(p: Progress, onPlay: (d: Difficulty) => void, onTutorial?: () => void, meta?: MenuMeta): void {
+    this.startArgs = [p, onPlay, onTutorial, meta];
     this.setInGame(false);
     const diffIcon: Record<Difficulty, string> = { easy: ICON.star, hard: ICON.bolt, nightmare: ICON.skull };
     const diffBtn = (d: Difficulty) => `
@@ -765,6 +865,8 @@ export class Hud {
         <div class="meta-side">
           <button class="meta-btn" id="metaShop" type="button"><span class="btn-round-sm gold">${ICON.shop}</span><span class="meta-label">Магазин</span></button>
           <button class="meta-btn" id="metaGift" type="button"><span class="btn-round-sm mint">${ICON.gift}${meta.giftReady ? '<span class="ping-dot"></span>' : ''}</span><span class="meta-label">Подарок</span></button>
+          ${meta.onCloud ? `<button class="meta-btn" id="metaCloud" type="button"><span class="btn-round-sm grape">${ICON.cloud}</span><span class="meta-label">Сохранить</span></button>` : ''}
+          <button class="meta-btn" id="metaSound" type="button" aria-label="Звук"><span class="btn-round-sm grape">${uiIcon(this.muted ? 'sound_off' : 'sound_on')}</span><span class="meta-label">Звук</span></button>
         </div>` : ''}
         <div class="menu-content">
           <div class="menu-hero">
@@ -795,7 +897,36 @@ export class Hud {
     if (meta) {
       this.el.screen.querySelector('#metaShop')!.addEventListener('click', meta.onShop);
       this.el.screen.querySelector('#metaGift')!.addEventListener('click', meta.onGift);
+      if (meta.onCloud) this.el.screen.querySelector('#metaCloud')!.addEventListener('click', () => this.offerCloud(meta.onCloud!));
+      // Звук и вне матча (раньше переключатель был только в игре): та же настройка, что у кнопки в матче.
+      this.el.screen.querySelector('#metaSound')!.addEventListener('click', () => this.setMuteIcon(this.onToggleMute()));
     }
+  }
+
+  /**
+   * Вход в Яндекс — только после нажатия игрока и с объяснением пользы (правило Яндекса 1.2.1): карточка «Сохранить
+   * прогресс?», и лишь «Войти» открывает окно входа. «Не сейчас» — назад в меню, ничего не запускается.
+   */
+  private offerCloud(onSignIn: () => void): void {
+    const back = () => {
+      const a = this.startArgs;
+      if (a) this.showStart(...a);
+      else this.hideScreen();
+    };
+    this.showScreen(`
+      <div class="card cloud-card">
+        <h1 class="stroke-title small">Сохранить прогресс?</h1>
+        <p class="cloud-text">Войди через Яндекс — монеты, покупки и открытия сохранятся в облаке и будут на любом твоём устройстве.</p>
+        <div class="diffs">
+          <button class="btn-big mint" id="cloudYes" type="button">${ICON.cloud}Войти</button>
+          <button class="btn-big cream" id="cloudNo" type="button">${ICON.menuList}Не сейчас</button>
+        </div>
+      </div>`);
+    this.el.screen.querySelector('#cloudYes')!.addEventListener('click', () => {
+      back();
+      onSignIn();
+    });
+    this.el.screen.querySelector('#cloudNo')!.addEventListener('click', back);
   }
 
   /** Магазин: герои / скины / усилители. Активная вкладка хранится в Hud и переживает перерисовку. */
@@ -1003,7 +1134,17 @@ export class Hud {
    * Итоги матча. newUnlock — за этот матч открылась постройка: на карточке метка «Новое!» с картинкой,
    * а сам экран «Новое!» main.ts покажет по любой кнопке итогов.
    */
-  showResult(m: Match, newUnlock: UnlockKind | null, onAgain: () => void, onMenu: () => void, reward?: Reward): void {
+  showResult(
+    m: Match,
+    newUnlock: UnlockKind | null,
+    onAgain: () => void,
+    onMenu: () => void,
+    reward?: Reward,
+    /** «×2 монеты» за рекламу: true — досмотрел, монеты начислены. Нет — кнопки нет. */
+    onDouble?: () => Promise<boolean>,
+    /** Сколько монет у игрока всего (уже с наградой) — плашка «Магазин»: куда эти монеты идут. */
+    bank?: () => number,
+  ): void {
     this.setInGame(false);
     this.clearMessages();
     const win = m.result === 'win';
@@ -1030,17 +1171,25 @@ export class Hud {
             ? `<div class="reward-block">
                 <div class="reward-total"><span class="reward-ico">${ICON.coin}</span><span class="reward-plus">+</span><span class="reward-num" id="rewardNum">0</span></div>
                 <div class="reward-parts">${reward.parts.map((p) => `<span class="reward-chip">${p.label} +${p.coins}</span>`).join('')}</div>
+                ${bank ? `<div class="reward-bank" aria-label="Монеты — в магазин"><span class="reward-bank-ico">${ICON.shop}</span>Магазин<span class="reward-bank-n"><span class="reward-ico">${ICON.coin}</span><span id="rewardBank">${bank()}</span></span></div>` : ''}
               </div>`
             : ''
         }
-        <div class="diffs">
-          <button class="btn-big straw" id="again" type="button">${ICON.replay}Ещё раз</button>
-          <button class="btn-big cream" id="tomenu" type="button">${ICON.menuList}Меню</button>
-        </div>
+        ${resultActionsHtml(!!onDouble && !!reward && reward.coins > 0)}
       </div>`);
     this.el.screen.querySelector('#again')!.addEventListener('click', onAgain);
     this.el.screen.querySelector('#tomenu')!.addEventListener('click', onMenu);
-    if (reward) this.animateCount(this.el.screen.querySelector<HTMLElement>('#rewardNum')!, reward.coins);
+    const num = this.el.screen.querySelector<HTMLElement>('#rewardNum');
+    if (reward && num) this.animateCount(num, reward.coins);
+    // «×2 монеты» за рекламу: досмотрел — число сразу становится вдвое больше и «подпрыгивает» (раньше счёт шёл
+    // заново с нуля, и 12-летний удвоения не заметил, AGE_UX_PLAYTEST.md). Сами монеты начисляет onDouble.
+    if (onDouble && reward && num) {
+      this.adButton('#double', async () => {
+        const ok = await onDouble();
+        if (ok && num.isConnected) showDoubledReward(num, reward.coins * 2, this.el.screen.querySelector<HTMLElement>('#rewardBank'), bank?.());
+        return ok;
+      });
+    }
   }
 
   /**
@@ -1087,7 +1236,12 @@ export class Hud {
   }
 
   /** Игрока поймали: игра стоит, пока не выберет — играть духом или выйти в меню (без монет, без рекламы). */
-  showCaught(onSpirit: () => void, onMenu: () => void, coins = 0, tip?: CaughtTip): void {
+  /**
+   * Игрока поймали. onRevive — «Вернуться в комнату» за рекламу (есть реклама и вернуться можно): на кнопке видно,
+   * что это реклама и что дадут (правило Яндекса 4.5.1). true — вернули, карточку закрыла сцена; false — ролик
+   * не досмотрен, кнопки снова активны.
+   */
+  showCaught(onSpirit: () => void, onMenu: () => void, coins = 0, tip?: CaughtTip, onRevive?: () => Promise<boolean>): void {
     this.clearMessages();
     this.showScreen(`
       <div class="card caught-card halftone">
@@ -1096,11 +1250,30 @@ export class Hud {
         ${tip ? `<div class="caught-tip tip-${tip.kind}"><span class="caught-tip-ico">${TIP_ICON[tip.kind]()}</span><span class="caught-tip-text">${tip.text}</span></div>` : ''}
         <div class="diffs">
           <button class="btn-big mint" id="spirit" type="button">${ICON.boo}Играть духом</button>
+          ${onRevive ? `<button class="btn-big straw ad-btn" id="revive" type="button">${ICON.tv}Вернуться в комнату<span class="ad-tag">реклама</span></button>` : ''}
           <button class="btn-big cream" id="tomenu" type="button">${ICON.menuList}Выйти в меню${exitCoinsPill(coins)}</button>
         </div>
       </div>`);
     this.el.screen.querySelector('#spirit')!.addEventListener('click', onSpirit);
     this.el.screen.querySelector('#tomenu')!.addEventListener('click', onMenu);
+    if (onRevive) this.adButton('#revive', onRevive);
+  }
+
+  /**
+   * Кнопка «за рекламу»: пока идёт ролик — все кнопки окна неактивны (двойной тап не запустит второй ролик
+   * и не уведёт в меню). Награда не выдана — кнопки снова активны; выдана — кнопка исчезает.
+   */
+  private adButton(sel: string, run: () => Promise<boolean>): void {
+    const btn = this.el.screen.querySelector<HTMLButtonElement>(sel);
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const all = [...this.el.screen.querySelectorAll<HTMLButtonElement>('button')];
+      all.forEach((b) => (b.disabled = true));
+      const ok = await run();
+      if (!btn.isConnected) return;
+      all.forEach((b) => (b.disabled = false));
+      if (ok) btn.remove();
+    });
   }
 
   showPause(onResume: () => void, onMenu: () => void, onSkipTutorial?: () => void, coins = 0): void {

@@ -1,6 +1,7 @@
 import { B, buildBaseCost } from '../sim/balance';
 import type { UnlockKind } from '../meta/unlocks';
 import { SPRITES } from '../view/sprites';
+import { HAND_SVG } from './pointer';
 
 /**
  * Экран «Новое!»: несколько коротких кадров-сценок из спрайтов игры (CSS-анимация), объясняем картинкой, а не текстом.
@@ -59,7 +60,7 @@ function placeHtml(kind: UnlockKind, ic: Icons): string {
         <span class="pv-menu-title">${soil ? 'Грядка' : 'Пол'}</span>
         <span class="pv-menu-row">${pic(info.sprite, 'pv-menu-ico')}<b>${info.name}</b><span class="pv-cost">${costHtml(kind, ic)}</span></span>
       </span>
-      <span class="pv-finger">👆</span>
+      <span class="pv-finger">${HAND_SVG}</span>
     </div>`;
 }
 
@@ -76,7 +77,7 @@ function doorHtml(kind: UnlockKind, need: number, ic: Icons): string {
         <span class="pv-menu-row"><span class="pv-menu-up">▲</span><b>Улучшить</b></span>
       </span>
       <span class="pv-lockbox">${pic(info.sprite, 'pv-lock-thing')}<span class="pv-lock"><span class="pv-cost-ico">${ic.lock}</span>${doorBadge(need)}</span><span class="pv-open">✓</span></span>
-      <span class="pv-finger">👆</span>
+      <span class="pv-finger">${HAND_SVG}</span>
     </div>`;
 }
 

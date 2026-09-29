@@ -32,18 +32,22 @@ import {
   type UnlockKind,
 } from './meta/unlocks';
 import { track } from './platform/analytics';
-import { bootSave, signInAndSync, type ProgressStore } from './platform/save';
+import { bootSave, connectPlayer, signInAndSync, type ProgressStore } from './platform/save';
 import { finishTutorial, resolveTutorialOnBoot, type Progress } from './platform/storage';
-import { initYandexSdk } from './platform/yandex';
+import { initYandexSdk, lateYandexSdk } from './platform/yandex';
 import { rendererType, startDiag } from './platform/diag';
+import { YandexPlatform, domFakeAds, interstitialBeforeMatch } from './platform/platform';
 import { Match } from './sim/match';
 import type { Difficulty } from './sim/types';
+import type { YaSdk } from './platform/yandex';
 import { Hud } from './ui/hud';
 import { GameScene, type GameData } from './view/GameScene';
 import { prefetchSkin, preloadSprites } from './view/sprites';
 import { SFX_GROUPS, Sfx, loadMusic, preloadSfx } from './audio/sfx';
 
 document.addEventListener('contextmenu', (e) => e.preventDefault());
+// Картинки не тянутся мышью (Firefox и Safari не читают CSS -webkit-user-drag): правило Яндекса 1.6.2.7.
+document.addEventListener('dragstart', (e) => e.preventDefault());
 
 const hud = new Hud(document.getElementById('ui')!);
 const game = new Phaser.Game({
@@ -125,6 +129,17 @@ class BootScene extends Phaser.Scene {
   }
 }
 const sfx = new Sfx(game);
+/**
+ * Яндекс Игры (YANDEX_READINESS.md): Game Ready, язык, пауза от платформы и рекламы (звук гаснет), разметка геймплея,
+ * реклама. Без SDK реклама имитируется в разработке и по ?fakeads — чтобы проверить путь без Яндекса.
+ */
+const platform = new YandexPlatform(import.meta.env.DEV || new URLSearchParams(location.search).has('fakeads') ? domFakeAds : null);
+platform.onPauseChange = (paused) => sfx.suspend(paused);
+if (import.meta.env.DEV) Object.assign(window, { __platform: platform, __sfx: sfx });
+// 1.3: ушли со вкладки или свернули — звук гаснет сразу, не дожидаясь паузы Phaser.
+document.addEventListener('visibilitychange', () => platform.setPause('hidden', document.hidden));
+/** «Сохранить прогресс» в меню: есть SDK, а игрок не вошёл в Яндекс. null — кнопки нет. */
+let cloudSave: (() => void) | null = null;
 hud.onSound = (k) => sfx.play(k, { pitch: 0.02 });
 hud.onToggleMute = () => {
   const muted = !sfx.muted;
@@ -150,9 +165,19 @@ let progress: Progress;
 /** Звук переключили на заставке, пока прогресс ещё грузился. */
 let mutedBeforeBoot: boolean | null = null;
 
+/**
+ * Номер текущего перехода между экранами. Каждый переход (меню, магазин, подарок, «Новое!», старт матча или
+ * обучения) берёт новый номер. Старт ждёт рекламу и загрузку — а игрок тем временем мог уйти в меню, нажать другую
+ * сложность, или облако перерисовало меню. После каждого await старт проверяет свой номер: перебили — не запускается
+ * (иначе двойной тап давал два матча, а «Меню» после «Ещё раз» всё равно уводило в матч).
+ */
+let nav = 0;
+
 function showMenu(): void {
+  nav++;
   hideBoot();
   game.scene.stop('game');
+  platform.setGameplay(false);
   // Музыка грузится вместе со спрайтами — включаем, как только она есть.
   spritesReady.then(() => sfx.playMusic('menu'));
   hud.showStart(progress, start, startTutorial, {
@@ -160,6 +185,8 @@ function showMenu(): void {
     giftReady: dailyAvailable(progress.meta, dayKey(new Date())),
     onShop: openShop,
     onGift: openDaily,
+    // Облако уже подключено (в том числе повтором или поздним ответом игрока) — входить незачем.
+    onCloud: store.cloudAttached ? undefined : (cloudSave ?? undefined),
   });
   // Открылась постройка, а экран «Новое!» ещё не видели (вышли после поимки, перезагрузили) — сначала он.
   // «Попробовать!» — сразу в матч (той же сложности, что в прошлый раз), как и после итогов; «В меню» — остаться.
@@ -175,6 +202,7 @@ function showMenu(): void {
  * Дальше в меню ждёт метка «Новое!».
  */
 function openUnlock(kind: UnlockKind, onTry: () => void, onMenu?: () => void): void {
+  nav++;
   hideBoot();
   track('unlock_preview', { kind });
   const buttons = previewButtons(progress.unlocks, kind, () => store.commit(), onTry, onMenu);
@@ -183,6 +211,7 @@ function openUnlock(kind: UnlockKind, onTry: () => void, onMenu?: () => void): v
 
 /** Магазин: герои, скины, усилители. После каждой покупки перерисовываем. */
 function openShop(): void {
+  nav++;
   const m = progress.meta;
   const done = (err: string | null) => {
     if (err) hud.toastScreen(err);
@@ -221,6 +250,7 @@ function openShop(): void {
 
 /** Ежедневный подарок: календарь на 7 дней. */
 function openDaily(): void {
+  nav++;
   const m = progress.meta;
   hud.showDaily(
     { days: [...DAILY], step: m.daily.step, available: dailyAvailable(m, dayKey(new Date())) },
@@ -234,13 +264,33 @@ function openDaily(): void {
   );
 }
 
+/** Кнопка «Сохранить» в меню: вход в Яндекс по нажатию игрока и перенос прогресса в облако. */
+function offerCloud(sdk: YaSdk): void {
+  // Вход уже идёт — второй тап «Сохранить» не открывает второе окно входа (FINAL_QA_REPORT.md, QA-19).
+  let signingIn = false;
+  cloudSave = () => {
+    if (signingIn) return;
+    signingIn = true;
+    void signInAndSync(sdk, store).then((r) => {
+      signingIn = false;
+      if (r === 'cancelled') return;
+      if (r === 'failed') return hud.toastScreen('Не получилось, попробуй позже');
+      cloudSave = null;
+      if (!game.scene.isActive('game')) showMenu();
+      hud.toastScreen('Прогресс сохранён в облаке');
+    });
+  };
+}
+
 /** Карта обучения всегда одна и та же — сценарий проверен на ней. */
 const TUTORIAL_SEED = 20260924;
 
 /** «Ночь 0»: настоящий матч с подсказками, проиграть нельзя. Не считается в матчи и победы. */
 async function startTutorial(): Promise<void> {
+  const my = ++nav;
   hud.hideScreen();
   await whenLoaded();
+  if (my !== nav) return;
   sfx.playMusic(GAME_MUSIC);
   const match = new Match({ seed: TUTORIAL_SEED, difficulty: 'easy', flameUnlocked: false, tutorial: true });
   // Пройдено или пропущено — больше само не запустится. Повтор из меню не трогает матчи, монеты и открытия.
@@ -250,6 +300,8 @@ async function startTutorial(): Promise<void> {
     match,
     hud,
     sfx,
+    platformPaused: () => platform.paused,
+    onGameplay: (active) => platform.setGameplay(active),
     onEnd: () => {
       // Подарок за обучение — один раз: сразу хватает на первую покупку в магазине.
       finish('done');
@@ -279,8 +331,14 @@ let lastDifficulty: Difficulty = 'easy';
 
 async function start(difficulty: Difficulty): Promise<void> {
   lastDifficulty = difficulty;
+  // Реклама перед матчем (4.4): сразу после нажатия игрока (сложность, «Ещё раз», «Попробовать!»), со второго
+  // завершённого матча. Частоту режет сама платформа: слишком рано — ролик просто не покажется.
+  const my = ++nav;
+  if (interstitialBeforeMatch(progress)) await platform.showInterstitial();
+  if (my !== nav) return;
   hud.hideScreen();
   await whenLoaded();
+  if (my !== nav) return;
   // Музыка меню — только в меню; с начала матча играет игровой плейлист.
   sfx.playMusic(GAME_MUSIC);
   // Купленные усилители срабатывают в этом матче (по одному каждого), а списываются, когда началась ночь:
@@ -306,6 +364,8 @@ async function start(difficulty: Difficulty): Promise<void> {
     match,
     hud,
     sfx,
+    platformPaused: () => platform.paused,
+    onGameplay: (active) => platform.setGameplay(active),
     hints: {
       seen: new Set(progress.hints),
       firstMatches: progress.matches < 2,
@@ -321,6 +381,8 @@ async function start(difficulty: Difficulty): Promise<void> {
       store.update((p) => spendBoosters(p.meta, boosters));
     },
     exitCoins: () => exitRewardNow()?.coins ?? 0,
+    // «Вернуться в комнату» за рекламу на карточке поимки (4.5: бесплатный путь — играть духом).
+    rewarded: { available: () => platform.rewardedAvailable(), show: () => platform.showRewarded() },
     unlocks: {
       badges: badgeKinds(progress.unlocks),
       onBadgeSeen: (kind) => {
@@ -347,7 +409,20 @@ async function start(difficulty: Difficulty): Promise<void> {
         if (!kind) return next();
         openUnlock(kind, () => afterResult(() => start(difficulty)), showMenu);
       };
-      hud.showResult(match, fresh[0] ?? null, () => afterResult(() => start(difficulty)), () => afterResult(showMenu), reward);
+      // «×2 монеты» за рекламу: досмотрел — монеты за матч ещё раз.
+      const onDouble =
+        platform.rewardedAvailable() && reward.coins > 0
+          ? async () => {
+              const ok = await platform.showRewarded();
+              if (ok) {
+                progress.meta.coins += reward.coins;
+                store.commit({ critical: true });
+                track('reward_double', { difficulty, coins: reward.coins });
+              }
+              return ok;
+            }
+          : undefined;
+      hud.showResult(match, fresh[0] ?? null, () => afterResult(() => start(difficulty)), () => afterResult(showMenu), reward, onDouble, () => progress.meta.coins);
     },
     onMenu: () => {
       // Сам вышел в меню: поймали — как за поражение, живым посреди ночи — за продержанные минуты.
@@ -438,7 +513,12 @@ if (previewResult === 'win' || previewResult === 'lose' || previewResult === 'te
 async function boot(): Promise<void> {
   let booted = false;
   const saved = await bootSave({
-    sdk: initYandexSdk,
+    // 2.14: язык и события паузы — сразу, как SDK загрузился, до первого экрана игры.
+    sdk: async () => {
+      const sdk = await initYandexSdk();
+      platform.attach(sdk);
+      return sdk;
+    },
     // Облако ответило позже или игрок вошёл в аккаунт — прогресс заменён облачным.
     onReplaced: () => {
       if (!booted) return;
@@ -450,6 +530,17 @@ async function boot(): Promise<void> {
   store = saved.store;
   progress = store.progress;
   booted = true;
+  // Облачное сохранение: вошёл в Яндекс — прогресс переносится в облако (SAVE_SYSTEM.md).
+  if (saved.sdk && !saved.authorized) offerCloud(saved.sdk);
+  // SDK не успел к запуску (медленная сеть) — не выбрасываем его: подключаем, как только ответит.
+  // Отложенный Game Ready, пауза платформы и реклама — в platform.attach; облако — если игрок уже вошёл.
+  if (!saved.sdk) {
+    void lateYandexSdk().then(async (sdk) => {
+      if (!sdk) return;
+      platform.attach(sdk);
+      if (!(await connectPlayer(sdk.getPlayer(), store))) offerCloud(sdk);
+    });
+  }
   // Скины на заставке не грузим — выбранный подтягиваем в кэш после основных спрайтов, пока игрок в меню
   // (не отнимая канал у заставки).
   void spritesReady.then(() => prefetchSkin(progress.meta.skin));
@@ -469,6 +560,9 @@ async function boot(): Promise<void> {
   }
   const { start: first, changed } = resolveTutorialOnBoot(progress);
   if (changed) store.commit();
-  if (first === 'menu') showMenu();
-  else startTutorial(); // Самый первый запуск: сразу в «Ночь 0», без меню.
+  // 1.19.2: Game Ready — когда игрок уже может играть (меню на экране или обучение запущено), не по таймеру.
+  if (first === 'menu') {
+    showMenu();
+    platform.ready();
+  } else void startTutorial().then(() => platform.ready()); // Самый первый запуск: сразу в «Ночь 0», без меню.
 }

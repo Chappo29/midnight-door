@@ -38,8 +38,14 @@ export interface GameData {
    * что пункт увидели (метка больше не нужна). Что игроку вообще закрыто — в match.opts.lockedKinds.
    */
   unlocks?: { badges: readonly BuildKind[]; onBadgeSeen: (kind: BuildKind) => void };
-  /** Игрок вернулся в комнату за рекламу (для аналитики). Пока не вызывается: кнопку убрали из UI до Yandex SDK. */
+  /** Игрок вернулся в комнату за рекламу (для аналитики). */
   onRevive?: () => void;
+  /** Пауза от платформы (реклама, пауза Яндекса, скрытая вкладка) — матч стоит (platform/platform.ts). */
+  platformPaused?: () => boolean;
+  /** Идёт ли игровой процесс — для GameplayAPI.start/stop (вызывается каждый кадр, платформа сама отсеивает повторы). */
+  onGameplay?: (active: boolean) => void;
+  /** Реклама за награду: есть ли она и показать (true — досмотрел). Нет — кнопки «за рекламу» не показываем. */
+  rewarded?: { available: () => boolean; show: () => Promise<boolean> };
 }
 
 interface CharView {
@@ -126,10 +132,9 @@ const ANIM = {
   walkFrameMs: 120,
 } as const;
 
-const ITEM_ICON = { lavender: '🌸', safe: '💰', toolbox: '🧰' } as const;
 const ITEM_INFO = {
   lavender: 'Лаванда: даёт конфеты, когда бьют дверь',
-  safe: 'Сейф: +1.5 🍬 в секунду',
+  safe: 'Сейф: +1.5 конфеты в секунду',
   toolbox: 'Ящик: сам понемногу чинит дверь',
 } as const;
 /** Подписи построек в меню и в баннере «Новое!» (desc — серая строчка под названием). */
@@ -143,6 +148,24 @@ const BUILD_INFO: Record<BuildKind, { label: string; desc?: string }> = {
 const DOOR_COLORS = [0x8b5a2b, 0x9c6b35, 0xb07d42, 0x8a8f99, 0x9fa8b3, 0xd4a82c, 0xe8c24a, 0x9ef0ff];
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+/**
+ * Сообщение команды — ожидание или «уже так», а не ошибка: перезарядка ключа и умений духа, герой занят или ещё идёт,
+ * максимальный уровень, целая дверь, «подлети ближе». Такие показываем спокойной плашкой (Hud.toastInfo).
+ */
+export const isNeutralMsg = (msg: string) =>
+  /будет готов|Подожди|Ещё идёт|Максимальный уровень|Дверь целая|Подлети ближе|Сначала дверь/.test(msg);
+
+/**
+ * Финал победы (мс): камера едет к призраку (если его не видно), существующая анимация смерти доигрывает,
+ * «Победа!» — и только потом итоги. Всего 1,5–2,1 с (AGE_UX_PLAYTEST.md, №4; CORE_LOOP_UX_PASS.md).
+ */
+export const FINALE = { panMs: 600, cheerMs: 600, deathMs: 1500 } as const;
+/**
+ * Экранная «безопасная полоса» (px): сверху плашки конфет/часов и портреты, снизу кнопки «домой»/ключ и полоска
+ * двери. Своя дверь и место призрака перед ней во время атаки должны быть внутри неё (CORE_LOOP_UX_PASS.md, п. 7).
+ */
+export const SAFE = { top: 104, bottom: 84, side: 56 } as const;
 
 export class GameScene extends Phaser.Scene {
   private m!: Match;
@@ -209,6 +232,10 @@ export class GameScene extends Phaser.Scene {
   /** Сколько секунд подряд дверь мигает, а готовый ключ не жмут; и было ли так в этой осаде (совет на карточке поимки). */
   private missedRepairT = 0;
   private missedRepair = false;
+  /** Идёт финал победы (призрак побеждён): ввод закрыт, итоги ждут, пока done. */
+  private finale: { t: number; deathAt: number; deathStarted: boolean; cheered: boolean; done: boolean } | null = null;
+  /** Призрак только что вернулся из гнезда — «Вылечился и идёт к тебе!» при выборе моей двери. */
+  private ghostHealed = false;
 
   constructor() {
     super('game');
@@ -263,6 +290,8 @@ export class GameScene extends Phaser.Scene {
     this.badgeShown = new Set();
     this.missedRepairT = 0;
     this.missedRepair = false;
+    this.finale = null;
+    this.ghostHealed = false;
   }
 
   preload(): void {
@@ -287,6 +316,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.bind({
       repair: () => this.tutRepair(),
       home: () => {
+        if (this.finale) return;
         // На выборе комнаты «домой» переключает «весь этаж ↔ ко мне».
         if (this.m.phase === 'pick') this.pickOverview = !this.pickOverview;
         this.fitCamera();
@@ -297,14 +327,14 @@ export class GameScene extends Phaser.Scene {
     });
     if (this.m.opts.tutorial) this.startTutorial();
     else {
-      this.hud.banner('Выбери комнату! 👆', 3500);
+      this.hud.banner('Выбери комнату!', 3500);
       const h = this.gd.hints;
       const touch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
       if (h) this.hints = new HintDirector(this.m, h.seen, h.onSeen, touch, h.firstMatches);
     }
     this.sfx.play('start', { volume: 0.7, pitch: 0 });
 
-    const onResize = () => this.fitCamera();
+    const onResize = () => this.onResize();
     const onVis = () => {
       this.hiddenPaused = document.hidden;
     };
@@ -323,20 +353,35 @@ export class GameScene extends Phaser.Scene {
       this.scale.off('resize', onResize);
       document.removeEventListener('visibilitychange', onVis);
       this.hud.setInGame(false);
+      this.gd.onGameplay?.(false);
     });
+  }
+
+  /**
+   * Размер поменялся (поворот телефона, окно): камера переставляется — открытое меню стройки осталось бы на старом
+   * месте, у чужой клетки или за краем экрана (FINAL_QA_REPORT.md, QA-18). Закрываем его вместе с выбором клетки.
+   */
+  private onResize(): void {
+    this.hud.hideMenu();
+    this.selected = null;
+    // Финал: камера уже едет к призраку — не уводить её к комнате.
+    if (!this.finale) this.fitCamera();
   }
 
   // ---------------- поймали: дух ----------------
 
   /**
    * Игрока поймали, соседи ещё держатся: игра встаёт, карточка «Играть духом / Выйти в меню».
-   * Возрождения нет (решение пользователя 2026-09-25); выход в меню — без монет за матч.
+   * Если есть реклама за награду — ещё «Вернуться в комнату» за ролик (раз за матч; бесплатный путь — дух,
+   * правило Яндекса 4.5.2). Выход в меню — награда как за поражение.
    */
   private onPlayerCaught(): void {
     if (this.m.result || this.ended) return;
     this.selected = null;
     this.hud.hideMenu();
     this.caughtPaused = true;
+    const ad = this.gd.rewarded;
+    const revive = ad?.available() && this.m.canRevive() === null ? () => this.reviveForAd(ad.show) : undefined;
     this.hud.showCaught(
       () => {
         this.caughtPaused = false;
@@ -347,7 +392,19 @@ export class GameScene extends Phaser.Scene {
       () => this.gd.onMenu(),
       this.gd.exitCoins?.() ?? 0,
       this.caughtAdvice(),
+      revive,
     );
+  }
+
+  /** «Вернуться в комнату» за рекламу: награда — только если ролик досмотрен и вернуться ещё можно. */
+  private async reviveForAd(show: () => Promise<boolean>): Promise<boolean> {
+    const ok = await show();
+    if (!ok || this.ended || this.m.result || this.m.revive() !== null) return false;
+    // Баннер «Снова в комнате!», вспышка и камера — в обработчике события revived.
+    this.caughtPaused = false;
+    this.hud.hideScreen();
+    this.gd.onRevive?.();
+    return true;
   }
 
   /** Один совет на следующий раз — из того, что было в комнате в момент поимки. */
@@ -467,15 +524,26 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.hintOverlay ??= new TutorialOverlay(() => {}, true);
-    this.hintOverlay.show(hint.text, hint.pose, this.targetRect(hint.target), 0);
+    this.hintOverlay.show(hint.text, hint.pose, this.targetRect(hint.target), 0, true, this.doorAvoidRect());
   }
 
-  /** Экранный прямоугольник цели: пункт открытого меню, клетка, призрак или элемент интерфейса. */
+  /**
+   * Сдвиг холста в окне. Координаты Phaser (pointer.x, камера) отсчитываются от холста, а слой обучения и клики
+   * по интерфейсу — от окна. Обычно они совпадают, но на ПК шире 2:1 поле по центру (style.css), и без сдвига палец
+   * обучения показывал мимо цели на (ширина − 2·высота)/2 px (FINAL_QA_REPORT.md, QA-07).
+   */
+  private canvasOffset(): { x: number; y: number } {
+    const r = this.game.canvas.getBoundingClientRect();
+    return { x: r.left, y: r.top };
+  }
+
+  /** Экранный (в координатах окна) прямоугольник цели: пункт открытого меню, клетка, призрак или элемент интерфейса. */
   private targetRect(t: Target, menuOpt?: string): DOMRect | null {
     const cam = this.cameras.main;
+    const off = this.canvasOffset();
     const box = (wx: number, wy: number, size: number) => {
       const s = size * cam.zoom;
-      return new DOMRect((wx - cam.worldView.x) * cam.zoom - s / 2, (wy - cam.worldView.y) * cam.zoom - s / 2, s, s);
+      return new DOMRect(off.x + (wx - cam.worldView.x) * cam.zoom - s / 2, off.y + (wy - cam.worldView.y) * cam.zoom - s / 2, s, s);
     };
     const opt = menuOpt && this.hud.menuOpen ? document.querySelector(`#menu button[data-opt="${menuOpt}"]`) : null;
     if (opt) return opt.getBoundingClientRect();
@@ -521,7 +589,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time: number, deltaMs: number): void {
-    const paused = this.userPaused || this.hiddenPaused || this.caughtPaused;
+    const paused = this.userPaused || this.hiddenPaused || this.caughtPaused || (this.gd.platformPaused?.() ?? false);
+    // Разметка геймплея для Яндекса (1.19.3): матч или обучение идут, без паузы, окон и итогов.
+    this.gd.onGameplay?.(!paused && !this.ended && this.m.phase !== 'end');
     if (!paused && !this.ended) {
       this.acc += Math.min(deltaMs / 1000, 0.25);
       while (this.acc >= TICK) {
@@ -534,6 +604,7 @@ export class GameScene extends Phaser.Scene {
     if (!paused) {
       this.handleKeys();
       this.trackMissedRepair(deltaMs / 1000);
+      this.updateFinale(deltaMs);
     }
     this.renderChars(a, time);
     this.followPlayerToRoom();
@@ -553,7 +624,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!paused) this.tut?.update(deltaMs / 1000);
     // Пауза, поимка, итоги: кот и палец не лежат поверх карточки и не показывают на её кнопки.
-    const modal = this.userPaused || this.caughtPaused || this.ended;
+    const modal = this.userPaused || this.caughtPaused || this.ended || !!this.finale;
     if (modal) this.tutOverlay?.hide();
     else this.renderTutorial();
     this.renderHint(paused ? 0 : deltaMs / 1000, modal);
@@ -563,7 +634,8 @@ export class GameScene extends Phaser.Scene {
       this.refreshMenu();
     }
 
-    if (this.m.phase === 'end' && !this.ended) {
+    // Победа: итоги — только когда финал (камера, смерть, «Победа!») доиграл. Один раз: дальше ended.
+    if (this.m.phase === 'end' && !this.ended && (!this.finale || this.finale.done)) {
       this.ended = true;
       this.hud.hideMenu();
       this.gd.onEnd();
@@ -713,7 +785,6 @@ export class GameScene extends Phaser.Scene {
           continue;
         }
         g.fillStyle(0xffffff, 0.55).fillCircle(cx, cy, TS * 0.4);
-        this.add.text(cx, cy, ITEM_ICON[it.kind], { fontSize: '28px' }).setOrigin(0.5).setDepth(1);
       }
       const s = r.sofa;
       if (hasSprite(this, 'sofa')) {
@@ -798,7 +869,7 @@ export class GameScene extends Phaser.Scene {
       if (c.caught) {
         // Пойман: испуганный кадр лицом к камере, дрожит и бледнеет.
         v.root.setAlpha(0.35);
-        v.emote.setText(v.frames ? '' : '😱');
+        v.emote.setText(v.frames ? '' : '!');
         v.dir = 'down';
         this.setPose(v, 'scared');
         v.body.setRotation(Math.sin(time / 40) * 0.15).setScale(this.flipX(v), 1);
@@ -1514,12 +1585,13 @@ export class GameScene extends Phaser.Scene {
         case 'phase':
           if (e.phase === 'prep') {
             // В обучении говорит кот — баннер бы с ним спорил.
-            if (!this.tut) this.hud.banner('Готовься! Скоро полночь 🕛');
+            if (!this.tut) this.hud.banner('Готовься! Скоро полночь');
             this.fitCamera();
           } else if (e.phase === 'night') {
             this.gd.onNightStart?.();
             this.sfx.play('midnight', { pitch: 0 });
-            this.hud.banner('Полночь! Призрак вышел! 👻');
+            // Цель матча — коротко: таймер ночи идёт вверх, и без этого было непонятно, как выиграть (12 лет).
+            this.hud.banner(this.tut ? 'Полночь! Призрак вышел!' : 'Полночь! Победи призрака!');
             this.cameras.main.shake(400, 0.006);
           }
           break;
@@ -1530,26 +1602,26 @@ export class GameScene extends Phaser.Scene {
           break;
         case 'upgraded':
           this.roomSound('upgrade', e.roomId, { volume: 0.8 });
-          this.floatText((e.x + 0.5) * TS, e.y * TS, '⬆', '#7dff7a');
+          this.floatText((e.x + 0.5) * TS, e.y * TS, '▲', '#7dff7a');
           this.bounce(this.buildingViews.get(key(e.x, e.y)));
           break;
         case 'sold':
           this.roomSound('sold', e.roomId);
-          if (e.roomId === mineId) this.floatText((e.x + 0.5) * TS, e.y * TS, `+${e.refund}🍬`, '#ffe066');
+          if (e.roomId === mineId) this.floatText((e.x + 0.5) * TS, e.y * TS, `+${e.refund}`, '#ffe066');
           break;
         case 'doorUpgraded':
         case 'repaired': {
           if (e.type === 'repaired' && e.roomId === mineId) this.missedRepair = false;
           const d = m.rooms[e.roomId].door;
           this.roomSound('upgrade', e.roomId, { volume: 0.8 });
-          if (e.type === 'doorUpgraded') this.floatText((d.x + 0.5) * TS, d.y * TS, '⬆', '#7dff7a');
+          if (e.type === 'doorUpgraded') this.floatText((d.x + 0.5) * TS, d.y * TS, '▲', '#7dff7a');
           this.puff((d.x + 0.5) * TS, (d.y + 0.5) * TS, 0xffe066, 8, 26, 4);
           break;
         }
         case 'sofaUpgraded': {
           this.roomSound('upgrade', e.roomId, { volume: 0.8 });
           const s = m.rooms[e.roomId].sofa;
-          this.floatText((s.x + 0.5) * TS, s.y * TS, '⬆🍬', '#7dff7a');
+          this.floatText((s.x + 0.5) * TS, s.y * TS, '▲', '#7dff7a');
           break;
         }
         case 'doorHit': {
@@ -1567,7 +1639,7 @@ export class GameScene extends Phaser.Scene {
           this.roomSound('door_break', e.roomId, { pitch: 0.02 }, 0.4);
           this.puff((d.x + 0.5) * TS, (d.y + 0.5) * TS, 0x8b5a2b, 16, 50, 6);
           if (e.roomId === mineId) {
-            this.hud.banner('Дверь сломана! 😱');
+            this.hud.banner('Дверь сломана!');
             this.cameras.main.shake(300, 0.01);
           }
           break;
@@ -1643,8 +1715,12 @@ export class GameScene extends Phaser.Scene {
           const r = m.playerRoom;
           const c = e.cmd;
           const at = 'x' in c && c.x !== undefined ? { x: c.x, y: c.y! } : c.type === 'upgradeSofa' ? r.sofa : r.door;
-          this.floatText((at.x + 0.5) * TS, at.y * TS, '✕', '#c9c2dc');
-          if (e.refund > 0) this.floatText((at.x + 0.5) * TS, (at.y - 0.5) * TS, `+${Math.round(e.refund)}🍬`, '#ffe066');
+          // Словами, а не «✕»: «+70 ×» читалось как ошибка, а возврат не замечали (AGE_UX_PLAYTEST.md, №6).
+          this.floatText((at.x + 0.5) * TS, at.y * TS, 'Отменено', '#c9c2dc');
+          if (e.refund > 0) {
+            this.floatText((at.x + 0.5) * TS, (at.y - 0.5) * TS, `+${Math.round(e.refund)}`, '#ffe066');
+            this.hud.refund(Math.round(e.refund));
+          }
           break;
         }
         case 'siegeEnd':
@@ -1652,23 +1728,39 @@ export class GameScene extends Phaser.Scene {
           // Без награды и окон (GHOST_ATTACK_DIRECTOR.md, п. 15).
           if (e.roomId === mineId && e.meaningful && !m.player.caught && !m.result && !this.tut && e.reason !== 'broke' && e.reason !== 'eliminated') {
             const d = m.rooms[e.roomId].door;
-            this.floatText((d.x + 0.5) * TS, d.y * TS - 6, 'Отбился!', '#7dffb8');
+            // Крупнее и дольше обычной надписи (его «почти не видели»), но без окна и баннера — играть не мешает.
+            this.floatText((d.x + 0.5) * TS, d.y * TS - 6, 'Отбился!', '#7dffb8', 24, 1700);
           }
           break;
         case 'ghostTarget':
           // «Призрак идёт к тебе!» — один раз на выбор двери; в обучении говорит кот.
           if (e.roomId === mineId && !m.player.caught && m.phase === 'night' && !this.tut) {
-            this.hud.banner('Призрак идёт к тебе!', 2600);
+            // Только что из гнезда — говорим, что это тот же призрак после лечения.
+            this.hud.banner(this.ghostHealed ? 'Вылечился и идёт к тебе!' : 'Призрак идёт к тебе!', 2600);
             this.sfx.heartbeat();
+            // Своя дверь — главный объект атаки: если её не видно (карту отвели), камера плавно возвращается.
+            this.ensureDoorVisible(true);
           }
+          this.ghostHealed = false;
           break;
         case 'ghostRetreat': {
           this.sfx.play('ghost_retreat', { volume: 0.6 });
           // Три захода — три разные стадии (домики справа от полоски HP гаснут по одному), а не один и тот же повтор.
           const text = e.left >= 2 ? 'Убегает лечиться!' : e.left === 1 ? 'Снова убегает лечиться!' : 'Последний раз лечится!';
           this.floatText(this.ghostView.x, this.ghostView.y - 50, text, '#7dd3ff');
+          // Надпись над призраком легко пропустить (12-летний отступления не заметил вовсе, AGE_UX_PLAYTEST.md, №8):
+          // бежит от моей двери или на виду — ещё и крупно по центру.
+          const g = m.ghost;
+          const fromMe = mineId !== null && g.targetRoom === mineId;
+          if (!this.tut && !m.player.caught && (fromMe || this.onScreen(Math.floor(g.x), Math.floor(g.y)))) this.hud.banner(text, 2200);
           break;
         }
+        case 'ghostHealed':
+          // Тот же призрак вернулся из гнезда: зелёная вспышка и «Вылечился!» — «почему снова здоровый» (6 лет).
+          this.ghostHealed = true;
+          this.floatText(this.ghostView.x, this.ghostView.y - 50, 'Вылечился!', '#7dff7a');
+          this.puff(this.ghostView.x, this.ghostView.y - 10, 0x7dff7a, 12, 40, 5);
+          break;
         case 'ghostDesperate':
           // Лечения кончились: призрак больше не убегает (сильнее он не становится). Полоска HP краснеет.
           this.sfx.play('ghost_laugh', { volume: 0.7, pitch: 0 });
@@ -1677,27 +1769,146 @@ export class GameScene extends Phaser.Scene {
           this.tweens.add({ targets: this.ghostView, scale: { from: 1.3, to: 1 }, duration: 250, ease: 'Quad.easeOut' });
           break;
         case 'ghostDead':
-          this.sfx.play('ghost_dead');
-          if (this.ghostImg) {
-            // Тает в лужу, конфеты высыпаются.
-            this.setGhostFrame('down_dead');
-            this.ghostBody.setScale(1, 1).setY(0);
-            this.ghostImg.setTint(0xffffff);
-            this.puff(this.ghostView.x, this.ghostView.y + 10, 0xff5fc8, 18, 60, 7);
-            this.tweens.add({ targets: this.ghostView, alpha: 0, delay: 900, duration: 900 });
-          } else {
-            this.puff(this.ghostView.x, this.ghostView.y, 0xf4f0ff, 24, 70, 8);
-            this.tweens.add({ targets: this.ghostView, alpha: 0, scale: 1.6, duration: 700 });
-          }
+          this.startFinale();
           break;
         case 'fail':
           if (e.charId === m.playerId) {
-            this.hud.toast(e.msg);
-            this.sfx.play('deny', { volume: 0.7 });
+            const calm = isNeutralMsg(e.msg);
+            if (calm) this.hud.toastInfo(e.msg);
+            else this.hud.toast(e.msg);
+            this.sfx.play(calm ? 'click' : 'deny', { volume: 0.7 });
           }
           break;
       }
     }
+  }
+
+  // ---------------- финал победы ----------------
+
+  /**
+   * Призрак побеждён: бой кончен (симуляция уже не стреляет), ввод закрыт, меню и подсказки убраны.
+   * Призрака не видно — камера плавно едет к нему; видно — стоит. Потом существующая анимация смерти
+   * доигрывает до конца, «Победа!», и только потом итоги (update ждёт finale.done). Ребёнок должен увидеть:
+   * пушки добили → он растаял → я победил (AGE_UX_PLAYTEST.md, №4).
+   */
+  private startFinale(): void {
+    if (this.finale) return;
+    this.hud.hideMenu();
+    this.selected = null;
+    this.hud.setGhostArrow(null);
+    this.drag.down = false;
+    this.drag.dragging = false;
+    this.pinch.active = false;
+    const gx = this.ghostView.x;
+    const gy = this.ghostView.y - TS * 0.5;
+    let deathAt = 0;
+    if (!this.onScreenSafe(gx, gy, TS * 0.8)) {
+      const cam = this.cameras.main;
+      const c = this.clampCenter(gx, gy);
+      cam.pan(c.x, c.y, FINALE.panMs, 'Sine.easeInOut', true);
+      deathAt = FINALE.panMs;
+    }
+    this.finale = { t: 0, deathAt, deathStarted: false, cheered: false, done: false };
+  }
+
+  /** Ход финала по времени игры (на паузе стоит): смерть после подлёта камеры, «Победа!», конец. */
+  private updateFinale(dtMs: number): void {
+    const f = this.finale;
+    if (!f || f.done) return;
+    f.t += dtMs;
+    if (!f.deathStarted && f.t >= f.deathAt) {
+      f.deathStarted = true;
+      this.playGhostDeath();
+    }
+    if (!f.cheered && f.t >= f.deathAt + FINALE.cheerMs) {
+      f.cheered = true;
+      this.hud.banner(this.m.teamWin ? 'Командная победа!' : 'Победа!', 1800);
+    }
+    if (f.t >= f.deathAt + FINALE.deathMs) f.done = true;
+  }
+
+  /** Анимация смерти призрака (та же, что была): тает в лужу, конфеты высыпаются. Укладывается в FINALE.deathMs. */
+  private playGhostDeath(): void {
+    this.sfx.play('ghost_dead');
+    if (this.ghostImg) {
+      this.setGhostFrame('down_dead');
+      this.ghostBody.setScale(1, 1).setY(0);
+      this.ghostImg.setTint(0xffffff);
+      this.puff(this.ghostView.x, this.ghostView.y + 10, 0xff5fc8, 18, 60, 7);
+      this.tweens.add({ targets: this.ghostView, alpha: 0, delay: 700, duration: 700 });
+    } else {
+      this.puff(this.ghostView.x, this.ghostView.y, 0xf4f0ff, 24, 70, 8);
+      this.tweens.add({ targets: this.ghostView, alpha: 0, scale: 1.6, duration: 700 });
+    }
+  }
+
+  // ---------------- видимость своей двери ----------------
+
+  /** Точка мира (px) на экране внутри безопасной полосы SAFE (не под плашками и кнопками), с запасом pad. */
+  private onScreenSafe(wx: number, wy: number, pad = 0): boolean {
+    const cam = this.cameras.main;
+    const sx = (wx - cam.worldView.x) * cam.zoom;
+    const sy = (wy - cam.worldView.y) * cam.zoom;
+    const p = pad * cam.zoom;
+    return sx - p >= SAFE.side && sx + p <= this.scale.width - SAFE.side && sy - p >= SAFE.top && sy + p <= this.scale.height - SAFE.bottom;
+  }
+
+  /**
+   * Своя дверь и место призрака перед ней — внутри безопасной полосы экрана: на телефоне верхняя дверь уходила
+   * под портреты и баннер, нижняя — под полоску прочности (AGE_UX_PLAYTEST.md, №7). Уже видно — камера стоит;
+   * иначе минимальный сдвиг: pan — плавно (начало атаки), иначе сразу (fitCamera). Вся карта на экране — не двигаем.
+   */
+  private ensureDoorVisible(pan: boolean): void {
+    const r = this.m.playerRoom;
+    if (!r || this.finale || this.mapFits() || this.drag.dragging || this.pinch.active) return;
+    const cam = this.cameras.main;
+    const d = r.door;
+    const xs = [d.x + 0.5, d.front.x];
+    const ys = [d.y + 0.5, d.front.y];
+    // Коробка «дверь + призрак у неё» с полклетки запаса (над призраком ещё полоска HP).
+    const x0 = (Math.min(...xs) - 0.7) * TS;
+    const x1 = (Math.max(...xs) + 0.7) * TS;
+    const y0 = (Math.min(...ys) - 1.3) * TS;
+    const y1 = (Math.max(...ys) + 0.7) * TS;
+    const z = cam.zoom;
+    // Центр камеры — из scroll (worldView обновляется только при отрисовке, см. clampCamera).
+    const mx = cam.scrollX + cam.width / 2;
+    const my = cam.scrollY + cam.height / 2;
+    const left = mx - cam.width / 2 / z + SAFE.side / z;
+    const right = mx + cam.width / 2 / z - SAFE.side / z;
+    const top = my - cam.height / 2 / z + SAFE.top / z;
+    const bottom = my + cam.height / 2 / z - SAFE.bottom / z;
+    // Сдвиг по оси: коробка уже в полосе — 0; иначе при атаке (pan) — в середину полосы, чтобы дверь не жалась
+    // к краю; при обычной расстановке — ровно столько, чтобы влезла (вид комнаты почти не меняется).
+    const inside = x0 >= left && x1 <= right && y0 >= top && y1 <= bottom;
+    if (inside) return;
+    const shift = (lo: number, hi: number, a: number, b: number) =>
+      pan || b - a > hi - lo ? (a + b) / 2 - (lo + hi) / 2 : a < lo ? a - lo : b > hi ? b - hi : 0;
+    const dx = shift(left, right, x0, x1);
+    const dy = shift(top, bottom, y0, y1);
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    const c = this.clampCenter(mx + dx, my + dy);
+    if (pan) cam.pan(c.x, c.y, 450, 'Sine.easeInOut', true);
+    else cam.centerOn(c.x, c.y);
+  }
+
+  /** Прямоугольник (в координатах окна) своей двери с местом призрака перед ней — его не накрывают меню и кот. */
+  private doorAvoidRect(): DOMRect | null {
+    const m = this.m;
+    const r = m.playerRoom;
+    const g = m.ghost;
+    const threat = !!r && m.phase === 'night' && !m.player.caught && g.targetRoom === r.id && (g.state === 'moving' || g.state === 'attacking');
+    if (!threat) return null;
+    const cam = this.cameras.main;
+    const off = this.canvasOffset();
+    const d = r!.door;
+    const sx = (wx: number) => off.x + (wx * TS - cam.worldView.x) * cam.zoom;
+    const sy = (wy: number) => off.y + (wy * TS - cam.worldView.y) * cam.zoom;
+    const x0 = sx(Math.min(d.x + 0.5, d.front.x) - 0.9);
+    const x1 = sx(Math.max(d.x + 0.5, d.front.x) + 0.9);
+    const y0 = sy(Math.min(d.y + 0.5, d.front.y) - 1.4);
+    const y1 = sy(Math.max(d.y + 0.5, d.front.y) + 0.9);
+    return new DOMRect(x0, y0, x1 - x0, y1 - y0);
   }
 
   private shoot(fx: number, fy: number, tx: number, ty: number): void {
@@ -1735,9 +1946,9 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private floatText(x: number, y: number, text: string, color: string): void {
-    const t = this.label(x, y, text, 18).setColor(color).setDepth(40);
-    this.tweens.add({ targets: t, y: y - 36, alpha: 0, duration: 1000, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
+  private floatText(x: number, y: number, text: string, color: string, size = 18, ms = 1000): void {
+    const t = this.label(x, y, text, size).setColor(color).setDepth(40);
+    this.tweens.add({ targets: t, y: y - 36, alpha: 0, duration: ms, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
   }
 
   private bounce(v: Phaser.GameObjects.Container | undefined): void {
@@ -1781,6 +1992,8 @@ export class GameScene extends Phaser.Scene {
     // Середина между центром комнаты и дверью: видно и комнату, и коридор перед ней.
     const mid = roomCenter(room);
     cam.centerOn(((mid.x + room.door.front.x) / 2) * TS, ((mid.y + room.door.front.y) / 2) * TS);
+    // Дверь и коридор перед ней — не под плашками и кнопками (AGE_UX_PLAYTEST.md, №7).
+    this.ensureDoorVisible(false);
   }
 
   /** Заливка неровной комнаты по клеткам. */
@@ -1811,6 +2024,7 @@ export class GameScene extends Phaser.Scene {
   private followPlayerToRoom(): void {
     const room = this.m.playerRoom;
     const p = this.m.player;
+    if (this.finale) return;
     // Дух летит, а весь этаж не влез в экран — камера плавно ведёт духа.
     if (p.spirit) {
       if (!p.flyTo || this.mapFits() || this.drag.dragging || this.pinch.active) return;
@@ -1849,6 +2063,15 @@ export class GameScene extends Phaser.Scene {
    */
   private clampCamera(): void {
     const cam = this.cameras.main;
+    const mx = cam.scrollX + cam.width / 2;
+    const my = cam.scrollY + cam.height / 2;
+    const c = this.clampCenter(mx, my);
+    if (Math.abs(c.x - mx) > 0.01 || Math.abs(c.y - my) > 0.01) cam.centerOn(c.x, c.y);
+  }
+
+  /** Центр камеры (мир, px), поправленный так, чтобы экран не уходил за край карты (правила clampCamera). */
+  private clampCenter(mx: number, my: number): { x: number; y: number } {
+    const cam = this.cameras.main;
     const halfW = cam.width / 2 / cam.zoom;
     const halfH = cam.height / 2 / cam.zoom;
     const pad = TS / 2;
@@ -1856,11 +2079,7 @@ export class GameScene extends Phaser.Scene {
     const padTop = pad + 70 / cam.zoom;
     const axis = (mid: number, half: number, size: number, lo = pad) =>
       size + lo + pad <= 2 * half ? size / 2 : Phaser.Math.Clamp(mid, half - lo, size - half + pad);
-    const mx = cam.scrollX + cam.width / 2;
-    const my = cam.scrollY + cam.height / 2;
-    const cx = axis(mx, halfW, W * TS);
-    const cy = axis(my, halfH, H * TS, padTop);
-    if (Math.abs(cx - mx) > 0.01 || Math.abs(cy - my) > 0.01) cam.centerOn(cx, cy);
+    return { x: axis(mx, halfW, W * TS), y: axis(my, halfH, H * TS, padTop) };
   }
 
   /**
@@ -1897,11 +2116,17 @@ export class GameScene extends Phaser.Scene {
     window.addEventListener('touchstart', heal, { capture: true, passive: true });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => window.removeEventListener('touchstart', heal, true));
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      // Финал победы: ни тапов, ни перетаскивания — камера сама показывает смерть призрака.
+      if (this.finale) return;
       const touching = this.fingersOnField();
       if (touching.length >= 2) {
+        // Второй палец — это уже не тап.
+        this.drag.dragging = true;
+        // В обучении камера стоит, как для колеса и перетаскивания: щипок уводил цель за край экрана,
+        // а сдвинуть карту обратно было нельзя (FINAL_QA_REPORT.md, QA-09).
+        if (this.tut && !this.tut.done) return;
         const [a, b] = touching;
         this.pinch = { active: true, dist: Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y), zoom: cam.zoom };
-        this.drag.dragging = true;
         return;
       }
       this.drag = { down: true, sx: p.x, sy: p.y, scrollX: cam.scrollX, scrollY: cam.scrollY, dragging: false };
@@ -1939,18 +2164,24 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       // Второй тап двойного тапа по «Ещё раз» / «Играть духом» не выбирает комнату и не уводит духа (B5).
-      const echo = this.downAt < this.hud.inputReadyAt || this.hud.isEchoOfPress(this.downAt, p.x, p.y);
+      const off = this.canvasOffset();
+      const echo = this.downAt < this.hud.inputReadyAt || this.hud.isEchoOfPress(this.downAt, p.x + off.x, p.y + off.y);
       if (this.drag.down && !this.drag.dragging && !echo) this.tap(p);
       this.drag.down = false;
     });
     this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
-      if (this.tut && !this.tut.done) return;
+      if ((this.tut && !this.tut.done) || this.finale) return;
       cam.setZoom(Phaser.Math.Clamp(cam.zoom * (dy > 0 ? 0.9 : 1.1), 0.3, 3));
       this.clampCamera();
     });
 
     const kb = this.input.keyboard!;
-    this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,R,H,ESC,SPACE') as Record<string, Phaser.Input.Keyboard.Key>;
+    // Захват (preventDefault на всей странице) нужен только пока идёт матч. Phaser при выключении сцены удаляет клавиши,
+    // но захват не снимает — после первого матча пробел и стрелки переставали работать в меню и магазине
+    // (FINAL_QA_REPORT.md, QA-20). Снимаем сами; пробел в игре не используется — не захватываем вовсе.
+    const keys = 'W,A,S,D,UP,DOWN,LEFT,RIGHT,R,H,ESC';
+    this.keys = kb.addKeys(keys) as Record<string, Phaser.Input.Keyboard.Key>;
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => kb.removeCapture(keys));
     kb.on('keydown-R', () => this.tutRepair());
     kb.on('keydown-H', () => this.fitCamera());
     kb.on('keydown-ESC', () => this.togglePause());
@@ -1959,7 +2190,7 @@ export class GameScene extends Phaser.Scene {
   /** WASD/стрелки — шаг на соседнюю клетку, пока клавиша зажата. */
   /** Ключ: в обучении — только на шаге «Чини дверь». */
   private tutRepair(): void {
-    if (this.m.player.spirit || this.userPaused || this.caughtPaused || this.ended) return;
+    if (this.m.player.spirit || this.userPaused || this.caughtPaused || this.ended || this.m.result) return;
     if (this.tut && !this.tut.allowAction('repair')) return;
     // Целую дверь чинить не нужно — это не ошибка ребёнка: спокойная плашка, без «deny» и красного.
     const d = this.m.playerRoom?.door;
@@ -1972,8 +2203,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleKeys(): void {
-    // В обучении ходим только туда, куда показывает кот.
-    if (this.tut && !this.tut.done) return;
+    // В обучении ходим только туда, куда показывает кот; в финале победы — никуда.
+    if ((this.tut && !this.tut.done) || this.finale) return;
     const k = this.keys;
     const dx = (k.D.isDown || k.RIGHT.isDown ? 1 : 0) - (k.A.isDown || k.LEFT.isDown ? 1 : 0);
     const dy = (k.S.isDown || k.DOWN.isDown ? 1 : 0) - (k.W.isDown || k.UP.isDown ? 1 : 0);
@@ -1995,17 +2226,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   private cmd(c: Cmd): void {
+    // Исход решён: кнопки (ключ, «Бу!») молчат, а не ругаются «Игра окончена».
+    if (this.m.result) return;
     const err = this.m.command(this.m.playerId, c);
     if (err === 'Не хватает пламени') this.hints?.noteFlameShort();
     if (!err && (c.type === 'boo' || c.type === 'spark')) this.hud.flashAbility(c.type);
-    if (err) {
-      this.hud.toast(err);
-      this.sfx.play('deny', { volume: 0.7 });
+    if (!err) return;
+    // Ожидание (перезарядка, герой занят, ещё идёт, максимум) — не ошибка ребёнка: спокойная плашка и щелчок,
+    // без красного и «deny» (серый ключ «14» + красная плашка читались как «сломалось», AGE_UX_PLAYTEST.md).
+    if (isNeutralMsg(err)) {
+      this.hud.toastInfo(err);
+      this.sfx.play('click', { volume: 0.6 });
+      return;
     }
+    this.hud.toast(err);
+    this.sfx.play('deny', { volume: 0.7 });
   }
 
   private tap(p: Phaser.Input.Pointer): void {
     const m = this.m;
+    if (this.finale) return;
     const w = this.cameras.main.getWorldPoint(p.x, p.y);
     let tx = Math.floor(w.x / TS);
     let ty = Math.floor(w.y / TS);
@@ -2024,7 +2264,7 @@ export class GameScene extends Phaser.Scene {
       if (!r) return;
       const err = m.command(m.playerId, { type: 'pickRoom', roomId: r.id });
       if (err) this.hud.toast(err);
-      else this.hud.banner('Это твоя комната! 🏠');
+      else this.hud.banner('Это твоя комната!');
       return;
     }
     if (m.phase === 'end') return;
@@ -2061,7 +2301,7 @@ export class GameScene extends Phaser.Scene {
       const cost = m.buildCost('pumpkin', room);
       const opt: MenuOption = {
         id: 'build:pumpkin',
-        icon: '🎃',
+        icon: '',
         label: 'Тыква',
         cost,
         isNew: this.badgeKinds.has('pumpkin'),
@@ -2096,7 +2336,7 @@ export class GameScene extends Phaser.Scene {
     const first = build();
     if (!first || !first.options.length) return;
     this.menuBuild = build;
-    this.hud.showMenu(p.x, p.y, first.title, first.options);
+    this.hud.showMenu(p.x, p.y, first.title, first.options, this.doorAvoidRect());
     // Пункт с меткой «Новое!» увидели: запоминаем сразу (перезагрузка не покажет метку снова),
     // а гасим, когда меню закроется.
     for (const o of first.options) {
@@ -2117,6 +2357,8 @@ export class GameScene extends Phaser.Scene {
     if (!this.menuBuild) return;
     if (!this.hud.menuOpen) {
       this.menuBuild = null;
+      // Меню закрыли (пункт выбран, крестик, тап мимо) — рамка и радиус выбранной клетки/пушки гаснут вместе с ним.
+      this.selected = null;
       this.retireBadges();
       return;
     }
@@ -2138,7 +2380,7 @@ export class GameScene extends Phaser.Scene {
       const options: MenuOption[] = [
         {
           id: 'upgradeDoor',
-          icon: '⬆',
+          icon: '',
           label: 'Улучшить',
           cost: up,
           note: up ? undefined : 'макс.',
@@ -2148,7 +2390,7 @@ export class GameScene extends Phaser.Scene {
         },
         {
           id: 'repair',
-          icon: '🔧',
+          icon: '',
           label: 'Чинить',
           // Целая дверь — пункт просто серый, без красной плашки «+30%» (она читалась как ошибка).
           note: d.hp >= d.maxHp ? undefined : d.repairCd > 0 ? `через ${Math.ceil(d.repairCd)} с` : `+${Math.round(B.repair.amount * 100)}%`,
@@ -2166,10 +2408,10 @@ export class GameScene extends Phaser.Scene {
       const up = m.sofaUpgradeCost(room);
       const need = m.sofaBlockedBy(room);
       const opt: MenuOption = need
-        ? { id: 'upgradeSofa', icon: '⬆', label: 'Больше конфет', lockDoor: need, onPick: () => this.pulseDoor(room, need) }
+        ? { id: 'upgradeSofa', icon: '', label: 'Больше конфет', lockDoor: need, onPick: () => this.pulseDoor(room, need) }
         : {
             id: 'upgradeSofa',
-            icon: '⬆',
+            icon: '',
             label: 'Больше конфет',
             cost: up,
             note: up ? undefined : 'макс.',
@@ -2178,7 +2420,7 @@ export class GameScene extends Phaser.Scene {
             onPick: () => this.cmd({ type: 'upgradeSofa' }),
           };
       return {
-        title: `Диван · ур. ${room.sofa.level} · 🍬 ${m.incomeOf(room).toFixed(1)}/с`,
+        title: `Диван · ур. ${room.sofa.level} · ${m.incomeOf(room).toFixed(1)} конф./с`,
         options: [opt],
       };
     });
@@ -2225,7 +2467,7 @@ export class GameScene extends Phaser.Scene {
     const m = this.m;
     const { label, desc } = BUILD_INFO[kind];
     const id = `build:${kind}`;
-    const icon = kind === 'cannon' ? '💥' : '';
+    const icon = '';
     const need = m.buildLocked(room, kind);
     // Только что открыта между матчами — «Новое!» и на пункте с замком двери: ребёнок видит, что появилось.
     if (need) return { id, icon, label, desc, lockDoor: need, isNew: this.badgeKinds.has(kind), onPick: () => this.pulseDoor(room, need) };
@@ -2245,7 +2487,8 @@ export class GameScene extends Phaser.Scene {
    * и короткий пульс своей двери — где она.
    */
   private pulseDoor(room: Room, need: number): void {
-    this.hud.toast(`Сначала дверь до ур. ${need}`);
+    // Подсказка, а не ошибка: спокойная плашка.
+    this.hud.toastInfo(`Сначала дверь до ур. ${need}`);
     this.doorPulse.set(room.id, this.time.now + 1500);
     this.sfx.play('click', { volume: 0.7 });
   }
@@ -2273,7 +2516,7 @@ export class GameScene extends Phaser.Scene {
         options: [
           {
             id: 'upgrade',
-            icon: '⬆',
+            icon: '',
             label: 'Улучшить',
             cost: up,
             note: up ? undefined : 'макс.',
@@ -2286,7 +2529,7 @@ export class GameScene extends Phaser.Scene {
             id: 'sell',
             icon: '',
             label: 'Убрать',
-            note: `🍬${m.sellValue(b)}`,
+            note: `gain:${m.sellValue(b)}`,
             secondary: true,
             confirm: 'Точно убрать?',
             onPick: () => this.cmd({ type: 'sell', x: b.x, y: b.y }),

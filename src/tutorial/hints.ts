@@ -89,7 +89,7 @@ const RULES: Rule[] = [
   {
     // После первой поимки: призрак далеко — сначала «лети к нему» (палец на призрака, у края — стрелка).
     id: 'spirit',
-    text: '👻 Ты дух! Лети к призраку',
+    text: 'Ты дух! Лети к призраку',
     pose: 'point',
     spirit: true,
     sticky: 10,
@@ -98,7 +98,7 @@ const RULES: Rule[] = [
   {
     // Долетел, «Бу!» готово — теперь жать (раньше палец звал жать серую кнопку, которая молчала).
     id: 'spirit-boo',
-    text: '👻 Жми «Бу!»',
+    text: 'Жми «Бу!»',
     pose: 'point',
     spirit: true,
     // Раз за матч, а не раз в жизни: духом играют редко, и к моменту «долетел» подсказка должна быть.
@@ -108,7 +108,7 @@ const RULES: Rule[] = [
   },
   {
     id: 'repair',
-    text: '🔧 Дверь слабеет — жми ключ!',
+    text: 'Дверь слабеет — жми ключ!',
     pose: 'oh',
     when: (m) => {
       const d = mine(m)?.door;
@@ -119,7 +119,7 @@ const RULES: Rule[] = [
   {
     // Первые матчи: нет пушки, а на неё хватает — «поставь, как учили» (важнее тыкв и остального).
     id: 'basic-cannon',
-    text: '💥 Поставь пушку у двери',
+    text: 'Поставь пушку у двери',
     pose: 'point',
     // Держим, пока пушки нет (не 6 с), и напоминаем снова, если ребёнок так и не поставил.
     once: 'repeat',
@@ -129,8 +129,8 @@ const RULES: Rule[] = [
       const r = mine(m);
       if (!r || r.buildings.some((b) => b.kind === 'cannon') || !m.canAfford(r, m.buildCost('cannon', r))) return null;
       // Уже нажал «Пушка» — герой идёт строить: подсказка сделала своё, не держим её до конца стройки.
-      const cmd = m.player.task?.cmd;
-      if (cmd?.type === 'build' && cmd.kind === 'cannon') return null;
+      const cmds = [m.player.task?.cmd, ...m.player.queue];
+      if (cmds.some((cmd) => cmd?.type === 'build' && cmd.kind === 'cannon')) return null;
       if (m.phase === 'prep' ? s.prepTime < 4 : m.phase !== 'night') return null;
       const at = pickCannonCell(m, r);
       return at ? { kind: 'cell', at } : null;
@@ -139,7 +139,7 @@ const RULES: Rule[] = [
   {
     // Первые матчи: пушка есть, а дверь всё ещё 1-го уровня и на улучшение хватает.
     id: 'basic-door',
-    text: '🚪 Сделай дверь крепче',
+    text: 'Сделай дверь крепче',
     pose: 'point',
     once: 'match',
     // Не дольше 10 с (20 было слишком долго): не сделал — палец не висит над дверью весь бой.
@@ -149,7 +149,7 @@ const RULES: Rule[] = [
       const r = mine(m);
       if (!r || m.phase !== 'night' || s.nightTime < 15 || r.door.broken || r.door.level > 1) return null;
       // Уже нажал «Улучшить» — герой идёт к двери и стучит молотком: подсказка уходит сразу, а не после стройки.
-      if (m.player.task?.cmd.type === 'upgradeDoor') return null;
+      if (m.player.task?.cmd.type === 'upgradeDoor' || m.player.queue.some((q) => q.type === 'upgradeDoor')) return null;
       if (!r.buildings.some((b) => b.kind === 'cannon')) return null;
       const cost = m.doorUpgradeCost(r);
       return cost && m.canAfford(r, cost) ? { kind: 'cell', at: r.door } : null;
@@ -157,14 +157,14 @@ const RULES: Rule[] = [
   },
   {
     id: 'level',
-    text: '👻⬆ Призрак вырос! Укрепи дверь',
+    text: 'Призрак вырос! Укрепи дверь',
     pose: 'oh',
     // Пока нет ни одной пушки, «укрепи дверь» — не в том порядке: сначала «Поставь пушку».
     when: (m, s) => (s.leveled && mine(m)?.buildings.some((b) => b.kind === 'cannon') ? { kind: 'cell', at: mine(m)!.door } : null),
   },
   {
     id: 'range',
-    text: '🎯 Пушки не достают — ставь ближе к двери',
+    text: 'Пушки не достают — ставь ближе к двери',
     pose: 'point',
     when: (m, s) => {
       const b = mine(m)?.buildings.find((q) => q.kind === 'cannon');
@@ -173,19 +173,19 @@ const RULES: Rule[] = [
   },
   {
     id: 'retreat',
-    text: '👻 Убегает лечиться. Он вернётся!',
+    text: 'Убегает лечиться. Он вернётся!',
     pose: 'point',
     when: (_m, s) => (s.retreated ? { kind: 'ghost' } : null),
   },
   {
     id: 'left',
-    text: '👋 Призрак ушёл к соседу. Готовься!',
+    text: 'Призрак ушёл к соседу. Готовься!',
     pose: 'wave',
     when: (_m, s) => (s.leftMe ? { kind: 'none' } : null),
   },
   {
     id: 'sell',
-    text: '🗑 Нет места? Убери старое',
+    text: 'Нет места? Убери старое',
     pose: 'point',
     when: (m) => {
       const r = mine(m);
@@ -197,7 +197,7 @@ const RULES: Rule[] = [
   },
   {
     id: 'flame',
-    text: '🎃 Посади тыкву — она даёт 🔥',
+    text: 'Посади тыкву — она даёт пламя',
     pose: 'point',
     // Только когда ребёнок сам упёрся в «не хватает пламени» — и пока не посадил первую тыкву.
     once: 'repeat',
@@ -229,7 +229,7 @@ const RULES: Rule[] = [
   },
   {
     id: 'pan',
-    text: '✋ Двигай карту пальцем',
+    text: 'Двигай карту пальцем',
     pose: 'wave',
     // Второстепенное: только когда пушка уже стоит, — иначе перебивает «Поставь пушку у двери».
     when: (m, s) => (s.touch && m.phase === 'prep' && s.prepTime > 10 && mine(m)?.buildings.some((b) => b.kind === 'cannon') ? { kind: 'none' } : null),

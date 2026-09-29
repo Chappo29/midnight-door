@@ -1,5 +1,7 @@
 import { SPRITES } from '../view/sprites';
 import { uiIcon } from '../ui/uiIcons';
+import { stripEmoji } from '../ui/emoji';
+import { ARROW_SVG, HAND_SVG } from '../ui/pointer';
 import type { Pose } from './steps';
 
 /** Держать «пропустить», мс: случайный тап ребёнка не сработает, взрослому читать не надо. */
@@ -27,6 +29,8 @@ export class TutorialOverlay {
   /** Размер кота с облачком (меряем при смене текста, а не каждый кадр) и где он сейчас стоит. */
   private guideSize = { w: 0, h: 0 };
   private guidePos = '';
+  /** Что нарисовано в руке сейчас: перерисовываем только при смене (не каждый кадр). */
+  private handKind: 'hand' | 'arrow' = 'hand';
 
   /**
    * light — режим подсказок во время обычной игры: без затемнения, звёздочек и «пропустить».
@@ -44,10 +48,10 @@ export class TutorialOverlay {
 
     this.top = el('div', light ? 'tut-top light' : 'tut-top');
     this.hand = el('div', 'tut-hand');
-    this.hand.textContent = '👆';
+    this.hand.innerHTML = HAND_SVG;
     this.guide = el('div', 'tut-guide');
     this.cat = SPRITES.mascot_wave ? Object.assign(document.createElement('img'), { className: 'tut-cat', alt: '' }) : el('div', 'tut-cat');
-    if (!(this.cat instanceof HTMLImageElement)) this.cat.textContent = '🐱';
+    if (!(this.cat instanceof HTMLImageElement)) this.cat.textContent = '';
     this.bubble = el('div', 'tut-bubble');
     this.guide.append(this.cat, this.bubble);
     this.skipBtn = document.createElement('button');
@@ -73,10 +77,12 @@ export class TutorialOverlay {
   /**
    * Показать шаг. rect — куда светить и показывать пальцем (экранные px), null — никуда.
    * nudge растёт, пока ребёнок бездействует: палец крупнее, цель пульсирует.
+   * avoid — что ещё нельзя закрывать котом (своя дверь во время атаки, CORE_LOOP_UX_PASS.md, п. 7).
    */
-  show(text: string, pose: Pose, rect: DOMRect | null, nudge: number, hand = true): void {
+  show(text: string, pose: Pose, rect: DOMRect | null, nudge: number, hand = true, avoid: DOMRect | null = null): void {
+    this.avoid = avoid;
     if (text !== this.lastText) {
-      this.bubble.textContent = text;
+      this.bubble.textContent = stripEmoji(text);
       this.lastText = text;
       this.guide.classList.remove('pop');
       void this.guide.offsetWidth;
@@ -106,6 +112,8 @@ export class TutorialOverlay {
    * Кот с облачком — туда, где он не закрывает цель: снизу слева (обычно), снизу справа или сверху
    * под счётчиками. На телефоне облачко накрывало клетку под пушку и свою дверь (проверка C1/C3/C5/C6).
    */
+  private avoid: DOMRect | null = null;
+
   private placeGuide(target: DOMRect | null): void {
     const W = window.innerWidth;
     const H = window.innerHeight;
@@ -117,13 +125,14 @@ export class TutorialOverlay {
       ['right', W - 12 - w, bottom],
       ['top', 12, top],
     ];
-    const cover = (x: number, y: number) => {
-      if (!target) return 0;
+    const overlap = (x: number, y: number, t: DOMRect | null) => {
+      if (!t) return 0;
       const pad = 10;
-      const ox = Math.max(0, Math.min(x + w, target.right + pad) - Math.max(x, target.left - pad));
-      const oy = Math.max(0, Math.min(y + h, target.bottom + pad) - Math.max(y, target.top - pad));
+      const ox = Math.max(0, Math.min(x + w, t.right + pad) - Math.max(x, t.left - pad));
+      const oy = Math.max(0, Math.min(y + h, t.bottom + pad) - Math.max(y, t.top - pad));
       return ox * oy;
     };
+    const cover = (x: number, y: number) => overlap(x, y, target) + overlap(x, y, this.avoid);
     let best = spots[0];
     for (const s of spots) if (cover(s[1], s[2]) < cover(best[1], best[2])) best = s;
     if (cover(best[1], best[2]) === cover(spots[0][1], spots[0][2])) best = spots[0];
@@ -154,7 +163,11 @@ export class TutorialOverlay {
     const y = Math.min(window.innerHeight - m, Math.max(m, cy));
     const off = x !== cx || y !== cy;
     this.hand.classList.toggle('edge', off);
-    this.hand.textContent = off ? '➤' : '👆';
+    const kind = off ? 'arrow' : 'hand';
+    if (kind !== this.handKind) {
+      this.handKind = kind;
+      this.hand.innerHTML = off ? ARROW_SVG : HAND_SVG;
+    }
     this.hand.style.setProperty('--ang', `${Math.atan2(cy - y, cx - x)}rad`);
     // Палец кончиком в центр цели.
     this.hand.style.left = `${x}px`;

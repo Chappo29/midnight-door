@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
+    "build:yandex": "npm run build && node scripts/build-yandex.mjs",
     "preview": "vite preview --host",
     "test": "vitest run",
     "balance": "tsx scripts/balance.ts",

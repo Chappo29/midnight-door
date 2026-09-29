@@ -38,7 +38,11 @@ export const B = {
    * возвращает долю макс. HP, потом перезарядка. Бесконечно «держать» дверь нельзя.
    */
   repair: { work: 1.2, amount: 0.3, cooldown: 20 },
-  pumpkin: { cost: 40, rate: 1, rateMul: 1.8, upCost: 60, upCostMul: 2, max: 5 },
+  /**
+   * rate — пламя в секунду с тыквы ур. 1 (было 1: копилось сотнями без дела, тратилось ~35% добытого;
+   * 0.6 — тратится ~55%, а вторая тыква/улучшение тыквы снова решение; CORE_LOOP_UX_PASS.md).
+   */
+  pumpkin: { cost: 40, rate: 0.6, rateMul: 1.8, upCost: 60, upCostMul: 2, max: 5 },
   cannon: {
     cost: 50,
     dmg: 10,
@@ -48,11 +52,19 @@ export const B = {
     range: 3.2,
     rangePerLevel: 0.3,
     upCost: 70,
-    upCostMul: 1.9,
+    /** Было 1.9: скачок 70 → 283 на ур. 3 закрывал больше всего пауз > 30 с (CORE_LOOP_UX_PASS.md). */
+    upCostMul: 1.75,
     max: 6,
     flameFrom: 3,
     flameCost: 15,
     flameMul: 2,
+    /**
+     * Ранняя скидка пламенем, только игроку: на улучшении пушки до ур. 2 часть цены (earlyFlame × flameToCandy
+     * конфет) платится пламенем — с тыквой 52 🍬 + 3 🔥, без тыквы те же 70. Первое полезное пламя — через ~50 с
+     * после тыквы вместо ~3 мин. Соседям не даём: скидка «всем» поднимала победы на сложной 50 → 62,5%,
+     * 5 пламени игроку — на +6,5 п.; 3 игроку — +2 п. (CORE_LOOP_UX_PASS.md, Final polish). 0 — выключено.
+     */
+    earlyFlame: 3,
   },
   /** Поздние постройки открываются уровнем двери прямо в матче (не номером матча). */
   unlock: { trap: 2, workbench: 3, fridge: 4 },
@@ -138,8 +150,11 @@ export const B = {
      */
     meaningfulHits: 3,
   },
-  /** Пока пламя не открыто (первый матч), его цена переводится в конфеты. */
-  flameToCandy: 10,
+  /**
+   * Пока пламя не открыто (первый матч), его цена переводится в конфеты. Было 10: пушка ур. 3 стоила 283 после 70
+   * за ур. 2 — пауза > 30 с в каждом матче (CORE_LOOP_UX_PASS.md).
+   */
+  flameToCandy: 6,
   endDelay: 1.5,
   /** Настройки ИИ соседей, не завязанные на характер (npc.ts). */
   npc: {
@@ -169,6 +184,8 @@ export interface DiffParams {
   ghostMul: number;
   /** Отдельный множитель только HP призрака (урон не трогает). */
   ghostHpMul: number;
+  /** Отдельный множитель только урона по двери (HP не трогает). */
+  ghostDmgMul: number;
   /** Полных ударов по дверям на первый новый уровень (дальше растёт на xpGrowth за уровень). */
   hitsPerLevel: number;
   /** Страховка: столько секунд без нового уровня — и уровень +1 сам (любой новый уровень сбрасывает счёт). */
@@ -188,10 +205,13 @@ export interface DiffParams {
 // 2026-09-26: режиссёр атак (ATTACK_DIRECTOR) водит призрака к игроку вдвое чаще и реже к соседям — на кошмаре соседей
 // стали реже ловить, призрак медленнее рос, победы 21 → 32%. Рост уровня на кошмаре на 5% быстрее (22 → 20.9 ударов,
 // страховка 125 → 119 с): 500 сидов — 22,8% побед при тех же ~6 атаках на игрока за 6 мин (−10% давало уже 15,6%).
+// 2026-09-29 (CORE_LOOP_UX_PASS.md): на лёгкой первые 4 атаки снимали 17–21% двери, ремонт был нужен в ~4% атак —
+// «атака проходит сама». Урон по двери ×1.3 (HP призрака тот же): 24–31% за атаку, ремонт нужен в 9–24% атак,
+// поймали 1 → 2–4,5% (кто не чинит вовсе — 23 → 40%). Сложная и кошмар не тронуты: там атаки и так значимые.
 export const DIFF: Record<Difficulty, DiffParams> = {
-  easy: { ghostMul: 0.7, ghostHpMul: 1.3, hitsPerLevel: 27, levelFallback: 200, retreatSpeedMul: 1, npcSkill: 0.3 },
-  hard: { ghostMul: 1.0, ghostHpMul: 1, hitsPerLevel: 21, levelFallback: 110, retreatSpeedMul: 1.1, npcSkill: 0.6 },
-  nightmare: { ghostMul: 1.2, ghostHpMul: 1, hitsPerLevel: 20.9, levelFallback: 119, retreatSpeedMul: 1.2, npcSkill: 0.9 },
+  easy: { ghostMul: 0.7, ghostHpMul: 1.3, ghostDmgMul: 1.3, hitsPerLevel: 27, levelFallback: 200, retreatSpeedMul: 1, npcSkill: 0.3 },
+  hard: { ghostMul: 1.0, ghostHpMul: 1, ghostDmgMul: 1, hitsPerLevel: 21, levelFallback: 110, retreatSpeedMul: 1.1, npcSkill: 0.6 },
+  nightmare: { ghostMul: 1.2, ghostHpMul: 1, ghostDmgMul: 1, hitsPerLevel: 20.9, levelFallback: 119, retreatSpeedMul: 1.2, npcSkill: 0.9 },
 };
 
 /**

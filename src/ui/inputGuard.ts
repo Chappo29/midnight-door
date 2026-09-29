@@ -46,6 +46,29 @@ export function isEchoAfterScreenChange(now: number, last: Pt & { t: number }, s
   return screenChangedAt > last.t && isHoldover(now, last.t, last, point);
 }
 
+/** Состояние защиты окна от сквозных и повторных нажатий (Hud). */
+export interface PressGuardState {
+  /** Последнее **принятое** нажатие. */
+  last: Pt & { t: number };
+  /** До этого момента нажатия глотаются (окно или меню только что сменились). */
+  readyAt: number;
+  /** Когда последний раз сменилось окно. */
+  screenChangedAt: number;
+}
+
+/**
+ * Пропустить ли нажатие по интерфейсу. trusted — настоящее нажатие пальцем/мышью (MouseEvent.detail > 0),
+ * а не click() из кода или клавиатуры. Запоминается только принятое нажатие: проглоченный второй тап не должен
+ * становиться «прошлым» для третьего — иначе тройной тап ребёнка (0 / 80 / 680 мс) проходил сквозь смену окна
+ * и нажимал кнопку нового экрана (FINAL_QA_REPORT.md, QA-04). Цепочка повторов считается от первого тапа.
+ */
+export function acceptPress(s: PressGuardState, now: number, point: Pt, trusted: boolean): boolean {
+  const echo = trusted && isEchoAfterScreenChange(now, s.last, s.screenChangedAt, point);
+  if (now < s.readyAt || echo) return false;
+  if (trusted) s.last = { t: now, ...point };
+  return true;
+}
+
 /**
  * Куда поставить меню по вертикали на узком экране: не на палец (иначе второй тап попадает в пункт),
  * а над ним или под ним — где больше места.
@@ -65,4 +88,31 @@ export function menuTopAwayFromFinger(y: number, menuH: number, viewH: number, e
 export function staleTouchPointers<P extends { id: number; active: boolean; identifier: number }>(pointers: readonly P[], live: Iterable<number>): P[] {
   const now = new Set(live);
   return pointers.filter((q) => q.id !== 0 && q.active && !now.has(q.identifier));
+}
+
+/**
+ * Сдвинуть меню так, чтобы оно не закрывало avoid (своя дверь с призраком во время атаки): сначала вбок —
+ * справа или слева от двери, где влезает; не влезает — над или под ней; нигде не влезает — оставить как было.
+ * Всё в одних координатах; edge — поля у краёв экрана.
+ */
+export function avoidRect(
+  menu: { left: number; top: number; w: number; h: number },
+  avoid: { left: number; top: number; right: number; bottom: number } | null,
+  viewW: number,
+  viewH: number,
+  edge: number,
+): { left: number; top: number } {
+  const { left, top, w, h } = menu;
+  const hits = (l: number, t: number) => !!avoid && l < avoid.right && l + w > avoid.left && t < avoid.bottom && t + h > avoid.top;
+  if (!avoid || !hits(left, top)) return { left, top };
+  const fitX = (l: number) => l >= edge && l + w <= viewW - edge;
+  const fitY = (t: number) => t >= edge && t + h <= viewH - edge;
+  const gap = 8;
+  const spots = [
+    { left: avoid.right + gap, top },
+    { left: avoid.left - gap - w, top },
+    { left, top: avoid.bottom + gap },
+    { left, top: avoid.top - gap - h },
+  ];
+  return spots.find((s) => fitX(s.left) && fitY(s.top) && !hits(s.left, s.top)) ?? { left, top };
 }
