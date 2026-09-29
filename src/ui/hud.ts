@@ -246,6 +246,9 @@ function noteVisual(note: string): string {
 }
 
 /** Интерфейс поверх canvas на обычном DOM: чёткий текст и крупные кнопки на любом экране. */
+/** Сколько показывать «+N» и галочку после «Забрать», прежде чем окно подарка закроется само. */
+const DAILY_CLOSE_MS = 700;
+
 export class Hud {
   private readonly el: Record<string, HTMLElement> = {};
   private handlers: HudHandlers = { repair: () => {}, home: () => {}, pause: () => {}, boo: () => {}, spark: () => {} };
@@ -1090,10 +1093,15 @@ export class Hud {
             tile.innerHTML = `<span class="daily-day">${view.step + 1}</span><span class="daily-check">${ICON.check}</span>`;
           }
           this.popCoins(tile ?? btn, coins);
-          // Та же кнопка станет «Отлично!» → меню: быстрые тапы не должны проскочить в меню и дальше.
+          // Забрал — окно закрывается само, второй раз жать не нужно. Короткая пауза, чтобы успел мелькнуть «+N» и галочка;
+          // кнопку гасим (тапы за это время ничего не делают), а меню под ней не должно поймать эхо тапа.
           this.armInput(HOLDOVER_MS);
+          btn.disabled = true;
           btn.innerHTML = `${ICON.check}Отлично!`;
-          btn.onclick = () => onClose();
+          window.setTimeout(() => {
+            // Окно уже сменилось (вкладку свернули и вернулись, пришло облако) — второй раз меню не рисуем.
+            if (btn.isConnected) onClose();
+          }, DAILY_CLOSE_MS);
         },
         { once: true },
       );
