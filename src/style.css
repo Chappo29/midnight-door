@@ -4216,7 +4216,8 @@ img {
   body:has(.menu-frame) {
     --menu-floor-h: max(12vh, 70px);
     background:
-      linear-gradient(var(--ink), var(--ink)) left bottom calc(var(--menu-floor-h) - 6px) / 100% 6px no-repeat,
+      /* Тёмная кромка пола — внизу, как у .menu-floor (inset-тень 0 -6px). */
+      linear-gradient(var(--ink), var(--ink)) left bottom / 100% 6px no-repeat,
       linear-gradient(90deg, var(--wood-1) 0 64px, var(--wood-2) 64px 68px) calc((100vw - 200vh) / 2) bottom / 68px var(--menu-floor-h) repeat-x,
       radial-gradient(60% 46% at 50% -6%, #4a3f79 0%, transparent 70%),
       radial-gradient(120% 90% at 50% 120%, var(--night-3) 0%, var(--night-1) 65%);
