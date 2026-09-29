@@ -179,7 +179,8 @@ function layoutRoom(rng: Rng, id: number, p: Plan, opens: (x: number, doorY: num
     const items: Item[] = [];
     for (const kind of rng.shuffle<ItemKind>(['lavender', 'safe', 'toolbox']).slice(0, rng.int(3))) {
       const v = take(cells.filter(isEdge));
-      if (v) items.push({ kind, ...v });
+      // Сейф на карте больше не лежит — он усилитель из магазина (meta/economy.ts). Клетку берём всё равно: карты сидов прежние.
+      if (v && kind !== 'safe') items.push({ kind, ...v });
     }
 
     const soil: Vec[] = [];

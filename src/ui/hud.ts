@@ -1033,7 +1033,7 @@ export class Hud {
   }
 
   private boostersGrid(view: ShopView): string {
-    const icons: Record<BoosterId, string> = { candy: img('candy_shot'), door: img('door_l2'), wrench: uiIcon('repair') };
+    const icons: Record<BoosterId, string> = { candy: img('candy_shot'), door: img('door_l2'), wrench: uiIcon('repair'), safe: img('safe') };
     const cards = view.boosters
       .map((b) => {
         const maxed = b.count >= BOOSTER_MAX;

@@ -11,18 +11,12 @@ export const B = {
    * walkMax — сколько подготовка ждёт, пока игрок дойдёт до своей комнаты; дальше отсчёт идёт в любом случае.
    */
   phase: { pick: 10, prep: 30, night: 360, walkMax: 20 },
-  /** Было 20 при доходе 2/с; доход дивана теперь ниже (1,2/с), поэтому старт больше — первая пушка не откладывается. */
-  startCandy: 40,
+  startCandy: 20,
   walkSpeed: 3,
   work: { build: 1.2, plant: 1.0, upgrade: 1.2, door: 1.5, sofa: 1.2, sell: 0.5 },
   sofa: {
-    /**
-     * Доход дивана, конфет/с на 1-м уровне и рост за уровень. Было 2 и ×1,45: конфеты шли слишком быстро, копились впрок,
-     * и улучшать диван было незачем (замеры — core-loop-sim: 1,2 и ×2,0 держат победы ≈ прежними: лёгкая 89 / сложная 51 /
-     * кошмар 37% против 95 / 54 / 33%, но начало ощутимо медленнее, а каждый уровень дивана удваивает доход).
-     */
-    income: 1.2,
-    incomeMul: 2.0,
+    income: 2,
+    incomeMul: 1.45,
     cost: 30,
     costMul: 2.2,
     max: 8,
@@ -119,7 +113,7 @@ export const B = {
   spirit: { speed: 4.5, booRange: 4, booHold: 1.5, booCd: 25, sparkRange: 5, sparkMul: 1.5, sparkTime: 8, sparkCd: 20 },
   /** Воскрешение (раз за матч, реклама за награду): дверь с долей doorHp HP, protect с призрак не идёт к этой комнате. */
   revive: { doorHp: 0.5, protect: 15 },
-  items: { lavender: 0.5, safe: 1.5, toolbox: 0.01 },
+  items: { lavender: 0.5, safe: 0.7, toolbox: 0.01 },
   sellRefund: 0.5,
   ghost: {
     // Рассвета нет — HP растёт медленно, иначе призрака не убить (подобрано scripts/tune.ts, 2026-09-24).
@@ -199,7 +193,29 @@ export interface DiffParams {
   /** Скорость бегства лечиться относительно обычной: на лёгкой без ускорения, чем сложнее — тем быстрее убегает. */
   retreatSpeedMul: number;
   npcSkill: number;
+  /**
+   * Своя экономика сложности (только то, что указано; остальное — из B). На лёгкой её нет: 2 конфеты/с, ×1,45, старт 20.
+   * Сложная и кошмар — медленнее и жёстче: старт 0, диван 1/с и ×2 за уровень, пушку до 4 ур. можно качать без пламени
+   * (замеры core-loop-sim, 200 матчей: сложная ≈ 49%, кошмар ≈ 40%). Действует на всех жильцов матча, соседей тоже.
+   */
+  econ?: Partial<Econ>;
 }
+
+/** Числа экономики, которые сложность может переопределить. */
+export interface Econ {
+  startCandy: number;
+  sofaIncome: number;
+  sofaIncomeMul: number;
+  sofaCost: number;
+  /** С какого уровня пушки её улучшение требует пламени (тыквы). */
+  cannonFlameFrom: number;
+}
+
+/**
+ * Замеры: доход 1/с и ×2,0 дают на сложной ~35% побед (слишком жёстко: соседям тоже медленнее), ×2,2 — 56% / кошмар 38%
+ * (было 54 / 33,5). Первый диван 20 (окупается за ~20 с). Без сейфа на карте: он усилитель из магазина.
+ */
+const HARD_ECON: Partial<Econ> = { startCandy: 0, sofaIncome: 1, sofaIncomeMul: 2.2, sofaCost: 20, cannonFlameFrom: 5 };
 
 // Подобрано scripts/tune.ts (2026-09-25, 160 матчей): подготовка 30 с (таймер ждёт игрока), бегство лечиться
 // ускорено по сложности (1 / 1.1 / 1.2). Итог: лёгкая 99%, сложная ~74%, кошмар ~33%, призрака убивают за 8–14 мин.
@@ -216,8 +232,8 @@ export interface DiffParams {
 // поймали 1 → 2–4,5% (кто не чинит вовсе — 23 → 40%). Сложная и кошмар не тронуты: там атаки и так значимые.
 export const DIFF: Record<Difficulty, DiffParams> = {
   easy: { ghostMul: 0.7, ghostHpMul: 1.3, ghostDmgMul: 1.3, hitsPerLevel: 27, levelFallback: 200, retreatSpeedMul: 1, npcSkill: 0.3 },
-  hard: { ghostMul: 1.0, ghostHpMul: 1, ghostDmgMul: 1, hitsPerLevel: 21, levelFallback: 110, retreatSpeedMul: 1.1, npcSkill: 0.6 },
-  nightmare: { ghostMul: 1.2, ghostHpMul: 1, ghostDmgMul: 1, hitsPerLevel: 20.9, levelFallback: 119, retreatSpeedMul: 1.2, npcSkill: 0.9 },
+  hard: { ghostMul: 1.0, ghostHpMul: 1, ghostDmgMul: 1, hitsPerLevel: 21, levelFallback: 110, retreatSpeedMul: 1.1, npcSkill: 0.6, econ: HARD_ECON },
+  nightmare: { ghostMul: 1.2, ghostHpMul: 1, ghostDmgMul: 1, hitsPerLevel: 20.9, levelFallback: 119, retreatSpeedMul: 1.2, npcSkill: 0.9, econ: HARD_ECON },
 };
 
 /**
@@ -260,11 +276,26 @@ export const ATTACK_DIRECTOR: Record<Difficulty, AttackDirector> = {
   nightmare: { enabled: true, minWeight: 0.2, growth: 30, maxWeight: 3, playerMul: 1.3, spreadNeighbors: false, neighborWeight: 1, respite: 17, firstBy: 10, forceAfter: 35 },
 };
 
-export const sofaIncome = (level: number) => B.sofa.income * B.sofa.incomeMul ** (level - 1);
+/** Экономика сложности: базовые числа из B, поверх — переопределения DIFF[d].econ (без сложности — базовые, как на лёгкой). */
+export function econOf(d?: Difficulty): Econ {
+  return {
+    startCandy: B.startCandy,
+    sofaIncome: B.sofa.income,
+    sofaIncomeMul: B.sofa.incomeMul,
+    sofaCost: B.sofa.cost,
+    cannonFlameFrom: B.cannon.flameFrom,
+    ...(d ? DIFF[d]?.econ : undefined),
+  };
+}
 
-export function sofaUpCost(level: number): Cost | null {
+export function sofaIncome(level: number, d?: Difficulty): number {
+  const e = econOf(d);
+  return e.sofaIncome * e.sofaIncomeMul ** (level - 1);
+}
+
+export function sofaUpCost(level: number, d?: Difficulty): Cost | null {
   if (level >= B.sofa.max) return null;
-  return { candy: Math.round(B.sofa.cost * B.sofa.costMul ** (level - 1)), flame: 0 };
+  return { candy: Math.round(econOf(d).sofaCost * B.sofa.costMul ** (level - 1)), flame: 0 };
 }
 
 /** Какой уровень двери нужен, чтобы прокачать диван до targetLevel (2..8). За пределами таблицы — не заперто. */
@@ -289,8 +320,8 @@ export const cannonDmg = (level: number) => B.cannon.dmg * B.cannon.dmgMul ** (l
 /** Докуда бьёт пушка: с уровнем дальше (для всех — и игрока, и соседей). */
 export const cannonRange = (level: number) => B.cannon.range + B.cannon.rangePerLevel * (level - 1);
 
-export function cannonUpCost(level: number): Cost | null {
-  const c = B.cannon;
+export function cannonUpCost(level: number, d?: Difficulty): Cost | null {
+  const c = { ...B.cannon, flameFrom: econOf(d).cannonFlameFrom };
   if (level >= c.max) return null;
   const next = level + 1;
   return {

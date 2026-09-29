@@ -93,14 +93,14 @@ describe('монеты и магазин', () => {
 it('test_meta_boosters_planned_without_spending_until_night', () => {
     // Arrange: по одному каждого усилителя.
     const m = emptyMeta();
-    m.boosters = { candy: 1, door: 1, wrench: 1 };
+    m.boosters = { candy: 1, door: 1, wrench: 1, safe: 1 };
     // Act: матч начался, но ребёнок вышел до ночи — план есть, списания нет (GAME_AUDIT.md, Top-4).
     const plan = planBoosters(m);
     // Assert
-    expect(plan).toEqual({ candy: 100, doorLevel: 2, repairMul: 0.5 });
-    expect(m.boosters).toEqual({ candy: 1, door: 1, wrench: 1 });
+    expect(plan).toEqual({ candy: 100, doorLevel: 2, repairMul: 0.5, safe: true });
+    expect(m.boosters).toEqual({ candy: 1, door: 1, wrench: 1, safe: 1 });
     spendBoosters(m, plan);
-    expect(m.boosters).toEqual({ candy: 0, door: 0, wrench: 0 });
+    expect(m.boosters).toEqual({ candy: 0, door: 0, wrench: 0, safe: 0 });
   });
 
   it('test_meta_exit_after_caught_pays_like_loss', () => {
@@ -130,7 +130,7 @@ it('test_meta_boosters_planned_without_spending_until_night', () => {
     expect(m.heroes).toEqual([0]);
     expect(m.hero).toBe(0);
     expect(m.skin).toEqual({ door: 'classic', cannon: 'classic' });
-    expect(m.boosters).toEqual({ candy: 0, door: BOOSTER_MAX, wrench: 0 });
+    expect(m.boosters).toEqual({ candy: 0, door: BOOSTER_MAX, wrench: 0, safe: 0 });
     expect(m.daily).toEqual({ last: '', step: 0 });
     expect(buyHero(m, HEROES[1].look)).toBe('Не хватает монет');
   });

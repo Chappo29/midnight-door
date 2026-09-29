@@ -577,7 +577,8 @@ describe('сохранение: миграция старых сохранени
     expect(p.matches).toBe(3);
     expect(p.wins).toEqual(old.wins);
     expect(p.hints).toEqual(old.hints);
-    expect(p.meta).toEqual(old.meta);
+    // Старое сохранение без усилителя «сейф» получает safe: 0 (остальное — как было).
+    expect(p.meta).toEqual({ ...old.meta, boosters: { ...old.meta.boosters, safe: 0 } });
     expect(p.unlocks).toEqual(old.unlocks);
     expect(p.tutorial).toBe('done');
     expect(p.settings.muted).toBe(true);
