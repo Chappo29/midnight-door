@@ -233,6 +233,15 @@ export interface Econ {
   sofaIncome: number;
   sofaIncomeMul: number;
   sofaCost: number;
+  /**
+   * Доход дивана по уровням, конф./с (индекс 0 — ур. 1). Есть таблица — sofaIncome и sofaIncomeMul не читаются; нет — формула
+   * sofaIncome × sofaIncomeMul^(ур.−1). Формула без потолка удваивала доход до самого 8-го уровня (сложная: 250/с к 6-й минуте
+   * при покупках на ~22 тыс. конфет за весь матч, деньги копились впустую) — таблица оставляет ранний рост и делает поздний линейным.
+   * Длина таблицы — предел уровня дивана.
+   */
+  sofaIncomeTable?: readonly number[];
+  /** Максимальный уровень дивана сложности (нет — B.sofa.max, но не выше длины sofaIncomeTable). */
+  sofaMax?: number;
   /** С какого уровня пушки её улучшение требует пламени (тыквы). */
   cannonFlameFrom: number;
   /** Инструменты сейфа: с какого уровня дивана продаются (раньше — трата ломает рост дохода). */
@@ -251,6 +260,10 @@ const HARD_ECON: Partial<Econ> = {
   startCandy: 0,
   sofaIncome: 1,
   sofaIncomeMul: 2.2,
+  // Ур. 1–4 — прежние ×2,2 (1 → 2,2 → 4,84 → 10,65), дальше +10/с за уровень: 20 → 30 → 40 → 50 вместо 23 → 51 → 113 → 249.
+  // Жадный бот (scripts/econ-max.ts) докупает всё за ~11,4 мин (было ~6,4), доход к 10-й минуте 50/с (было 250). Победы в пределах
+  // шума (N=1500: сложная 48,3 → 47,5%, кошмар 32,4 → 31,9%); потолок ещё ниже (40/с) — уже −2,6 п. на сложной.
+  sofaIncomeTable: [1, 2.2, 4.84, 10.65, 20, 30, 40, 50],
   sofaCost: 20,
   cannonFlameFrom: 5,
   toolSofaMin: 4,
@@ -272,7 +285,9 @@ const HARD_ECON: Partial<Econ> = {
 // «атака проходит сама». Урон по двери ×1.3 (HP призрака тот же): 24–31% за атаку, ремонт нужен в 9–24% атак,
 // поймали 1 → 2–4,5% (кто не чинит вовсе — 23 → 40%). Сложная и кошмар не тронуты: там атаки и так значимые.
 export const DIFF: Record<Difficulty, DiffParams> = {
-  easy: { ghostMul: 0.7, ghostHpMul: 1.3, ghostDmgMul: 1.3, hitsPerLevel: 27, levelFallback: 200, retreatSpeedMul: 1, npcSkill: 0.3 },
+  // Диван лёгкой кончается на ур. 6 (12,8/с, формула прежняя): ур. 7–8 давали 18,6 и 26,9/с за 1,5 и 3,4 тыс. конфет — тот, кто докачал
+  // всё, к 10-й минуте копил по 27/с. Победы лёгкой не изменились (N=300: 91,7%).
+  easy: { ghostMul: 0.7, ghostHpMul: 1.3, ghostDmgMul: 1.3, hitsPerLevel: 27, levelFallback: 200, retreatSpeedMul: 1, npcSkill: 0.3, econ: { sofaMax: 6 } },
   hard: { ghostMul: 1.0, ghostHpMul: 1, ghostDmgMul: 1, hitsPerLevel: 21, levelFallback: 110, retreatSpeedMul: 1.1, npcSkill: 0.6, econ: HARD_ECON },
   nightmare: { ghostMul: 1.2, ghostHpMul: 1, ghostDmgMul: 1, hitsPerLevel: 20.9, levelFallback: 119, retreatSpeedMul: 1.2, npcSkill: 0.9, econ: HARD_ECON },
 };
@@ -334,11 +349,19 @@ export function econOf(d?: Difficulty): Econ {
 
 export function sofaIncome(level: number, d?: Difficulty): number {
   const e = econOf(d);
+  const t = e.sofaIncomeTable;
+  if (t) return t[Math.min(t.length, Math.max(1, level)) - 1];
   return e.sofaIncome * e.sofaIncomeMul ** (level - 1);
 }
 
+/** Максимальный уровень дивана сложности: B.sofa.max, но не выше econ.sofaMax и длины econ.sofaIncomeTable. */
+export function sofaMaxLevel(d?: Difficulty): number {
+  const e = econOf(d);
+  return Math.min(B.sofa.max, e.sofaMax ?? Infinity, e.sofaIncomeTable?.length ?? Infinity);
+}
+
 export function sofaUpCost(level: number, d?: Difficulty): Cost | null {
-  if (level >= B.sofa.max) return null;
+  if (level >= sofaMaxLevel(d)) return null;
   return { candy: Math.round(econOf(d).sofaCost * B.sofa.costMul ** (level - 1)), flame: 0 };
 }
 
