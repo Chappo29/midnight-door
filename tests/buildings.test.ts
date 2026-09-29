@@ -362,7 +362,7 @@ describe('соседи и поздние постройки', () => {
         for (let i = 0; i < 20 * 900 && m.phase !== 'end'; i++) {
           m.step();
           for (const e of m.events) {
-            if (e.type !== 'built' || e.kind === 'cannon' || e.kind === 'pumpkin') continue;
+            if (e.type !== 'built' || e.kind === 'cannon' || e.kind === 'pumpkin' || e.kind === 'safe') continue;
             const r = m.rooms[e.roomId];
             expect(r.door.level).toBeGreaterThanOrEqual(B.unlock[e.kind]);
             if (e.kind === 'trap') traps++;

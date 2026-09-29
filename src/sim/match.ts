@@ -46,7 +46,7 @@ export interface MatchOptions {
   /** Скины двери и пушек комнаты игрока (только внешний вид, симуляция их не читает). */
   skin?: { door: string; cannon: string };
   /** Усилители игрока на этот матч (куплены в магазине). */
-  boosters?: { candy: number; doorLevel: number; repairMul: number; safe?: boolean };
+  boosters?: { candy: number; doorLevel: number; repairMul: number };
   /** Обучение («Ночь 0»): сценарий вместо обычных правил, проиграть нельзя. */
   tutorial?: boolean;
   /** Игроком управляет ИИ — для тестов и прогона баланса. */
@@ -183,7 +183,7 @@ export class Match {
   // ---------- экономика ----------
 
   incomeOf(r: Room): number {
-    return sofaIncome(r.sofa.level, this.opts.difficulty) + (r.items.some((i) => i.kind === 'safe') ? B.items.safe : 0);
+    return sofaIncome(r.sofa.level, this.opts.difficulty) + (r.buildings.some((b) => b.kind === 'safe') ? B.items.safe : 0);
   }
 
   flameIncomeOf(r: Room): number {
@@ -217,7 +217,7 @@ export class Match {
 
   upgradeCost(b: Pick<Building, 'kind' | 'level'>, r: Room | null): Cost | null {
     const k = b.kind;
-    const c = k === 'cannon' ? cannonUpCost(b.level, this.opts.difficulty) : k === 'pumpkin' ? pumpkinUpCost(b.level) : extraUpCost(k, b.level);
+    const c = k === 'safe' ? null : k === 'cannon' ? cannonUpCost(b.level, this.opts.difficulty) : k === 'pumpkin' ? pumpkinUpCost(b.level) : extraUpCost(k, b.level);
     if (c && k === 'cannon') this.earlyFlame(c, b.level, r);
     return c && adjustCost(c, this.flameOpen(r));
   }
@@ -265,7 +265,8 @@ export class Match {
 
   /** Постройка открыта хозяину комнаты (глобальный замок — только у игрока; матчевый — buildLocked). */
   kindOpen(r: Room, kind: BuildKind): boolean {
-    return r.ownerId !== this.playerId || !this.opts.lockedKinds?.includes(kind);
+    // Сейф открывается вместе с капканом (со 2-го завершённого матча), отдельного экрана «Новое!» у него нет.
+    return r.ownerId !== this.playerId || !this.opts.lockedKinds?.includes(kind === 'safe' ? 'trap' : kind);
   }
 
   /**
@@ -273,7 +274,7 @@ export class Match {
    * открытые, но запертые дверью в этом матче, — с нужным уровнем двери (lockDoor). В обучении — только пушка.
    */
   floorMenuKinds(r: Room): { kind: BuildKind; lockDoor: number | null }[] {
-    const kinds: BuildKind[] = this.script ? ['cannon'] : ['cannon', ...LATE_KINDS.filter((k) => this.kindOpen(r, k))];
+    const kinds: BuildKind[] = this.script ? ['cannon'] : ['cannon', ...LATE_KINDS.filter((k) => this.kindOpen(r, k)), ...(this.kindOpen(r, 'safe') ? (['safe'] as const) : [])];
     return kinds.map((kind) => ({ kind, lockDoor: this.buildLocked(r, kind) }));
   }
 
@@ -317,6 +318,7 @@ export class Match {
 
   /** Поздних построек в комнате не больше B[kind].maxPerRoom (пушки и тыквы ограничены только местом). */
   atCap(r: Room, kind: BuildKind): boolean {
+    if (kind === 'safe') return r.buildings.some((b) => b.kind === 'safe');
     return isLateKind(kind) && r.buildings.filter((b) => b.kind === kind).length >= B[kind].maxPerRoom;
   }
 
@@ -646,7 +648,6 @@ export class Match {
         r.door.level = boost.doorLevel;
         r.door.maxHp = r.door.hp = doorMaxHp(boost.doorLevel);
       }
-      if (boost.safe) this.placeSafe(r);
     }
     c.roomId = r.id;
     // Путь по коридорам к своей двери и внутрь; через чужие комнаты не ходим.
@@ -658,16 +659,6 @@ export class Match {
     };
     c.path = bfs(from, [d.inside], hall) ?? [{ ...d.inside }];
     c.task = null;
-  }
-
-  /** Сейф-усилитель: ставим в свободную клетку комнаты подальше от двери (там пушкам и так тесно). Нет места — без сейфа. */
-  private placeSafe(r: Room): void {
-    if (r.items.some((i) => i.kind === 'safe')) return;
-    const busy = [r.door.inside, r.sofa, ...r.soil, ...r.furniture, ...r.items, ...r.buildings];
-    const free = roomCells(r).filter((c) => !busy.some((b) => b.x === c.x && b.y === c.y));
-    const f = r.door.front;
-    free.sort((a, b) => Math.hypot(b.x - f.x, b.y - f.y) - Math.hypot(a.x - f.x, a.y - f.y));
-    if (free[0]) r.items.push({ kind: 'safe', x: free[0].x, y: free[0].y });
   }
 
   // ---------- шаг симуляции ----------

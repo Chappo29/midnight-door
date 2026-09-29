@@ -144,6 +144,7 @@ const BUILD_INFO: Record<BuildKind, { label: string; desc?: string }> = {
   trap: { label: 'Капкан', desc: 'держит призрака' },
   workbench: { label: 'Верстак', desc: 'чинит дверь ночью' },
   fridge: { label: 'Холодильник', desc: 'призрак бьёт реже' },
+  safe: { label: 'Сейф', desc: '+0,7 конфеты в секунду' },
 };
 const DOOR_COLORS = [0x8b5a2b, 0x9c6b35, 0xb07d42, 0x8a8f99, 0x9fa8b3, 0xd4a82c, 0xe8c24a, 0x9ef0ff];
 
@@ -1263,7 +1264,16 @@ export class GameScene extends Phaser.Scene {
     const parts: Phaser.GameObjects.GameObject[] = [];
     const g = this.add.graphics();
     let barrel: Phaser.GameObjects.Graphics | Phaser.GameObjects.Image | null = null;
-    if (b.kind === 'cannon' && hasSprite(this, 'cannon_base')) {
+    if (b.kind === 'safe') {
+      // Сейф — просто стоит и копит конфеты: без уровня. Нет спрайта — тёмный ящик.
+      g.fillStyle(0x000000, 0.2).fillEllipse(0, 14, 36, 10);
+      if (hasSprite(this, 'safe')) parts.push(g, fitImage(this, 0, 0, 'safe', TS - 6, TS - 6, 0.5));
+      else {
+        g.fillStyle(0x5b6270).fillRoundedRect(-15, -14, 30, 28, 4);
+        g.fillStyle(0xffd35c).fillCircle(4, 0, 4);
+        parts.push(g);
+      }
+    } else if (b.kind === 'cannon' && hasSprite(this, 'cannon_base')) {
       // Своя модель на каждый уровень, и с уровнем пушка чуть крупнее.
       const size = 38 + 2 * b.level;
       g.fillStyle(0x000000, 0.2).fillEllipse(0, 14, size - 2, 12);
@@ -1310,7 +1320,7 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0x2a1600).fillTriangle(-9, 0, -4, -5, -3, 2).fillTriangle(9, 0, 4, -5, 3, 2);
       parts.push(g);
     }
-    const lvl = this.label(14, 14, String(b.level), 13);
+    const lvl = this.label(14, 14, b.kind === 'safe' ? '' : String(b.level), 13);
     parts.push(lvl);
     const box = this.add.container(cx, cy, parts).setDepth(5);
     box.setData('lvl', lvl).setData('barrel', barrel).setData('level', b.level);
@@ -2510,10 +2520,15 @@ export class GameScene extends Phaser.Scene {
               ? `Верстак · ур. ${b.level} · +${pct(benchHeal(b.level))}% / ${B.workbench.interval} с`
               : b.kind === 'fridge'
                 ? `Холодильник · ур. ${b.level} · реже на ${pct(fridgeSlow(b.level))}%`
-                : `Тыква · ур. ${b.level}`;
+                : b.kind === 'safe'
+                  ? `Сейф · +${B.items.safe} конф./с`
+                  : `Тыква · ур. ${b.level}`;
       return {
         title,
         options: [
+          ...(b.kind === 'safe'
+            ? []
+            : [
           {
             id: 'upgrade',
             icon: '',
@@ -2524,6 +2539,7 @@ export class GameScene extends Phaser.Scene {
             ...this.affordance(room, up),
             onPick: () => this.cmd({ type: 'upgrade', x: b.x, y: b.y }),
           },
+            ]),
           {
             // Уничтожает постройку: приглушённый второстепенный пункт с корзиной и подтверждением.
             id: 'sell',

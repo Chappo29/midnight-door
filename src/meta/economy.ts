@@ -6,7 +6,7 @@ import type { Difficulty } from '../sim/types';
  * Цены и награды — здесь, в одном месте (данные, а не код экранов).
  */
 
-export type BoosterId = 'candy' | 'door' | 'wrench' | 'safe';
+export type BoosterId = 'candy' | 'door' | 'wrench';
 export type SkinSlot = 'door' | 'cannon';
 
 /** То, что хранится между матчами (часть сохранения). */
@@ -33,7 +33,7 @@ export function emptyMeta(): Meta {
     hero: 0,
     skins: { door: ['classic'], cannon: ['classic'] },
     skin: { door: 'classic', cannon: 'classic' },
-    boosters: { candy: 0, door: 0, wrench: 0, safe: 0 },
+    boosters: { candy: 0, door: 0, wrench: 0 },
     daily: { last: '', step: 0 },
     tutorialGift: false,
   };
@@ -72,7 +72,6 @@ export function normalizeMeta(raw: Partial<Meta> | undefined): Meta {
       candy: safeInt(m.boosters?.candy, 0, BOOSTER_MAX),
       door: safeInt(m.boosters?.door, 0, BOOSTER_MAX),
       wrench: safeInt(m.boosters?.wrench, 0, BOOSTER_MAX),
-      safe: safeInt(m.boosters?.safe, 0, BOOSTER_MAX),
     },
     daily: { last: typeof m.daily?.last === 'string' ? m.daily.last : '', step: safeInt(m.daily?.step, 0, DAILY.length - 1) },
     tutorialGift: !!m.tutorialGift,
@@ -112,7 +111,6 @@ export const BOOSTERS: Record<BoosterId, { title: string; desc: string; price: n
   candy: { title: 'Мешок конфет', desc: '+100 конфет в начале', price: 40 },
   door: { title: 'Крепкая дверь', desc: 'дверь сразу ур. 2', price: 60 },
   wrench: { title: 'Быстрый ключ', desc: 'ключ заряжается вдвое быстрее', price: 50 },
-  safe: { title: 'Сейф', desc: '+0,7 конфеты в секунду весь матч', price: 70 },
 };
 /** Больше этого за раз не накопить — чтобы не скупали «про запас» всё подряд. */
 export const BOOSTER_MAX = 3;
@@ -122,8 +120,6 @@ export interface MatchBoosters {
   candy: number;
   doorLevel: number;
   repairMul: number;
-  /** Сейф в комнате игрока: +B.items.safe конфет/с весь матч. */
-  safe: boolean;
 }
 
 export type BuyError = 'Не хватает монет' | 'Уже есть' | 'Скоро' | 'Больше не взять';
@@ -170,7 +166,6 @@ export function planBoosters(m: Meta): MatchBoosters {
     candy: m.boosters.candy > 0 ? 100 : 0,
     doorLevel: m.boosters.door > 0 ? 2 : 1,
     repairMul: m.boosters.wrench > 0 ? 0.5 : 1,
-    safe: m.boosters.safe > 0,
   };
 }
 
@@ -182,7 +177,6 @@ export function spendBoosters(m: Meta, plan: MatchBoosters): void {
   if (plan.candy > 0 && m.boosters.candy > 0) m.boosters.candy--;
   if (plan.doorLevel > 1 && m.boosters.door > 0) m.boosters.door--;
   if (plan.repairMul < 1 && m.boosters.wrench > 0) m.boosters.wrench--;
-  if (plan.safe && m.boosters.safe > 0) m.boosters.safe--;
 }
 
 /** Забрать по одному каждого купленного усилителя на этот матч. */

@@ -1,6 +1,6 @@
 export type Vec = { x: number; y: number };
 /** trap/workbench/fridge открываются уровнем двери прямо в матче (B.unlock). */
-export type BuildKind = 'cannon' | 'pumpkin' | 'trap' | 'workbench' | 'fridge';
+export type BuildKind = 'cannon' | 'pumpkin' | 'trap' | 'workbench' | 'fridge' | 'safe';
 export type ItemKind = 'lavender' | 'safe' | 'toolbox';
 export type Difficulty = 'easy' | 'hard' | 'nightmare';
 export type Phase = 'pick' | 'prep' | 'night' | 'end';

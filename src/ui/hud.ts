@@ -149,6 +149,7 @@ const OPTION_ICON: Record<string, () => string> = {
   'build:trap': () => img('trap') || ICON.trap,
   'build:workbench': () => img('workbench') || ICON.bench,
   'build:fridge': () => img('fridge') || ICON.fridge,
+  'build:safe': () => img('safe'),
   upgradeDoor: () => img('door_l1'),
   repair: () => uiIcon('repair'),
   upgradeSofa: () => img('sofa'),
@@ -1033,7 +1034,7 @@ export class Hud {
   }
 
   private boostersGrid(view: ShopView): string {
-    const icons: Record<BoosterId, string> = { candy: img('candy_shot'), door: img('door_l2'), wrench: uiIcon('repair'), safe: img('safe') };
+    const icons: Record<BoosterId, string> = { candy: img('candy_shot'), door: img('door_l2'), wrench: uiIcon('repair') };
     const cards = view.boosters
       .map((b) => {
         const maxed = b.count >= BOOSTER_MAX;

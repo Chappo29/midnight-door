@@ -113,7 +113,8 @@ export const B = {
   spirit: { speed: 4.5, booRange: 4, booHold: 1.5, booCd: 25, sparkRange: 5, sparkMul: 1.5, sparkTime: 8, sparkCd: 20 },
   /** Воскрешение (раз за матч, реклама за награду): дверь с долей doorHp HP, protect с призрак не идёт к этой комнате. */
   revive: { doorHp: 0.5, protect: 15 },
-  items: { lavender: 0.5, safe: 0.7, toolbox: 0.01 },
+  /** safe — конфет/с от сейфа; safeCost — его цена в матче, safeDoor — нужный уровень двери (сейф покупают, а не находят на карте, как в Ghost at the Door). */
+  items: { lavender: 0.5, safe: 0.7, safeCost: 50, safeDoor: 2, toolbox: 0.01 },
   sellRefund: 0.5,
   ghost: {
     // Рассвета нет — HP растёт медленно, иначе призрака не убить (подобрано scripts/tune.ts, 2026-09-24).
@@ -336,6 +337,8 @@ export function buildBaseCost(kind: BuildKind): Cost {
       return { candy: B.cannon.cost, flame: 0 };
     case 'pumpkin':
       return { candy: B.pumpkin.cost, flame: 0 };
+    case 'safe':
+      return { candy: B.items.safeCost, flame: 0 };
     case 'trap':
     case 'workbench':
     case 'fridge':
@@ -349,7 +352,7 @@ export const LATE_KINDS: readonly LateKind[] = ['trap', 'workbench', 'fridge'];
 export const isLateKind = (kind: BuildKind): kind is LateKind => kind === 'trap' || kind === 'workbench' || kind === 'fridge';
 
 /** Какой уровень двери открывает постройку (0 — открыта сразу). */
-export const unlockDoor = (kind: BuildKind): number => (isLateKind(kind) ? B.unlock[kind] : 0);
+export const unlockDoor = (kind: BuildKind): number => (isLateKind(kind) ? B.unlock[kind] : kind === 'safe' ? B.items.safeDoor : 0);
 
 /** Цена улучшения поздней постройки с уровня level; null — уже максимум. */
 export function extraUpCost(kind: LateKind, level: number): Cost | null {
